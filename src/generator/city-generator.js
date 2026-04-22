@@ -43,9 +43,10 @@ function applyWater(rng, diagram, options) {
   const activeSides = options.waterSides.filter((side) => side.enabled).map((side) => side.name);
   const selected = new Set();
   const queue = [];
+  const maxWaterReach = options.mapSize * 0.2;
 
   for (const cell of diagram.cells) {
-    if (activeSides.some((side) => cell.touches[side])) {
+    if (activeSides.some((side) => cell.touches[side]) && isWithinWaterReach(cell, activeSides, options.mapSize, maxWaterReach)) {
       selected.add(cell.id);
       queue.push(cell.id);
     }
@@ -63,6 +64,10 @@ function applyWater(rng, diagram, options) {
       }
 
       const neighbor = diagram.cells[neighborId];
+      if (!isWithinWaterReach(neighbor, activeSides, options.mapSize, maxWaterReach)) {
+        continue;
+      }
+
       const inwardResistance = centerBias(neighbor.centroid, options.mapSize);
       if (rng.next() < expansionChance * (1 - inwardResistance)) {
         selected.add(neighborId);
@@ -85,6 +90,15 @@ function applyWater(rng, diagram, options) {
     sides: activeSides,
     seaCellIds: Array.from(selected),
   };
+}
+
+function isWithinWaterReach(cell, activeSides, size, maxWaterReach) {
+  if (activeSides.length === 0) {
+    return false;
+  }
+
+  const nearestWaterDistance = Math.min(...activeSides.map((side) => distanceToSide(cell.centroid, size, side)));
+  return nearestWaterDistance <= maxWaterReach;
 }
 
 function pressureFromSides(cell, options) {
