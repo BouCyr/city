@@ -10,3 +10,6 @@ The point field is converted into Voronoi polygons and adjacency edges. Both cel
 
 3. Select and paint sea areas.
 Cells touching the selected outer sides seed the sea, then pseudo-random flood expansion pushes water inland. Cells farther than 20% of the field size from every selected water side stay land. Sea cells are filled blue, regular edges stay dark, and edges between sea cells are drawn dark blue.
+
+4. Apply one Lloyd relaxation pass.
+Each site is moved once to the centroid of its current Voronoi cell, the diagram is rebuilt, and water selection is recomputed on the smoothed cells.

@@ -10,8 +10,7 @@ const COLORS = {
 
 export function clearCanvas(canvas) {
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  clearBase(ctx, canvas.width);
 }
 
 export function drawCityMap(canvas, map) {
@@ -21,6 +20,15 @@ export function drawCityMap(canvas, map) {
   drawCells(ctx, map.cells);
   drawEdges(ctx, map.edges);
   drawPoints(ctx, map.points);
+}
+
+export function drawReplayFrame(canvas, frame) {
+  if (!frame || frame.type === "blank") {
+    clearCanvas(canvas);
+    return;
+  }
+
+  drawCityMap(canvas, frame.map);
 }
 
 function clearBase(ctx, size) {

@@ -68,6 +68,20 @@
           <p id="mapSummary">No map generated yet.</p>
         </div>
         <canvas id="cityCanvas" width="768" height="768" aria-label="Generated city map"></canvas>
+        <section class="replay-panel">
+          <div class="replay-header">
+            <h3>Replay</h3>
+            <button id="playReplayButton" class="secondary-button" type="button">Play</button>
+          </div>
+          <div class="replay-controls">
+            <button id="prevReplayButton" class="secondary-button" type="button">Prev</button>
+            <label class="replay-slider">
+              <span id="replayLabel">Step 0 / Blank canvas</span>
+              <input id="replaySlider" type="range" min="0" max="0" value="0">
+            </label>
+            <button id="nextReplayButton" class="secondary-button" type="button">Next</button>
+          </div>
+        </section>
       </section>
     </main>
   </div>

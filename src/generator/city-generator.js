@@ -6,20 +6,30 @@ export async function generateCity(options, stepTracker) {
   stepTracker.reset();
 
   const rng = createSeededRandom(options.seed);
-  const points = await stepTracker.advance(0, "Points", async () => scatterPoints(rng, options));
-  const diagram = await stepTracker.advance(1, "Voronoi", async () =>
-    buildVoronoiDiagram({ points, width: options.mapSize, height: options.mapSize }),
+  const frames = [createFrame("Blank canvas", null)];
+  const initialPoints = await stepTracker.advance(0, "Points", async () => scatterPoints(rng, options));
+  frames.push(
+    createFrame("Step 1 / Scattered points", {
+      points: initialPoints,
+      cells: [],
+      edges: [],
+      water: { sides: [], seaCellIds: [] },
+    }),
   );
-  const water = await stepTracker.advance(2, "Water", async () => applyWater(rng, diagram, options));
+  const initialDiagram = await stepTracker.advance(1, "Voronoi", async () =>
+    buildVoronoiDiagram({ points: initialPoints, width: options.mapSize, height: options.mapSize }),
+  );
+  frames.push(createFrame("Step 2 / Raw Voronoi diagram", createMapShape(initialPoints, initialDiagram, options, null)));
+  const initialWater = await stepTracker.advance(2, "Water", async () => applyWater(rng, initialDiagram, options));
+  frames.push(createFrame("Step 3 / Water classification", createMapShape(initialPoints, initialDiagram, options, initialWater)));
+  const points = await stepTracker.advance(3, "Lloyd", async () => relaxPoints(initialDiagram, options.mapSize));
+  const diagram = buildVoronoiDiagram({ points, width: options.mapSize, height: options.mapSize });
+  const water = applyWater(rng, diagram, options);
+  frames.push(createFrame("Step 4 / Lloyd-smoothed map", createMapShape(points, diagram, options, water)));
   stepTracker.complete();
 
-  return {
-    seed: options.seed,
-    size: options.mapSize,
-    points,
-    cells: diagram.cells,
-    edges: diagram.edges,
-    water,
+  const finalMap = {
+    ...createMapShape(points, diagram, options, water),
     summary: {
       pointCount: points.length,
       cellCount: diagram.cells.length,
@@ -27,6 +37,11 @@ export async function generateCity(options, stepTracker) {
       seaCellCount: water.seaCellIds.length,
     },
     steps: GENERATION_STEPS,
+    frames,
+  };
+
+  return {
+    ...finalMap,
   };
 }
 
@@ -36,6 +51,15 @@ function scatterPoints(rng, options) {
     id: index,
     x: rng.between(padding, options.mapSize - padding),
     y: rng.between(padding, options.mapSize - padding),
+  }));
+}
+
+function relaxPoints(diagram, size) {
+  const padding = size * 0.04;
+  return diagram.cells.map((cell) => ({
+    id: cell.site.id,
+    x: clamp(cell.centroid.x, padding, size - padding),
+    y: clamp(cell.centroid.y, padding, size - padding),
   }));
 }
 
@@ -90,6 +114,34 @@ function applyWater(rng, diagram, options) {
     sides: activeSides,
     seaCellIds: Array.from(selected),
   };
+}
+
+function createMapShape(points, diagram, options, water) {
+  const seaCellIds = new Set(water?.seaCellIds || []);
+  return {
+    seed: options.seed,
+    size: options.mapSize,
+    points,
+    cells: diagram.cells.map((cell) => ({
+      ...cell,
+      isSea: seaCellIds.has(cell.id),
+    })),
+    edges: diagram.edges.map((edge) => ({
+      ...edge,
+      kind: seaCellIds.has(edge.a) && seaCellIds.has(edge.b) ? "sea" : "land",
+    })),
+    water: water || { sides: [], seaCellIds: [] },
+  };
+}
+
+function createFrame(label, map) {
+  return map
+    ? { type: "map", label, map }
+    : { type: "blank", label };
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function isWithinWaterReach(cell, activeSides, size, maxWaterReach) {
