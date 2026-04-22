@@ -48,7 +48,7 @@ export async function generateCity(options, stepTracker) {
 }
 
 function scatterPoints(rng, options) {
-  const padding = options.mapSize * 0.0;
+  const padding = options.mapSize * 0.01;
   return Array.from({ length: options.pointCount }, (_, index) => ({
     id: index,
     x: rng.between(padding, options.mapSize - padding),

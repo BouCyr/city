@@ -68,7 +68,14 @@
           <h2>Rendered Map</h2>
           <p id="mapSummary">No map generated yet.</p>
         </div>
-        <canvas id="cityCanvas" width="768" height="768" aria-label="Generated city map"></canvas>
+        <div class="map-controls" aria-label="Map zoom controls">
+          <button id="zoomOutButton" class="secondary-button" type="button" aria-label="Zoom out">-</button>
+          <button id="zoomInButton" class="secondary-button" type="button" aria-label="Zoom in">+</button>
+          <button id="resetViewButton" class="secondary-button" type="button">Reset View</button>
+        </div>
+        <div id="mapViewport" class="map-viewport">
+          <svg id="cityMap" viewBox="0 0 768 768" aria-label="Generated city map" role="img"></svg>
+        </div>
       </section>
     </main>
   </div>
