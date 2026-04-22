@@ -20,7 +20,9 @@ export function drawCityMap(canvas, map) {
   clearBase(ctx, size);
   drawCells(ctx, map.cells);
   drawEdges(ctx, map.edges);
-  drawPoints(ctx, map.points);
+  if (!map.cells.length) {
+    drawPoints(ctx, map.points);
+  }
 }
 
 export function drawReplayFrame(canvas, frame) {

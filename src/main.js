@@ -5,22 +5,30 @@ import { clearCanvas, drawReplayFrame } from "./render/canvas-renderer.js";
 
 const CANVAS_SIZE = 768;
 const REPLAY_DELAY_MS = 1000;
+const REGENERATE_DEBOUNCE_MS = 250;
 const form = document.querySelector("#generatorForm");
 const canvas = document.querySelector("#cityCanvas");
 const summary = document.querySelector("#mapSummary");
 const replaySlider = document.querySelector("#replaySlider");
-const replayLabel = document.querySelector("#replayLabel");
 const playReplayButton = document.querySelector("#playReplayButton");
 const prevReplayButton = document.querySelector("#prevReplayButton");
 const nextReplayButton = document.querySelector("#nextReplayButton");
 const stepTracker = createStepTracker({
   listElement: document.querySelector("#stepsList"),
   statusElement: document.querySelector("#statusBadge"),
+  onStepSelect: (stepIndex) => {
+    stopReplay();
+    const replayIndex = stepIndex + 1;
+    replaySlider.value = String(replayIndex);
+    renderReplayIndex(replayIndex);
+  },
 });
 let currentMap = null;
 let replayTimer = null;
+let regenerateTimer = null;
+let generationToken = 0;
 
-bindFormInteractions(form, document.querySelector("#helpText"));
+bindFormInteractions(form);
 canvas.width = CANVAS_SIZE;
 canvas.height = CANVAS_SIZE;
 clearCanvas(canvas);
@@ -30,6 +38,15 @@ replaySlider.addEventListener("input", () => {
   stopReplay();
   renderReplayIndex(Number(replaySlider.value));
 });
+
+for (const field of form.elements) {
+  if (!(field instanceof HTMLElement) || !field.name) {
+    continue;
+  }
+
+  const eventName = field instanceof HTMLInputElement && field.type === "text" ? "input" : "change";
+  field.addEventListener(eventName, scheduleRegeneration);
+}
 
 prevReplayButton.addEventListener("click", () => {
   stopReplay();
@@ -51,9 +68,10 @@ playReplayButton.addEventListener("click", () => {
     return;
   }
 
+  replaySlider.value = "0";
+  renderReplayIndex(0);
   playReplayButton.textContent = "Pause";
-  let index = Number(replaySlider.value);
-  renderReplayIndex(index);
+  let index = 0;
 
   replayTimer = window.setInterval(() => {
     index += 1;
@@ -70,12 +88,17 @@ playReplayButton.addEventListener("click", () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   stopReplay();
+  const token = ++generationToken;
 
   const options = readFormState(form);
   const map = await generateCity({ ...options, mapSize: CANVAS_SIZE }, stepTracker);
+  if (token !== generationToken) {
+    return;
+  }
   currentMap = map;
-  syncReplayUi(map, map.frames.length - 1);
-  renderReplayIndex(map.frames.length - 1);
+  syncReplayUi(map, 0);
+  renderReplayIndex(0);
+  startReplay();
 });
 
 form.requestSubmit();
@@ -88,8 +111,8 @@ function renderReplayIndex(index) {
 
   const frame = currentMap.frames[index];
   drawReplayFrame(canvas, frame);
-  replayLabel.textContent = frame.label;
   summary.textContent = describeFrame(currentMap, frame);
+  stepTracker.setSelectedStep(index - 1);
 }
 
 function syncReplayUi(map, index) {
@@ -99,7 +122,6 @@ function syncReplayUi(map, index) {
   playReplayButton.disabled = !map;
   prevReplayButton.disabled = !map;
   nextReplayButton.disabled = !map;
-  replayLabel.textContent = map ? map.frames[index].label : "Step 0 / Blank canvas";
 }
 
 function stopReplay() {
@@ -111,6 +133,29 @@ function stopReplay() {
   window.clearInterval(replayTimer);
   replayTimer = null;
   playReplayButton.textContent = "Play";
+}
+
+function startReplay() {
+  if (!currentMap || !currentMap.frames.length) {
+    return;
+  }
+
+  stopReplay();
+  replaySlider.value = "0";
+  renderReplayIndex(0);
+  playReplayButton.textContent = "Pause";
+  let index = 0;
+
+  replayTimer = window.setInterval(() => {
+    index += 1;
+    if (index >= currentMap.frames.length) {
+      stopReplay();
+      return;
+    }
+
+    replaySlider.value = String(index);
+    renderReplayIndex(index);
+  }, REPLAY_DELAY_MS);
 }
 
 function describeFrame(map, frame) {
@@ -137,4 +182,11 @@ function stepReplayBy(delta) {
   const nextIndex = Math.min(Math.max(Number(replaySlider.value) + delta, 0), currentMap.frames.length - 1);
   replaySlider.value = String(nextIndex);
   renderReplayIndex(nextIndex);
+}
+
+function scheduleRegeneration() {
+  window.clearTimeout(regenerateTimer);
+  regenerateTimer = window.setTimeout(() => {
+    form.requestSubmit();
+  }, REGENERATE_DEBOUNCE_MS);
 }

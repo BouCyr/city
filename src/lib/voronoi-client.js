@@ -80,41 +80,78 @@ function detectTouches(polygon, width, height) {
 }
 
 function collectEdges(cells) {
-  const segments = new Map();
+  const segmentBuckets = new Map();
+  const edges = [];
 
   for (const cell of cells) {
     for (let index = 0; index < cell.polygon.length; index += 1) {
       const from = cell.polygon[index];
       const to = cell.polygon[(index + 1) % cell.polygon.length];
-      const key = segmentKey(from, to);
-      const existing = segments.get(key);
+      const candidate = {
+        a: cell.id,
+        from,
+        to,
+      };
+      const key = segmentBucketKey(from, to);
+      const bucket = segmentBuckets.get(key) || [];
+      const matchIndex = bucket.findIndex((segment) => segmentsMatch(segment, candidate));
 
-      if (existing) {
-        existing.b = cell.id;
-      } else {
-        segments.set(key, {
-          id: key,
-          a: cell.id,
-          b: null,
-          from,
-          to,
+      if (matchIndex >= 0) {
+        const existing = bucket.splice(matchIndex, 1)[0];
+        edges.push({
+          id: `${existing.a}-${cell.id}-${key}`,
+          a: existing.a,
+          b: cell.id,
+          from: existing.from,
+          to: existing.to,
           kind: "land",
         });
+      } else {
+        bucket.push(candidate);
+        segmentBuckets.set(key, bucket);
       }
     }
   }
 
-  return Array.from(segments.values()).filter((edge) => edge.b !== null);
+  for (const [key, bucket] of segmentBuckets) {
+    for (const segment of bucket) {
+      edges.push({
+        id: `boundary-${segment.a}-${key}`,
+        a: segment.a,
+        b: null,
+        from: segment.from,
+        to: segment.to,
+        kind: "land",
+      });
+    }
+  }
+
+  return edges;
 }
 
-function segmentKey(from, to) {
-  const first = normalizePoint(from);
-  const second = normalizePoint(to);
-  return first < second ? `${first}|${second}` : `${second}|${first}`;
+function segmentBucketKey(from, to) {
+  const midpoint = {
+    x: (from.x + to.x) / 2,
+    y: (from.y + to.y) / 2,
+  };
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  return `${normalizeScalar(midpoint.x)}:${normalizeScalar(midpoint.y)}:${normalizeScalar(length)}`;
 }
 
-function normalizePoint(point) {
-  return `${point.x.toFixed(3)},${point.y.toFixed(3)}`;
+function segmentsMatch(first, second) {
+  return (
+    pointsNear(first.from, second.from) && pointsNear(first.to, second.to)
+  ) || (
+    pointsNear(first.from, second.to) && pointsNear(first.to, second.from)
+  );
+}
+
+function pointsNear(first, second, epsilon = 0.75) {
+  return distanceSquared(first, second) <= epsilon ** 2;
+}
+
+function normalizeScalar(value) {
+  return value.toFixed(1);
 }
 
 function distanceSquared(a, b) {

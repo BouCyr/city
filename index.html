@@ -13,47 +13,48 @@
   <div class="page-shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">Canvas-based procedural generator</p>
         <h1>City Map Workshop</h1>
-        <p class="hero-copy">
-          Generate a deterministic Voronoi-based city field from pseudo-random points, then flood selected map
-          borders to shape inland, coastal, or island-style water layouts.
-        </p>
       </div>
       <button id="generateButton" class="generate-button" type="submit" form="generatorForm">Generate City</button>
     </header>
 
     <main class="layout">
-      <aside class="panel guide-panel" aria-live="polite">
-        <h2>Field Guide</h2>
-        <p id="helpText">
-          Hover or focus a field to inspect what it changes. The same seed and settings always reproduce the same Voronoi map.
-        </p>
-      </aside>
-
       <section class="panel controls-panel">
         <form id="generatorForm" class="controls-grid">
           <label>
-            <span>Seed</span>
-            <input id="seed" name="seed" type="text" value="harbor-01" data-help="Controls the deterministic random stream. Reusing the same seed with the same settings reproduces the exact same Voronoi map.">
+            <span class="field-title">Seed <button class="help-dot" type="button" data-tooltip="Controls the deterministic random stream. Reusing the same seed with the same settings reproduces the exact same Voronoi map." aria-label="Seed help">?</button></span>
+            <input id="seed" name="seed" type="text" value="harbor-01">
           </label>
 
           <label>
-            <span>Point Count</span>
-            <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500" data-help="Sets how many pseudo-random sites are scattered before the Voronoi pass. Higher values create smaller cells and denser edge networks.">
-            <output for="pointCount" id="pointCountValue">500</output>
+            <span class="field-title">Point Count <button class="help-dot" type="button" data-tooltip="Sets how many pseudo-random sites are scattered before the Voronoi pass. Higher values create smaller cells and denser edge networks." aria-label="Point count help">?</button></span>
+            <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="1000">
+            <output for="pointCount" id="pointCountValue">1000</output>
           </label>
 
-          <fieldset class="water-sides" data-help="Choose which outer borders can flood inward. No sides gives an inland city, one or two sides yields a coastal city, and all four sides tends toward an island core.">
-            <legend>Water Sides</legend>
+          <fieldset class="water-sides">
+            <legend>Water Sides <button class="help-dot" type="button" data-tooltip="Choose which outer borders can flood inward. No sides gives an inland city, one or two sides yields a coastal city, and all four sides tends toward an island core." aria-label="Water sides help">?</button></legend>
             <label><input type="checkbox" name="waterSides" value="north">North</label>
             <label><input type="checkbox" name="waterSides" value="east">East</label>
-            <label><input type="checkbox" name="waterSides" value="south">South</label>
-            <label><input type="checkbox" name="waterSides" value="west">West</label>
+            <label><input type="checkbox" name="waterSides" value="south" checked>South</label>
+            <label><input type="checkbox" name="waterSides" value="west" checked>West</label>
           </fieldset>
         </form>
 
         <section class="steps-box">
+          <section class="replay-panel">
+            <div class="replay-header">
+              <h3>Replay</h3>
+              <button id="playReplayButton" class="secondary-button" type="button">Play</button>
+            </div>
+            <div class="replay-controls">
+              <button id="prevReplayButton" class="secondary-button" type="button">Prev</button>
+              <label class="replay-slider">
+                <input id="replaySlider" type="range" min="0" max="0" value="0">
+              </label>
+              <button id="nextReplayButton" class="secondary-button" type="button">Next</button>
+            </div>
+          </section>
           <div class="steps-header">
             <h2>Generation Steps</h2>
             <span id="statusBadge" class="status-badge">Idle</span>
@@ -68,20 +69,6 @@
           <p id="mapSummary">No map generated yet.</p>
         </div>
         <canvas id="cityCanvas" width="768" height="768" aria-label="Generated city map"></canvas>
-        <section class="replay-panel">
-          <div class="replay-header">
-            <h3>Replay</h3>
-            <button id="playReplayButton" class="secondary-button" type="button">Play</button>
-          </div>
-          <div class="replay-controls">
-            <button id="prevReplayButton" class="secondary-button" type="button">Prev</button>
-            <label class="replay-slider">
-              <span id="replayLabel">Step 0 / Blank canvas</span>
-              <input id="replaySlider" type="range" min="0" max="0" value="0">
-            </label>
-            <button id="nextReplayButton" class="secondary-button" type="button">Next</button>
-          </div>
-        </section>
       </section>
     </main>
   </div>

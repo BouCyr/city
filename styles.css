@@ -27,9 +27,8 @@ body {
 }
 
 .page-shell {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 32px;
+  width: 100%;
+  padding: 8px;
 }
 
 .hero,
@@ -39,12 +38,11 @@ body {
 }
 
 .hero {
-  grid-template-columns: 1.7fr auto;
+  grid-template-columns: 1fr auto;
   align-items: end;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 
-.eyebrow,
 .status-badge,
 output,
 .steps-list,
@@ -52,35 +50,22 @@ output,
   font-family: "IBM Plex Mono", monospace;
 }
 
-.eyebrow {
-  margin: 0 0 8px;
-  font-size: 0.82rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 h1,
 h2,
+h3,
 p {
   margin-top: 0;
 }
 
 h1 {
-  margin-bottom: 12px;
-  font-size: clamp(2.8rem, 5vw, 4.8rem);
-  line-height: 0.95;
-}
-
-.hero-copy {
-  max-width: 70ch;
-  margin-bottom: 0;
-  color: var(--muted);
+  margin: 0;
+  font-size: clamp(1.4rem, 2vw, 2rem);
+  line-height: 1;
 }
 
 .generate-button {
   border: 0;
-  padding: 16px 24px;
+  padding: 10px 16px;
   border-radius: 999px;
   font: inherit;
   font-weight: 700;
@@ -91,20 +76,13 @@ h1 {
 }
 
 .layout {
-  grid-template-columns: 280px minmax(320px, 400px) minmax(0, 1fr);
-}
-
-.guide-panel {
-  position: sticky;
-  top: 24px;
-  align-self: start;
-  min-height: 220px;
+  grid-template-columns: 320px minmax(0, 1fr);
 }
 
 .panel {
   border: 1px solid var(--line);
-  border-radius: 28px;
-  padding: 24px;
+  border-radius: 18px;
+  padding: 12px;
   background: var(--panel);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
@@ -117,20 +95,21 @@ h1 {
 
 label {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
-label span,
+.field-title,
 .steps-header {
   font-weight: 700;
+  font-size: 0.9rem;
 }
 
 input,
 select {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 8px 10px;
   font: inherit;
   color: var(--ink);
   background: rgba(255, 255, 255, 0.7);
@@ -142,14 +121,15 @@ input[type="range"] {
 
 fieldset {
   margin: 0;
-  padding: 14px;
+  padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 12px;
 }
 
 legend {
-  padding: 0 8px;
+  padding: 0 4px;
   font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .water-sides {
@@ -162,7 +142,7 @@ legend {
 .water-sides label {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-weight: 500;
 }
 
@@ -176,8 +156,8 @@ output {
 }
 
 .steps-box {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 
@@ -199,31 +179,43 @@ output {
 }
 
 .steps-list {
-  margin: 16px 0 0;
+  margin: 10px 0 0;
   padding-left: 20px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
   color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .steps-list li.active {
   color: var(--ink);
 }
 
+.steps-list li.current {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .steps-list li.complete {
   color: #1b6d4c;
 }
 
+.steps-list li {
+  cursor: pointer;
+}
+
 .canvas-panel {
   display: grid;
-  gap: 18px;
+  gap: 8px;
+  align-content: start;
 }
 
 .replay-panel {
   display: grid;
-  gap: 14px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
 }
 
 .replay-header {
@@ -235,11 +227,12 @@ output {
 
 .replay-header h3 {
   margin: 0;
+  font-size: 0.95rem;
 }
 
 .secondary-button {
   border: 1px solid var(--line);
-  padding: 10px 16px;
+  padding: 8px 12px;
   border-radius: 999px;
   font: inherit;
   font-weight: 700;
@@ -262,7 +255,7 @@ output {
 .replay-controls {
   display: flex;
   align-items: end;
-  gap: 12px;
+  gap: 8px;
 }
 
 .canvas-meta {
@@ -274,21 +267,69 @@ output {
 
 #mapSummary {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   text-align: right;
 }
 
 canvas {
-  width: 100%;
-  height: auto;
-  border-radius: 24px;
+  width: min(100%, calc(100vh - 92px));
+  height: min(100%, calc(100vh - 92px));
+  aspect-ratio: 1 / 1;
+  justify-self: center;
+  align-self: start;
+  border-radius: 12px;
   background: #f8f6f1;
   border: 1px solid rgba(16, 37, 48, 0.14);
 }
 
+.help-dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-left: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: help;
+}
+
+.help-dot::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  z-index: 10;
+  width: 220px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(24, 33, 38, 0.94);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.help-dot:hover::after,
+.help-dot:focus-visible::after {
+  opacity: 1;
+}
+
 @media (max-width: 980px) {
   .page-shell {
-    padding: 20px;
+    padding: 6px;
   }
 
   .hero,
@@ -297,12 +338,19 @@ canvas {
     grid-template-columns: 1fr;
   }
 
-  .guide-panel {
-    position: static;
-    min-height: 0;
-  }
-
   #mapSummary {
     text-align: left;
+  }
+
+  canvas {
+    width: min(100%, calc(100vh - 180px));
+    height: min(100%, calc(100vh - 180px));
+  }
+
+  .help-dot::after {
+    left: 0;
+    top: calc(100% + 8px);
+    transform: none;
+    width: 200px;
   }
 }

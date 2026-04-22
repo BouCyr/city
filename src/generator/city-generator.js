@@ -48,7 +48,7 @@ export async function generateCity(options, stepTracker) {
 }
 
 function scatterPoints(rng, options) {
-  const padding = options.mapSize * 0.04;
+  const padding = options.mapSize * 0.0;
   return Array.from({ length: options.pointCount }, (_, index) => ({
     id: index,
     x: rng.between(padding, options.mapSize - padding),
@@ -58,11 +58,31 @@ function scatterPoints(rng, options) {
 
 function relaxPoints(diagram, size) {
   const padding = size * 0.04;
+  const protectedCellIds = collectProtectedCellIds(diagram);
   return diagram.cells.map((cell) => ({
     id: cell.site.id,
-    x: clamp(cell.centroid.x, padding, size - padding),
-    y: clamp(cell.centroid.y, padding, size - padding),
+    x: protectedCellIds.has(cell.id) ? cell.site.x : clamp(cell.centroid.x, padding, size - padding),
+    y: protectedCellIds.has(cell.id) ? cell.site.y : clamp(cell.centroid.y, padding, size - padding),
   }));
+}
+
+function collectProtectedCellIds(diagram) {
+  const protectedCellIds = new Set();
+  const sideCellIds = new Set(
+    diagram.cells.filter((cell) => Object.values(cell.touches).some(Boolean)).map((cell) => cell.id),
+  );
+
+  for (const cellId of sideCellIds) {
+    protectedCellIds.add(cellId);
+  }
+
+  for (const cell of diagram.cells) {
+    if (cell.neighbors.some((neighborId) => sideCellIds.has(neighborId))) {
+      protectedCellIds.add(cell.id);
+    }
+  }
+
+  return protectedCellIds;
 }
 
 function applyWater(rng, diagram, options) {
@@ -108,8 +128,8 @@ function applyWater(rng, diagram, options) {
 
   for (const edge of diagram.edges) {
     const first = diagram.cells[edge.a];
-    const second = diagram.cells[edge.b];
-    edge.kind = first.isSea && second.isSea ? "sea" : "land";
+    const second = edge.b === null ? null : diagram.cells[edge.b];
+    edge.kind = first.isSea && second?.isSea ? "sea" : "land";
   }
 
   return {
@@ -158,7 +178,7 @@ function createMapShape(points, diagram, options, water, cityCenterCellId = null
     })),
     edges: diagram.edges.map((edge) => ({
       ...edge,
-      kind: seaCellIds.has(edge.a) && seaCellIds.has(edge.b) ? "sea" : "land",
+      kind: edge.b !== null && seaCellIds.has(edge.a) && seaCellIds.has(edge.b) ? "sea" : "land",
     })),
     water: water || { sides: [], seaCellIds: [] },
     cityCenterCellId,
