@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Procedural City Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Canvas-based procedural generator</p>
+        <h1>City Map Workshop</h1>
+        <p class="hero-copy">
+          Tune a handful of parameters, generate a deterministic city layout, and inspect each stage as roads,
+          districts, water, and landmarks are layered onto the map.
+        </p>
+      </div>
+      <button id="generateButton" class="generate-button" type="submit" form="generatorForm">Generate City</button>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls-panel">
+        <form id="generatorForm" class="controls-grid">
+          <label>
+            <span>Seed</span>
+            <input id="seed" name="seed" type="text" value="harbor-01" data-help="Controls the deterministic random stream. Reusing the same seed with the same settings reproduces the exact same city.">
+          </label>
+
+          <label>
+            <span>Map Size</span>
+            <select id="mapSize" name="mapSize" data-help="Sets the canvas dimensions used during generation. Larger maps leave room for denser district and road patterns.">
+              <option value="768">Medium</option>
+              <option value="640">Compact</option>
+              <option value="960">Large</option>
+            </select>
+          </label>
+
+          <label>
+            <span>District Count</span>
+            <input id="districts" name="districts" type="range" min="4" max="14" value="8" data-help="Defines how many district centers seed the block layout. More districts create tighter zoning transitions.">
+            <output for="districts" id="districtsValue">8</output>
+          </label>
+
+          <label>
+            <span>Road Density</span>
+            <input id="roadDensity" name="roadDensity" type="range" min="2" max="10" value="6" data-help="Drives the number of arterial and secondary roads. Higher values create more intersections and smaller blocks.">
+            <output for="roadDensity" id="roadDensityValue">6</output>
+          </label>
+
+          <label>
+            <span>Water Presence</span>
+            <select id="waterMode" name="waterMode" data-help="Chooses whether the city is dry, river-cut, coastal, or fully random. Water shapes districts and interrupts roads.">
+              <option value="random">Random</option>
+              <option value="none">None</option>
+              <option value="river">River</option>
+              <option value="coast">Coast</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Street Style</span>
+            <select id="streetStyle" name="streetStyle" data-help="Biases the road network toward neat grids, radial spokes, or mixed layouts.">
+              <option value="mixed">Mixed</option>
+              <option value="grid">Grid</option>
+              <option value="radial">Radial</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Landmark Bias</span>
+            <input id="landmarks" name="landmarks" type="range" min="1" max="8" value="4" data-help="Controls how many major landmarks are placed after the structural layout is complete.">
+            <output for="landmarks" id="landmarksValue">4</output>
+          </label>
+        </form>
+
+        <aside class="help-box" aria-live="polite">
+          <h2>Field Guide</h2>
+          <p id="helpText">
+            Hover or focus a field to inspect what it changes. The same seed and settings always produce the same map.
+          </p>
+        </aside>
+
+        <section class="steps-box">
+          <div class="steps-header">
+            <h2>Generation Steps</h2>
+            <span id="statusBadge" class="status-badge">Idle</span>
+          </div>
+          <ol id="stepsList" class="steps-list"></ol>
+        </section>
+      </section>
+
+      <section class="panel canvas-panel">
+        <div class="canvas-meta">
+          <h2>Rendered Map</h2>
+          <p id="mapSummary">No map generated yet.</p>
+        </div>
+        <canvas id="cityCanvas" width="768" height="768" aria-label="Generated city map"></canvas>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
