@@ -16,8 +16,8 @@
         <p class="eyebrow">Canvas-based procedural generator</p>
         <h1>City Map Workshop</h1>
         <p class="hero-copy">
-          Tune a handful of parameters, generate a deterministic city layout, and inspect each stage as roads,
-          districts, water, and landmarks are layered onto the map.
+          Generate a deterministic Voronoi-based city field from pseudo-random points, then flood selected map
+          borders to shape inland, coastal, or island-style water layouts.
         </p>
       </div>
       <button id="generateButton" class="generate-button" type="submit" form="generatorForm">Generate City</button>
@@ -28,7 +28,7 @@
         <form id="generatorForm" class="controls-grid">
           <label>
             <span>Seed</span>
-            <input id="seed" name="seed" type="text" value="harbor-01" data-help="Controls the deterministic random stream. Reusing the same seed with the same settings reproduces the exact same city.">
+            <input id="seed" name="seed" type="text" value="harbor-01" data-help="Controls the deterministic random stream. Reusing the same seed with the same settings reproduces the exact same Voronoi map.">
           </label>
 
           <label>
@@ -41,47 +41,24 @@
           </label>
 
           <label>
-            <span>District Count</span>
-            <input id="districts" name="districts" type="range" min="4" max="14" value="8" data-help="Defines how many district centers seed the block layout. More districts create tighter zoning transitions.">
-            <output for="districts" id="districtsValue">8</output>
+            <span>Point Count</span>
+            <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500" data-help="Sets how many pseudo-random sites are scattered before the Voronoi pass. Higher values create smaller cells and denser edge networks.">
+            <output for="pointCount" id="pointCountValue">500</output>
           </label>
 
-          <label>
-            <span>Road Density</span>
-            <input id="roadDensity" name="roadDensity" type="range" min="2" max="10" value="6" data-help="Drives the number of arterial and secondary roads. Higher values create more intersections and smaller blocks.">
-            <output for="roadDensity" id="roadDensityValue">6</output>
-          </label>
-
-          <label>
-            <span>Water Presence</span>
-            <select id="waterMode" name="waterMode" data-help="Chooses whether the city is dry, river-cut, coastal, or fully random. Water shapes districts and interrupts roads.">
-              <option value="random">Random</option>
-              <option value="none">None</option>
-              <option value="river">River</option>
-              <option value="coast">Coast</option>
-            </select>
-          </label>
-
-          <label>
-            <span>Street Style</span>
-            <select id="streetStyle" name="streetStyle" data-help="Biases the road network toward neat grids, radial spokes, or mixed layouts.">
-              <option value="mixed">Mixed</option>
-              <option value="grid">Grid</option>
-              <option value="radial">Radial</option>
-            </select>
-          </label>
-
-          <label>
-            <span>Landmark Bias</span>
-            <input id="landmarks" name="landmarks" type="range" min="1" max="8" value="4" data-help="Controls how many major landmarks are placed after the structural layout is complete.">
-            <output for="landmarks" id="landmarksValue">4</output>
-          </label>
+          <fieldset class="water-sides" data-help="Choose which outer borders can flood inward. No sides gives an inland city, one or two sides yields a coastal city, and all four sides tends toward an island core.">
+            <legend>Water Sides</legend>
+            <label><input type="checkbox" name="waterSides" value="north">North</label>
+            <label><input type="checkbox" name="waterSides" value="east">East</label>
+            <label><input type="checkbox" name="waterSides" value="south">South</label>
+            <label><input type="checkbox" name="waterSides" value="west">West</label>
+          </fieldset>
         </form>
 
         <aside class="help-box" aria-live="polite">
           <h2>Field Guide</h2>
           <p id="helpText">
-            Hover or focus a field to inspect what it changes. The same seed and settings always produce the same map.
+            Hover or focus a field to inspect what it changes. The same seed and settings always reproduce the same Voronoi map.
           </p>
         </aside>
 

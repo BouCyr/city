@@ -1,19 +1,11 @@
-const STEP_LABELS = [
-  "Seed random stream",
-  "Shape terrain",
-  "Place district centers",
-  "Lay road network",
-  "Carve neighborhood blocks",
-  "Drop landmarks",
-  "Render summary",
-];
+import { GENERATION_STEPS } from "../generator/steps.js";
 
 export function createStepTracker({ listElement, statusElement }) {
   let activeIndex = -1;
 
   function render(status = "Idle") {
     listElement.innerHTML = "";
-    STEP_LABELS.forEach((label, index) => {
+    GENERATION_STEPS.forEach((label, index) => {
       const item = document.createElement("li");
       item.textContent = label;
       if (index < activeIndex) {
@@ -40,7 +32,7 @@ export function createStepTracker({ listElement, statusElement }) {
       return work();
     },
     complete() {
-      activeIndex = STEP_LABELS.length;
+      activeIndex = GENERATION_STEPS.length;
       render("Complete");
     },
   };

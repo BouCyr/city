@@ -12,7 +12,7 @@ const stepTracker = createStepTracker({
 });
 
 bindFormInteractions(form, document.querySelector("#helpText"));
-clearCanvas(canvas, "Adjust parameters and generate a city.");
+clearCanvas(canvas, "Adjust parameters and generate a Voronoi city map.");
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -25,10 +25,10 @@ form.addEventListener("submit", async (event) => {
   drawCityMap(canvas, map);
   summary.textContent = [
     `Seed ${map.seed}`,
-    `${map.districts.length} districts`,
-    `${map.roads.length} roads`,
-    `${map.landmarks.length} landmarks`,
-    map.water.type === "none" ? "dry terrain" : `${map.water.type} terrain`,
+    `${map.summary.pointCount} points`,
+    `${map.summary.cellCount} cells`,
+    `${map.summary.edgeCount} edges`,
+    `${map.summary.seaCellCount} sea cells`,
   ].join(" | ");
 });
 

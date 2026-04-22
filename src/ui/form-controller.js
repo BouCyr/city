@@ -1,7 +1,7 @@
 const HELP_FALLBACK =
-  "Hover or focus a field to inspect what it changes. The same seed and settings always produce the same map.";
+  "Hover or focus a field to inspect what it changes. The same seed and settings always reproduce the same Voronoi map.";
 
-const RANGE_FIELDS = ["districts", "roadDensity", "landmarks"];
+const RANGE_FIELDS = ["pointCount"];
 
 export function bindFormInteractions(form, helpElement) {
   for (const field of form.elements) {
@@ -16,6 +16,15 @@ export function bindFormInteractions(form, helpElement) {
     field.addEventListener("mouseenter", updateHelp);
     field.addEventListener("focus", updateHelp);
     field.addEventListener("change", updateHelp);
+  }
+
+  for (const helper of form.querySelectorAll("[data-help]")) {
+    const updateHelp = () => {
+      helpElement.textContent = helper.dataset.help || HELP_FALLBACK;
+    };
+
+    helper.addEventListener("mouseenter", updateHelp);
+    helper.addEventListener("focusin", updateHelp);
   }
 
   form.addEventListener("mouseleave", () => {
@@ -44,10 +53,10 @@ export function readFormState(form) {
   return {
     seed: String(data.get("seed") || "city-seed"),
     mapSize: Number(data.get("mapSize") || 768),
-    districts: Number(data.get("districts") || 8),
-    roadDensity: Number(data.get("roadDensity") || 6),
-    waterMode: String(data.get("waterMode") || "random"),
-    streetStyle: String(data.get("streetStyle") || "mixed"),
-    landmarks: Number(data.get("landmarks") || 4),
+    pointCount: Number(data.get("pointCount") || 500),
+    waterSides: ["north", "east", "south", "west"].map((side) => ({
+      name: side,
+      enabled: data.getAll("waterSides").includes(side),
+    })),
   };
 }

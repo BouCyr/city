@@ -1,17 +1,11 @@
 const COLORS = {
-  background: "#f8f6f1",
+  background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
-  road: "#1b2830",
-  district: {
-    civic: "#d9c4a0",
-    market: "#e7b88c",
-    garden: "#b5ccb0",
-    industrial: "#bca99d",
-    residential: "#d8d3c2",
-  },
-  block: "rgba(255, 255, 255, 0.62)",
-  water: "#7cb7c9",
-  landmark: "#d66b3d",
+  landFill: "#f1eadb",
+  point: "#d6693c",
+  edge: "#1a2026",
+  seaFill: "#7ebbd4",
+  seaEdge: "#1f4e72",
   label: "#40525c",
 };
 
@@ -28,11 +22,9 @@ export function drawCityMap(canvas, map) {
   const ctx = canvas.getContext("2d");
   const size = canvas.width;
   clearBase(ctx, size);
-  drawWater(ctx, size, map.water);
-  drawDistricts(ctx, size, map.districts);
-  drawRoads(ctx, size, map.roads);
-  drawBlocks(ctx, size, map.blocks);
-  drawLandmarks(ctx, size, map.landmarks);
+  drawCells(ctx, map.cells);
+  drawEdges(ctx, map.edges);
+  drawPoints(ctx, map.points);
   drawLabels(ctx, size, map);
 }
 
@@ -51,75 +43,39 @@ function clearBase(ctx, size) {
   }
 }
 
-function drawWater(ctx, size, water) {
-  if (water.type === "none") {
-    return;
-  }
-
-  ctx.fillStyle = COLORS.water;
-  if (water.type === "coast") {
-    const depth = size * water.depth;
-    if (water.side === "north") ctx.fillRect(0, 0, size, depth);
-    if (water.side === "south") ctx.fillRect(0, size - depth, size, depth);
-    if (water.side === "east") ctx.fillRect(size - depth, 0, depth, size);
-    if (water.side === "west") ctx.fillRect(0, 0, depth, size);
-    return;
-  }
-
-  ctx.beginPath();
-  water.bends.forEach((bend, index) => {
-    const x = bend.x * size;
-    const y = bend.y * size;
-    if (index === 0) {
-      ctx.moveTo(x, y);
+function drawCells(ctx, cells) {
+  cells.forEach((cell) => {
+    if (cell.polygon.length < 3) {
       return;
     }
-    ctx.lineTo(x, y);
-  });
-  ctx.lineWidth = size * 0.1;
-  ctx.strokeStyle = COLORS.water;
-  ctx.lineCap = "round";
-  ctx.stroke();
-}
 
-function drawDistricts(ctx, size, districts) {
-  districts.forEach((district) => {
     ctx.beginPath();
-    ctx.fillStyle = COLORS.district[district.tone];
-    ctx.globalAlpha = 0.78;
-    ctx.arc(district.x * size, district.y * size, district.radius * size, 0, Math.PI * 2);
+    ctx.moveTo(cell.polygon[0].x, cell.polygon[0].y);
+    for (let index = 1; index < cell.polygon.length; index += 1) {
+      ctx.lineTo(cell.polygon[index].x, cell.polygon[index].y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = cell.isSea ? COLORS.seaFill : COLORS.landFill;
     ctx.fill();
-    ctx.globalAlpha = 1;
   });
 }
 
-function drawRoads(ctx, size, roads) {
-  roads.forEach((road) => {
+function drawEdges(ctx, edges) {
+  edges.forEach((edge) => {
     ctx.beginPath();
-    ctx.strokeStyle = COLORS.road;
-    ctx.lineWidth = road.weight * 4;
-    ctx.moveTo(road.x1 * size, road.y1 * size);
-    ctx.lineTo(road.x2 * size, road.y2 * size);
+    ctx.strokeStyle = edge.kind === "sea" ? COLORS.seaEdge : COLORS.edge;
+    ctx.lineWidth = 1.2;
+    ctx.moveTo(edge.from.x, edge.from.y);
+    ctx.lineTo(edge.to.x, edge.to.y);
     ctx.stroke();
   });
 }
 
-function drawBlocks(ctx, size, blocks) {
-  ctx.fillStyle = COLORS.block;
-  blocks.forEach((block) => {
-    ctx.save();
-    ctx.translate(block.x * size, block.y * size);
-    ctx.rotate(block.rotation);
-    ctx.fillRect(-(block.w * size) / 2, -(block.h * size) / 2, block.w * size, block.h * size);
-    ctx.restore();
-  });
-}
-
-function drawLandmarks(ctx, size, landmarks) {
-  landmarks.forEach((landmark) => {
+function drawPoints(ctx, points) {
+  points.forEach((point) => {
     ctx.beginPath();
-    ctx.fillStyle = COLORS.landmark;
-    ctx.arc(landmark.x * size, landmark.y * size, landmark.size * size, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS.point;
+    ctx.arc(point.x, point.y, 1.8, 0, Math.PI * 2);
     ctx.fill();
   });
 }
@@ -128,5 +84,5 @@ function drawLabels(ctx, size, map) {
   ctx.fillStyle = COLORS.label;
   ctx.font = "15px IBM Plex Mono";
   ctx.fillText(`seed: ${map.seed}`, 24, size - 28);
-  ctx.fillText(map.profile, 24, size - 52);
+  ctx.fillText(`water sides: ${map.water.sides.join(", ") || "none"}`, 24, size - 52);
 }

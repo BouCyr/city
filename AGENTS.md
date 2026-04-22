@@ -1,27 +1,28 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a small static web app. The entry page is [`index.html`](/mnt/c/dev/city/index.html), shared styling lives in [`styles.css`](/mnt/c/dev/city/styles.css), and application logic is split under [`src/`](/mnt/c/dev/city/src). Use `src/ui/` for form and status interactions, `src/generator/` for deterministic city-building logic, and `src/render/` for canvas drawing. Keep new features in focused modules rather than expanding `main.js`.
+This repository is a small static web app. The entry page is [`index.html`](/mnt/c/dev/city/index.html), shared styling lives in [`styles.css`](/mnt/c/dev/city/styles.css), and application logic is split under [`src/`](/mnt/c/dev/city/src). Use `src/ui/` for form and status interactions, `src/generator/` for deterministic map logic, `src/render/` for canvas drawing, and `src/lib/` for thin wrappers around third-party libraries. Keep the implemented step list aligned between [`src/generator/steps.js`](/mnt/c/dev/city/src/generator/steps.js) and [`GENERATION_STEPS.md`](/mnt/c/dev/city/GENERATION_STEPS.md).
 
 ## Build, Test, and Development Commands
-No build step is required. Open `index.html` directly for quick checks, or run a simple local server for module-safe development:
+No build step is required. Run a simple local server for module-safe development:
 
 ```bash
 python -m http.server 8000
 ```
 
-Then visit `http://localhost:8000`. There is no automated test runner yet, so validate changes by generating multiple maps, reusing the same seed to confirm deterministic output, and checking that step updates and hover help text stay in sync.
+Then visit `http://localhost:8000`. There is no automated test runner yet, so validate changes by generating multiple maps, reusing the same seed to confirm deterministic output, and checking that Voronoi cells, sea fills, and step updates stay in sync.
 
 ## Coding Style & Naming Conventions
-Use modern ES modules and keep code ASCII unless a file already requires otherwise. Prefer `const` and `let`, small pure functions, and descriptive camelCase names such as `generateCity` or `drawCityMap`. Keep DOM wiring in `src/ui/`, rendering logic in `src/render/`, and generator math in `src/generator/`. Match the existing two-space indentation in HTML and CSS and consistent semicolon-free JavaScript style.
+Use modern ES modules and keep code ASCII unless a file already requires otherwise. Prefer `const` and `let`, small pure functions, and descriptive camelCase names such as `generateCity` or `buildVoronoiDiagram`. Keep DOM wiring in `src/ui/`, rendering logic in `src/render/`, generator math in `src/generator/`, and third-party calls inside dedicated wrappers under `src/lib/`. Match the existing two-space indentation in HTML and CSS and consistent semicolon-free JavaScript style.
 
 ## Testing Guidelines
 Manual verification is currently the project standard. Before submitting, check:
 
-- same seed + same settings => same city
-- changed seed or parameters => visibly different city
+- same seed + same settings => same Voronoi map
+- changed seed or parameters => visibly different cell layout
 - form hover/focus updates the help panel
-- generation steps progress from idle to complete
+- selected water sides produce expected flooding from the correct borders
+- generation steps match `GENERATION_STEPS.md`
 - canvas layout remains usable on desktop and mobile widths
 
 If you add automated tests later, place them beside the related module or under a top-level `tests/` directory and name files after the feature under test, for example `city-generator.test.js`.
