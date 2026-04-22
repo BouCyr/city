@@ -24,20 +24,18 @@
     </header>
 
     <main class="layout">
+      <aside class="panel guide-panel" aria-live="polite">
+        <h2>Field Guide</h2>
+        <p id="helpText">
+          Hover or focus a field to inspect what it changes. The same seed and settings always reproduce the same Voronoi map.
+        </p>
+      </aside>
+
       <section class="panel controls-panel">
         <form id="generatorForm" class="controls-grid">
           <label>
             <span>Seed</span>
             <input id="seed" name="seed" type="text" value="harbor-01" data-help="Controls the deterministic random stream. Reusing the same seed with the same settings reproduces the exact same Voronoi map.">
-          </label>
-
-          <label>
-            <span>Map Size</span>
-            <select id="mapSize" name="mapSize" data-help="Sets the canvas dimensions used during generation. Larger maps leave room for denser district and road patterns.">
-              <option value="768">Medium</option>
-              <option value="640">Compact</option>
-              <option value="960">Large</option>
-            </select>
           </label>
 
           <label>
@@ -54,13 +52,6 @@
             <label><input type="checkbox" name="waterSides" value="west">West</label>
           </fieldset>
         </form>
-
-        <aside class="help-box" aria-live="polite">
-          <h2>Field Guide</h2>
-          <p id="helpText">
-            Hover or focus a field to inspect what it changes. The same seed and settings always reproduce the same Voronoi map.
-          </p>
-        </aside>
 
         <section class="steps-box">
           <div class="steps-header">

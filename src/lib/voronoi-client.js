@@ -20,26 +20,7 @@ export function buildVoronoiDiagram({ points, width, height }) {
     };
   });
 
-  const edges = [];
-  for (let index = 0; index < points.length; index += 1) {
-    for (const neighborId of cells[index].neighbors) {
-      if (neighborId <= index) {
-        continue;
-      }
-
-      const edge = extractSharedEdge(cells[index].polygon, cells[neighborId].polygon);
-      if (edge) {
-        edges.push({
-          id: `${index}-${neighborId}`,
-          a: index,
-          b: neighborId,
-          from: edge[0],
-          to: edge[1],
-          kind: "land",
-        });
-      }
-    }
-  }
+  const edges = collectEdges(cells);
 
   return { cells, edges };
 }
@@ -98,22 +79,42 @@ function detectTouches(polygon, width, height) {
   };
 }
 
-function extractSharedEdge(firstPolygon, secondPolygon) {
-  const shared = [];
-  for (const pointA of firstPolygon) {
-    for (const pointB of secondPolygon) {
-      if (distanceSquared(pointA, pointB) < 0.25) {
-        shared.push(pointA);
+function collectEdges(cells) {
+  const segments = new Map();
+
+  for (const cell of cells) {
+    for (let index = 0; index < cell.polygon.length; index += 1) {
+      const from = cell.polygon[index];
+      const to = cell.polygon[(index + 1) % cell.polygon.length];
+      const key = segmentKey(from, to);
+      const existing = segments.get(key);
+
+      if (existing) {
+        existing.b = cell.id;
+      } else {
+        segments.set(key, {
+          id: key,
+          a: cell.id,
+          b: null,
+          from,
+          to,
+          kind: "land",
+        });
       }
     }
   }
 
-  const unique = dedupePoints(shared);
-  if (unique.length < 2) {
-    return null;
-  }
+  return Array.from(segments.values()).filter((edge) => edge.b !== null);
+}
 
-  return [unique[0], unique[1]];
+function segmentKey(from, to) {
+  const first = normalizePoint(from);
+  const second = normalizePoint(to);
+  return first < second ? `${first}|${second}` : `${second}|${first}`;
+}
+
+function normalizePoint(point) {
+  return `${point.x.toFixed(3)},${point.y.toFixed(3)}`;
 }
 
 function distanceSquared(a, b) {

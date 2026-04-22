@@ -6,16 +6,12 @@ const COLORS = {
   edge: "#1a2026",
   seaFill: "#7ebbd4",
   seaEdge: "#1f4e72",
-  label: "#40525c",
 };
 
-export function clearCanvas(canvas, message) {
+export function clearCanvas(canvas) {
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = COLORS.label;
-  ctx.font = "20px IBM Plex Mono";
-  ctx.fillText(message, 28, 40);
 }
 
 export function drawCityMap(canvas, map) {
@@ -25,7 +21,6 @@ export function drawCityMap(canvas, map) {
   drawCells(ctx, map.cells);
   drawEdges(ctx, map.edges);
   drawPoints(ctx, map.points);
-  drawLabels(ctx, size, map);
 }
 
 function clearBase(ctx, size) {
@@ -78,11 +73,4 @@ function drawPoints(ctx, points) {
     ctx.arc(point.x, point.y, 1.8, 0, Math.PI * 2);
     ctx.fill();
   });
-}
-
-function drawLabels(ctx, size, map) {
-  ctx.fillStyle = COLORS.label;
-  ctx.font = "15px IBM Plex Mono";
-  ctx.fillText(`seed: ${map.seed}`, 24, size - 28);
-  ctx.fillText(`water sides: ${map.water.sides.join(", ") || "none"}`, 24, size - 52);
 }

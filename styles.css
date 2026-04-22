@@ -91,7 +91,14 @@ h1 {
 }
 
 .layout {
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: 280px minmax(320px, 400px) minmax(0, 1fr);
+}
+
+.guide-panel {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  min-height: 220px;
 }
 
 .panel {
@@ -168,7 +175,6 @@ output {
   color: var(--muted);
 }
 
-.help-box,
 .steps-box {
   margin-top: 24px;
   padding-top: 20px;
@@ -243,6 +249,11 @@ canvas {
   .layout,
   .canvas-meta {
     grid-template-columns: 1fr;
+  }
+
+  .guide-panel {
+    position: static;
+    min-height: 0;
   }
 
   #mapSummary {

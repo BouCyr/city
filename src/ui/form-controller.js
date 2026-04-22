@@ -52,7 +52,6 @@ export function readFormState(form) {
   const data = new FormData(form);
   return {
     seed: String(data.get("seed") || "city-seed"),
-    mapSize: Number(data.get("mapSize") || 768),
     pointCount: Number(data.get("pointCount") || 500),
     waterSides: ["north", "east", "south", "west"].map((side) => ({
       name: side,
