@@ -2,6 +2,7 @@ const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
   landFill: "#f1eadb",
+  centerFill: "#efc8c3",
   point: "#d6693c",
   edge: "#1a2026",
   seaFill: "#7ebbd4",
@@ -58,7 +59,7 @@ function drawCells(ctx, cells) {
       ctx.lineTo(cell.polygon[index].x, cell.polygon[index].y);
     }
     ctx.closePath();
-    ctx.fillStyle = cell.isSea ? COLORS.seaFill : COLORS.landFill;
+    ctx.fillStyle = cell.isSea ? COLORS.seaFill : cell.isCityCenter ? COLORS.centerFill : COLORS.landFill;
     ctx.fill();
   });
 }

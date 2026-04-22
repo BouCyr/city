@@ -13,3 +13,6 @@ Cells touching the selected outer sides seed the sea, then pseudo-random flood e
 
 4. Apply one Lloyd relaxation pass.
 Each site is moved once to the centroid of its current Voronoi cell, the diagram is rebuilt, and water selection is recomputed on the smoothed cells.
+
+5. Choose the city center cell.
+From the non-sea cells, select the cell that is farthest from every land side. The chosen center cell is highlighted with a light red fill.

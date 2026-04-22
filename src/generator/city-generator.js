@@ -26,10 +26,12 @@ export async function generateCity(options, stepTracker) {
   const diagram = buildVoronoiDiagram({ points, width: options.mapSize, height: options.mapSize });
   const water = applyWater(rng, diagram, options);
   frames.push(createFrame("Step 4 / Lloyd-smoothed map", createMapShape(points, diagram, options, water)));
+  const cityCenterCellId = await stepTracker.advance(4, "Center", async () => chooseCityCenterCell(diagram, options));
+  frames.push(createFrame("Step 5 / City center", createMapShape(points, diagram, options, water, cityCenterCellId)));
   stepTracker.complete();
 
   const finalMap = {
-    ...createMapShape(points, diagram, options, water),
+    ...createMapShape(points, diagram, options, water, cityCenterCellId),
     summary: {
       pointCount: points.length,
       cellCount: diagram.cells.length,
@@ -116,7 +118,34 @@ function applyWater(rng, diagram, options) {
   };
 }
 
-function createMapShape(points, diagram, options, water) {
+function chooseCityCenterCell(diagram, options) {
+  const landSides = options.waterSides.filter((side) => !side.enabled).map((side) => side.name);
+  const candidates = diagram.cells.filter((cell) => !cell.isSea);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  if (landSides.length === 0) {
+    return candidates.reduce((best, cell) => {
+      const cellScore = distanceFromCenter(cell.centroid, options.mapSize);
+      if (!best || cellScore < best.score) {
+        return { id: cell.id, score: cellScore };
+      }
+      return best;
+    }, null)?.id ?? null;
+  }
+
+  return candidates.reduce((best, cell) => {
+    const score = Math.min(...landSides.map((side) => distanceToSide(cell.centroid, options.mapSize, side)));
+    if (!best || score > best.score) {
+      return { id: cell.id, score };
+    }
+    return best;
+  }, null)?.id ?? null;
+}
+
+function createMapShape(points, diagram, options, water, cityCenterCellId = null) {
   const seaCellIds = new Set(water?.seaCellIds || []);
   return {
     seed: options.seed,
@@ -125,12 +154,14 @@ function createMapShape(points, diagram, options, water) {
     cells: diagram.cells.map((cell) => ({
       ...cell,
       isSea: seaCellIds.has(cell.id),
+      isCityCenter: cell.id === cityCenterCellId,
     })),
     edges: diagram.edges.map((edge) => ({
       ...edge,
       kind: seaCellIds.has(edge.a) && seaCellIds.has(edge.b) ? "sea" : "land",
     })),
     water: water || { sides: [], seaCellIds: [] },
+    cityCenterCellId,
   };
 }
 
@@ -178,4 +209,8 @@ function centerBias(point, size) {
   const dy = point.y - size / 2;
   const distance = Math.hypot(dx, dy);
   return Math.max(0, 1 - distance / (size * 0.68));
+}
+
+function distanceFromCenter(point, size) {
+  return Math.hypot(point.x - size / 2, point.y - size / 2);
 }
