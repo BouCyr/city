@@ -11,7 +11,7 @@ const DEFAULT_RIVER_STROKE_WIDTH = 2.8;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
-  landFill: "#f1eadb",
+  landFill: "#c8ae89",
   centerFill: "#efc8c3",
   point: "#d6693c",
   edge: "#1a2026",
@@ -121,6 +121,7 @@ function createCellsGroup(cells) {
       createElement("polygon", {
         points: toSvgPoints(cell.polygon),
         fill: cell.features.sea ? COLORS.seaFill : cell.features.cityCenter ? COLORS.centerFill : COLORS.landFill,
+        "data-cell-id": cell.id,
       }),
     );
   });
@@ -133,6 +134,7 @@ function createEdgesGroup(edges) {
     fill: "none",
     "stroke-linecap": "round",
     "stroke-width": EDGE_STROKE_WIDTH,
+    "pointer-events": "none",
   });
 
   edges.forEach((edge) => {
@@ -151,7 +153,9 @@ function createEdgesGroup(edges) {
 }
 
 function createPointsGroup(points) {
-  const group = createElement("g");
+  const group = createElement("g", {
+    "pointer-events": "none",
+  });
 
   points.forEach((point) => {
     group.append(
@@ -173,6 +177,7 @@ function createRiversGroup(rivers) {
     stroke: COLORS.river,
     "stroke-linecap": "round",
     "stroke-linejoin": "round",
+    "pointer-events": "none",
   });
 
   rivers.forEach((river) => {
@@ -184,6 +189,8 @@ function createRiversGroup(rivers) {
           x2: segment.to.x,
           y2: segment.to.y,
           "stroke-width": segment.width || DEFAULT_RIVER_STROKE_WIDTH,
+          "data-river-id": river.id,
+          "data-base-width": segment.width || DEFAULT_RIVER_STROKE_WIDTH,
         }),
       );
     });

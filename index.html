@@ -79,8 +79,14 @@
           <button id="zoomInButton" class="secondary-button" type="button" aria-label="Zoom in">+</button>
           <button id="resetViewButton" class="secondary-button" type="button">Reset View</button>
         </div>
-        <div id="mapViewport" class="map-viewport">
-          <svg id="cityMap" viewBox="0 0 768 768" aria-label="Generated city map" role="img"></svg>
+        <div class="map-shell">
+          <div id="mapViewport" class="map-viewport">
+            <svg id="cityMap" viewBox="0 0 768 768" aria-label="Generated city map" role="img"></svg>
+          </div>
+          <aside class="cell-panel" aria-live="polite">
+            <h3>Hovered Cell</h3>
+            <div id="hoveredCellData" class="cell-data empty">Hover a cell to inspect its data.</div>
+          </aside>
         </div>
       </section>
     </main>

@@ -19,6 +19,10 @@ const PLAY_BUTTON_LABEL = "Play";
 const PAUSE_BUTTON_LABEL = "Pause";
 const REPLAY_START_INDEX = 0;
 const VIEWPORT_FALLBACK_RATIO = 0.5;
+const NEIGHBOR_CELL_OPACITY = 0.62;
+const DIMMED_CELL_OPACITY = 0.28;
+const DIMMED_RIVER_OPACITY = 0.14;
+const HIGHLIGHT_RIVER_WIDTH_SCALE = 1.35;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
@@ -30,6 +34,7 @@ const nextReplayButton = document.querySelector("#nextReplayButton");
 const zoomInButton = document.querySelector("#zoomInButton");
 const zoomOutButton = document.querySelector("#zoomOutButton");
 const resetViewButton = document.querySelector("#resetViewButton");
+const hoveredCellData = document.querySelector("#hoveredCellData");
 const stepTracker = createStepTracker({
   listElement: document.querySelector("#stepsList"),
   statusElement: document.querySelector("#statusBadge"),
@@ -45,6 +50,8 @@ let replayTimer = null;
 let regenerateTimer = null;
 let generationToken = 0;
 let currentFrameIndex = 0;
+let currentFrame = null;
+let hoveredCellId = null;
 let isDragging = false;
 let dragPointerId = null;
 let dragStart = null;
@@ -121,6 +128,9 @@ mapViewport.addEventListener("pointermove", handlePointerMove);
 mapViewport.addEventListener("pointerup", handlePointerUp);
 mapViewport.addEventListener("pointercancel", handlePointerUp);
 mapViewport.addEventListener("pointerleave", handlePointerUp);
+svg.addEventListener("pointermove", handleCellHover);
+svg.addEventListener("pointerleave", clearHoveredCell);
+svg.addEventListener("click", handleCellClick);
 
 form.requestSubmit();
 
@@ -138,8 +148,10 @@ function renderReplayIndex(index) {
   }
 
   const frame = currentMap.frames[index];
+  currentFrame = frame;
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
+  clearHoveredCell();
   summary.textContent = describeFrame(currentMap, frame);
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
@@ -283,6 +295,36 @@ function handlePointerUp(event) {
   }
 }
 
+function handleCellHover(event) {
+  const cell = getCellFromEvent(event);
+  if (!cell) {
+    clearHoveredCell();
+    return;
+  }
+
+  renderHoveredCell(cell);
+}
+
+function clearHoveredCell() {
+  if (!(hoveredCellData instanceof HTMLElement)) {
+    return;
+  }
+
+  hoveredCellId = null;
+  applyHoverPresentation(null);
+  hoveredCellData.className = "cell-data empty";
+  hoveredCellData.textContent = "Hover a cell to inspect its data.";
+}
+
+function handleCellClick(event) {
+  const cell = getCellFromEvent(event);
+  if (!cell) {
+    return;
+  }
+
+  focusCell(cell, currentFrame?.map?.meta.size || currentMap?.meta.size || CANVAS_SIZE);
+}
+
 /**
  * WHAT: Zoom the SVG viewBox around a focus point while keeping the viewport inside map bounds.
  * HOW: Convert the desired zoom factor into a new viewBox rectangle anchored at the pointer or viewport center.
@@ -362,4 +404,171 @@ function createViewportState(size) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function getCellFromEvent(event) {
+  if (!currentFrame || currentFrame.type !== "map") {
+    return null;
+  }
+
+  const target = event.target instanceof Element ? event.target.closest("[data-cell-id]") : null;
+  const cellId = target ? Number(target.getAttribute("data-cell-id")) : hoveredCellId;
+  if (!Number.isFinite(cellId)) {
+    return null;
+  }
+
+  return currentFrame.map.cells.find((cell) => cell.id === cellId) || null;
+}
+
+function renderHoveredCell(cell) {
+  if (!(hoveredCellData instanceof HTMLElement)) {
+    return;
+  }
+
+  hoveredCellId = cell.id;
+  applyHoverPresentation(cell.id);
+  const features = Object.entries(cell.features)
+    .filter(([, enabled]) => enabled)
+    .map(([name]) => name)
+    .join(", ") || "none";
+  const boundarySides = cell.boundarySides.length ? cell.boundarySides.join(", ") : "none";
+
+  hoveredCellData.className = "cell-data";
+  hoveredCellData.innerHTML = [
+    createCellDataRow("Cell", String(cell.id)),
+    createCellDataRow("Centroid", `${cell.centroid.x.toFixed(1)}, ${cell.centroid.y.toFixed(1)}`),
+    createCellDataRow("Features", features),
+    createCellDataRow("Boundary Sides", boundarySides),
+    createCellDataRow("Edges", cell.edgeIds.join(", ") || "none"),
+    createCellDataRow("Neighbors", cell.neighborCellIds.join(", ") || "none"),
+  ].join("");
+}
+
+function createCellDataRow(label, value) {
+  return `
+    <div class="cell-data-row">
+      <span class="cell-data-label">${label}</span>
+      <span>${value}</span>
+    </div>
+  `;
+}
+
+function focusCell(cell, size) {
+  const bounds = getCellBounds(cell);
+  const padding = 18;
+  const cellWidth = bounds.maxX - bounds.minX;
+  const cellHeight = bounds.maxY - bounds.minY;
+  const targetSpan = clamp(Math.max(cellWidth, cellHeight) + padding * 2, size / MAX_ZOOM, size);
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+
+  viewportState.width = targetSpan;
+  viewportState.height = targetSpan;
+  viewportState.zoom = size / targetSpan;
+  viewportState.x = centerX - targetSpan / 2;
+  viewportState.y = centerY - targetSpan / 2;
+  clampViewport(size);
+  applyViewport();
+}
+
+function getCellBounds(cell) {
+  return cell.polygon.reduce((bounds, point) => ({
+    minX: Math.min(bounds.minX, point.x),
+    minY: Math.min(bounds.minY, point.y),
+    maxX: Math.max(bounds.maxX, point.x),
+    maxY: Math.max(bounds.maxY, point.y),
+  }), {
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity,
+  });
+}
+
+function applyHoverPresentation(cellId) {
+  const cellElements = svg.querySelectorAll("[data-cell-id]");
+  const riverElements = svg.querySelectorAll("[data-river-id]");
+
+  if (!Number.isFinite(cellId)) {
+    cellElements.forEach((element) => {
+      element.style.opacity = "1";
+    });
+    riverElements.forEach((element) => {
+      element.style.opacity = "1";
+      element.style.strokeWidth = element.getAttribute("data-base-width") || "";
+    });
+    return;
+  }
+
+  const neighborCellIds = collectNeighborCellIds(cellId);
+  cellElements.forEach((element) => {
+    const currentCellId = Number(element.getAttribute("data-cell-id"));
+    if (currentCellId === cellId) {
+      element.style.opacity = "1";
+      return;
+    }
+
+    element.style.opacity = neighborCellIds.has(currentCellId) ? String(NEIGHBOR_CELL_OPACITY) : String(DIMMED_CELL_OPACITY);
+  });
+
+  const highlightedRiverIds = collectHighlightedRiverIds(cellId);
+  riverElements.forEach((element) => {
+    const riverId = Number(element.getAttribute("data-river-id"));
+    const baseWidth = Number(element.getAttribute("data-base-width")) || 0;
+    const isHighlighted = highlightedRiverIds.has(riverId);
+    element.style.opacity = highlightedRiverIds.size === 0 || isHighlighted ? "1" : String(DIMMED_RIVER_OPACITY);
+    element.style.strokeWidth = isHighlighted ? String(baseWidth * HIGHLIGHT_RIVER_WIDTH_SCALE) : String(baseWidth);
+  });
+}
+
+function collectNeighborCellIds(cellId) {
+  if (!currentFrame || currentFrame.type !== "map") {
+    return new Set();
+  }
+
+  const hoveredCell = currentFrame.map.cells.find((cell) => cell.id === cellId);
+  return new Set(hoveredCell?.neighborCellIds || []);
+}
+
+function collectHighlightedRiverIds(cellId) {
+  if (!currentFrame || currentFrame.type !== "map") {
+    return new Set();
+  }
+
+  const { rivers } = currentFrame.map;
+  const highlighted = new Set(
+    rivers
+      .filter((river) => river.cellIds.includes(cellId))
+      .map((river) => river.id),
+  );
+
+  if (highlighted.size === 0) {
+    return highlighted;
+  }
+
+  const parentByRiverId = new Map();
+  rivers.forEach((river) => {
+    if (river.termination !== "merge") {
+      return;
+    }
+
+    const parent = rivers.find((candidate) => candidate.id !== river.id && candidate.cellIds.includes(river.endCellId));
+    if (parent) {
+      parentByRiverId.set(river.id, parent.id);
+    }
+  });
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    rivers.forEach((river) => {
+      const parentId = parentByRiverId.get(river.id);
+      if (parentId !== undefined && highlighted.has(parentId) && !highlighted.has(river.id)) {
+        highlighted.add(river.id);
+        changed = true;
+      }
+    });
+  }
+
+  return highlighted;
 }
