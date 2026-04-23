@@ -14,8 +14,5 @@ Cells touching the selected outer sides seed the sea, then pseudo-random flood e
 4. Apply one Lloyd relaxation pass.
 Each site is moved once to the centroid of its current Voronoi cell, the diagram is rebuilt, and water selection is recomputed on the smoothed cells.
 
-5. Choose the city center cell.
-From the non-sea cells, select the cell that is farthest from every land side. The chosen center cell is highlighted with a light red fill.
-
-6. Trace river channels.
-Starting from inland land cells that are not too close to the sea, trace each river cell-by-cell toward the sea through shared-edge midpoints. Rivers are generated one by one, are slightly attracted to previously traced rivers, stop when they reach the sea or another river, and are drawn as dark blue lines.
+5. Flag inland hill cells.
+Select land cells that are at least three cell-to-cell steps away from the sea. The first hill is chosen randomly from the valid inland land cells, then each later hill greedily picks the valid candidate that is farthest from the already chosen hills.

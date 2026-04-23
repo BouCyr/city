@@ -8,10 +8,9 @@ import { createSeededRandom } from "./random.js";
 import { BLANK_STEP_INDEX, buildSummary, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
 import { runBuildVoronoiStep } from "./step-build-voronoi.js";
 import { runApplyWaterStep } from "./step-apply-water.js";
-import { runChooseCenterStep } from "./step-choose-center.js";
+import { runFlagHillsStep } from "./step-flag-hills.js";
 import { runRelaxPointsStep } from "./step-relax-points.js";
 import { runScatterPointsStep } from "./step-scatter-points.js";
-import { runTraceRiversStep } from "./step-trace-rivers.js";
 import { GENERATION_STEPS } from "./steps.js";
 
 const GENERATION_PIPELINE = [
@@ -19,8 +18,7 @@ const GENERATION_PIPELINE = [
   { status: "Voronoi", run: runBuildVoronoiStep },
   { status: "Water", run: runApplyWaterStep },
   { status: "Lloyd", run: runRelaxPointsStep },
-  { status: "Center", run: runChooseCenterStep },
-  { status: "Rivers", run: runTraceRiversStep },
+  { status: "Hills", run: runFlagHillsStep },
 ];
 
 export async function generateCity(options, stepTracker) {

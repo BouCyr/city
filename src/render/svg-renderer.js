@@ -7,17 +7,17 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
 const EDGE_STROKE_WIDTH = 1.2;
-const DEFAULT_RIVER_STROKE_WIDTH = 2.8;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
   landFill: "#c8ae89",
+  hillsideFill: "#b89263",
+  hillFill: "#9b774e",
   centerFill: "#efc8c3",
   point: "#d6693c",
   edge: "#1a2026",
   seaFill: "#7ebbd4",
   seaEdge: "#1f4e72",
-  river: "#2a8fff",
 };
 
 /**
@@ -100,7 +100,7 @@ function createGrid(size) {
 
 function createMapLayer(map) {
   const layer = createElement("g");
-  layer.append(createCellsGroup(map.cells), createEdgesGroup(map.edges), createRiversGroup(map.rivers || []));
+  layer.append(createCellsGroup(map.cells), createEdgesGroup(map.edges));
 
   if (!map.cells.length) {
     layer.append(createPointsGroup(map.points));
@@ -120,7 +120,15 @@ function createCellsGroup(cells) {
     group.append(
       createElement("polygon", {
         points: toSvgPoints(cell.polygon),
-        fill: cell.features.sea ? COLORS.seaFill : cell.features.cityCenter ? COLORS.centerFill : COLORS.landFill,
+        fill: cell.features.sea
+          ? COLORS.seaFill
+          : cell.features.hill
+            ? COLORS.hillFill
+            : cell.features.hillside
+              ? COLORS.hillsideFill
+              : cell.features.cityCenter
+                ? COLORS.centerFill
+                : COLORS.landFill,
         "data-cell-id": cell.id,
       }),
     );
@@ -145,6 +153,9 @@ function createEdgesGroup(edges) {
         x2: edge.to.x,
         y2: edge.to.y,
         stroke: edge.features.sea ? COLORS.seaEdge : COLORS.edge,
+        "data-edge-id": edge.id,
+        "data-left-cell-id": edge.leftCellId ?? "",
+        "data-right-cell-id": edge.rightCellId ?? "",
       }),
     );
   });
@@ -166,34 +177,6 @@ function createPointsGroup(points) {
         fill: COLORS.point,
       }),
     );
-  });
-
-  return group;
-}
-
-function createRiversGroup(rivers) {
-  const group = createElement("g", {
-    fill: "none",
-    stroke: COLORS.river,
-    "stroke-linecap": "round",
-    "stroke-linejoin": "round",
-    "pointer-events": "none",
-  });
-
-  rivers.forEach((river) => {
-    river.segments.forEach((segment) => {
-      group.append(
-        createElement("line", {
-          x1: segment.from.x,
-          y1: segment.from.y,
-          x2: segment.to.x,
-          y2: segment.to.y,
-          "stroke-width": segment.width || DEFAULT_RIVER_STROKE_WIDTH,
-          "data-river-id": river.id,
-          "data-base-width": segment.width || DEFAULT_RIVER_STROKE_WIDTH,
-        }),
-      );
-    });
   });
 
   return group;

@@ -17,7 +17,7 @@ export function createInitialMap(options) {
       params: {
         seed: options.seed,
         pointCount: options.pointCount,
-        riverCount: options.riverCount,
+        hillCount: options.hillCount,
         waterSides: options.waterSides.map((side) => ({ ...side })),
         mapSize: options.mapSize,
       },
@@ -30,7 +30,6 @@ export function createInitialMap(options) {
     points: [],
     cells: [],
     edges: [],
-    rivers: [],
     water: {
       sides: [],
       seaCellIds: [],
@@ -87,12 +86,13 @@ export function buildCanonicalGeometry(diagram) {
       },
       polygon: cell.polygon.map((point) => ({ x: point.x, y: point.y })),
       edgeIds: [],
-      neighborCellIds: [...cell.neighbors],
+      neighborCellIds: [],
       boundarySides,
       features: {
         land: true,
         sea: false,
-        river: false,
+        hill: false,
+        hillside: false,
         boundary: boundarySides.length > 0,
         cityCenter: false,
       },
@@ -111,6 +111,21 @@ export function buildCanonicalGeometry(diagram) {
     return oriented;
   });
 
+  edges.forEach((edge) => {
+    if (edge.leftCellId === null || edge.rightCellId === null || edge.leftCellId === edge.rightCellId) {
+      return;
+    }
+
+    const leftCell = cellById.get(edge.leftCellId);
+    const rightCell = cellById.get(edge.rightCellId);
+    if (leftCell && !leftCell.neighborCellIds.includes(edge.rightCellId)) {
+      leftCell.neighborCellIds.push(edge.rightCellId);
+    }
+    if (rightCell && !rightCell.neighborCellIds.includes(edge.leftCellId)) {
+      rightCell.neighborCellIds.push(edge.leftCellId);
+    }
+  });
+
   return { cells, edges };
 }
 
@@ -120,7 +135,8 @@ export function buildSummary(map) {
     cellCount: map.cells.length,
     edgeCount: map.edges.length,
     seaCellCount: map.cells.filter((cell) => cell.features.sea).length,
-    riverCount: map.rivers.length,
+    hillCount: map.cells.filter((cell) => cell.features.hill).length,
+    hillsideCount: map.cells.filter((cell) => cell.features.hillside).length,
   };
 }
 
@@ -145,7 +161,6 @@ function orientEdge(edge, cellById, width, height) {
       features: {
         boundary: isBoundary,
         sea: false,
-        river: false,
       },
     };
   }
@@ -161,11 +176,10 @@ function orientEdge(edge, cellById, width, height) {
     midpoint,
     leftCellId: firstSide >= secondSide ? firstId : secondId,
     rightCellId: firstSide >= secondSide ? secondId : firstId,
-    features: {
-      boundary: isBoundary,
-      sea: false,
-      river: false,
-    },
+      features: {
+        boundary: isBoundary,
+        sea: false,
+      },
   };
 }
 

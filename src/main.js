@@ -19,10 +19,10 @@ const PLAY_BUTTON_LABEL = "Play";
 const PAUSE_BUTTON_LABEL = "Pause";
 const REPLAY_START_INDEX = 0;
 const VIEWPORT_FALLBACK_RATIO = 0.5;
-const NEIGHBOR_CELL_OPACITY = 0.62;
-const DIMMED_CELL_OPACITY = 0.28;
-const DIMMED_RIVER_OPACITY = 0.14;
-const HIGHLIGHT_RIVER_WIDTH_SCALE = 1.35;
+const DOTTED_EDGE_PATTERN = "4 6";
+const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
+const FLOW_STROKE = "#4f7cff";
+const FLOW_STROKE_WIDTH = 4;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
@@ -211,7 +211,8 @@ function describeFrame(map, frame) {
 
   const frameMap = frame.map;
   const seaCellCount = frameMap.cells.filter((cell) => cell.features.sea).length;
-  const riverCount = frameMap.rivers?.length || 0;
+  const hillCount = frameMap.cells.filter((cell) => cell.features.hill).length;
+  const hillsideCount = frameMap.cells.filter((cell) => cell.features.hillside).length;
   return [
     frame.label,
     `Seed ${map.init.seed}`,
@@ -219,7 +220,8 @@ function describeFrame(map, frame) {
     `${frameMap.cells.length} cells`,
     `${frameMap.edges.length} edges`,
     `${seaCellCount} sea cells`,
-    `${riverCount} rivers`,
+    `${hillCount} hills`,
+    `${hillsideCount} hillsides`,
   ].join(" | ");
 }
 
@@ -311,6 +313,7 @@ function clearHoveredCell() {
   }
 
   hoveredCellId = null;
+  clearFlowOverlay();
   applyHoverPresentation(null);
   hoveredCellData.className = "cell-data empty";
   hoveredCellData.textContent = "Hover a cell to inspect its data.";
@@ -432,16 +435,21 @@ function renderHoveredCell(cell) {
     .map(([name]) => name)
     .join(", ") || "none";
   const boundarySides = cell.boundarySides.length ? cell.boundarySides.join(", ") : "none";
+  const flowPath = computeFlowPath(cell.id);
 
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
     createCellDataRow("Cell", String(cell.id)),
     createCellDataRow("Centroid", `${cell.centroid.x.toFixed(1)}, ${cell.centroid.y.toFixed(1)}`),
     createCellDataRow("Features", features),
+    createCellDataRow("Hill", cell.features.hill ? "yes" : "no"),
+    createCellDataRow("Hillside", cell.features.hillside ? "yes" : "no"),
+    createCellDataRow("Flow To Sea", describeFlowPath(flowPath)),
     createCellDataRow("Boundary Sides", boundarySides),
     createCellDataRow("Edges", cell.edgeIds.join(", ") || "none"),
     createCellDataRow("Neighbors", cell.neighborCellIds.join(", ") || "none"),
   ].join("");
+  drawFlowOverlay(flowPath);
 }
 
 function createCellDataRow(label, value) {
@@ -486,89 +494,158 @@ function getCellBounds(cell) {
 }
 
 function applyHoverPresentation(cellId) {
-  const cellElements = svg.querySelectorAll("[data-cell-id]");
-  const riverElements = svg.querySelectorAll("[data-river-id]");
+  const edgeElements = svg.querySelectorAll("[data-edge-id]");
 
   if (!Number.isFinite(cellId)) {
-    cellElements.forEach((element) => {
-      element.style.opacity = "1";
-    });
-    riverElements.forEach((element) => {
-      element.style.opacity = "1";
-      element.style.strokeWidth = element.getAttribute("data-base-width") || "";
+    edgeElements.forEach((element) => {
+      element.style.strokeDasharray = "";
     });
     return;
   }
 
-  const neighborCellIds = collectNeighborCellIds(cellId);
-  cellElements.forEach((element) => {
-    const currentCellId = Number(element.getAttribute("data-cell-id"));
-    if (currentCellId === cellId) {
-      element.style.opacity = "1";
+  const highlightedCellIds = collectHighlightedCellIds(cellId);
+  edgeElements.forEach((element) => {
+    const leftCellId = parseOptionalCellId(element.getAttribute("data-left-cell-id"));
+    const rightCellId = parseOptionalCellId(element.getAttribute("data-right-cell-id"));
+    if (highlightedCellIds.has(leftCellId) || highlightedCellIds.has(rightCellId)) {
+      element.style.strokeDasharray = "";
       return;
     }
 
-    element.style.opacity = neighborCellIds.has(currentCellId) ? String(NEIGHBOR_CELL_OPACITY) : String(DIMMED_CELL_OPACITY);
-  });
-
-  const highlightedRiverIds = collectHighlightedRiverIds(cellId);
-  riverElements.forEach((element) => {
-    const riverId = Number(element.getAttribute("data-river-id"));
-    const baseWidth = Number(element.getAttribute("data-base-width")) || 0;
-    const isHighlighted = highlightedRiverIds.has(riverId);
-    element.style.opacity = highlightedRiverIds.size === 0 || isHighlighted ? "1" : String(DIMMED_RIVER_OPACITY);
-    element.style.strokeWidth = isHighlighted ? String(baseWidth * HIGHLIGHT_RIVER_WIDTH_SCALE) : String(baseWidth);
+    element.style.strokeDasharray = DOTTED_EDGE_PATTERN;
   });
 }
 
-function collectNeighborCellIds(cellId) {
+function collectHighlightedCellIds(cellId) {
   if (!currentFrame || currentFrame.type !== "map") {
     return new Set();
   }
 
   const hoveredCell = currentFrame.map.cells.find((cell) => cell.id === cellId);
-  return new Set(hoveredCell?.neighborCellIds || []);
+  return new Set([cellId, ...(hoveredCell?.neighborCellIds || [])]);
 }
 
-function collectHighlightedRiverIds(cellId) {
+function parseOptionalCellId(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function computeFlowPath(startCellId) {
   if (!currentFrame || currentFrame.type !== "map") {
-    return new Set();
+    return null;
   }
 
-  const { rivers } = currentFrame.map;
-  const highlighted = new Set(
-    rivers
-      .filter((river) => river.cellIds.includes(cellId))
-      .map((river) => river.id),
-  );
-
-  if (highlighted.size === 0) {
-    return highlighted;
+  const { cells } = currentFrame.map;
+  const startCell = cells.find((cell) => cell.id === startCellId);
+  if (!startCell || startCell.features.sea) {
+    return null;
   }
 
-  const parentByRiverId = new Map();
-  rivers.forEach((river) => {
-    if (river.termination !== "merge") {
-      return;
+  const previousByCellId = new Map();
+  const visited = new Set([startCellId]);
+  const queue = [startCellId];
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const cellId = queue[index];
+    const cell = cells[cellId];
+    if (!cell) {
+      continue;
     }
 
-    const parent = rivers.find((candidate) => candidate.id !== river.id && candidate.cellIds.includes(river.endCellId));
-    if (parent) {
-      parentByRiverId.set(river.id, parent.id);
-    }
-  });
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    rivers.forEach((river) => {
-      const parentId = parentByRiverId.get(river.id);
-      if (parentId !== undefined && highlighted.has(parentId) && !highlighted.has(river.id)) {
-        highlighted.add(river.id);
-        changed = true;
+    for (const neighborId of cell.neighborCellIds) {
+      if (visited.has(neighborId)) {
+        continue;
       }
-    });
+
+      const neighbor = cells[neighborId];
+      if (!neighbor) {
+        continue;
+      }
+
+      if (!neighbor.features.sea && (neighbor.features.hill || neighbor.features.hillside)) {
+        continue;
+      }
+
+      visited.add(neighborId);
+      previousByCellId.set(neighborId, cellId);
+      if (neighbor.features.sea) {
+        return buildFlowPath(cells, previousByCellId, startCellId, neighborId);
+      }
+      queue.push(neighborId);
+    }
   }
 
-  return highlighted;
+  return null;
+}
+
+function buildFlowPath(cells, previousByCellId, startCellId, endCellId) {
+  const cellIds = [];
+  let cursor = endCellId;
+
+  while (cursor !== undefined) {
+    cellIds.push(cursor);
+    if (cursor === startCellId) {
+      break;
+    }
+    cursor = previousByCellId.get(cursor);
+  }
+
+  if (cellIds[cellIds.length - 1] !== startCellId) {
+    return null;
+  }
+
+  cellIds.reverse();
+  return {
+    cellIds,
+    points: cellIds
+      .map((cellId) => cells[cellId])
+      .filter(Boolean)
+      .map((cell) => ({ x: cell.centroid.x, y: cell.centroid.y })),
+  };
+}
+
+function describeFlowPath(flowPath) {
+  if (!flowPath) {
+    return "no valid path";
+  }
+
+  return `${flowPath.cellIds.length - 1} steps`;
+}
+
+function drawFlowOverlay(flowPath) {
+  clearFlowOverlay();
+  if (!flowPath || flowPath.points.length < 2) {
+    return;
+  }
+
+  const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  overlay.setAttribute("id", FLOW_OVERLAY_ID);
+  overlay.setAttribute("pointer-events", "none");
+
+  const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  outline.setAttribute("points", toSvgPoints(flowPath.points));
+  outline.setAttribute("fill", "none");
+  outline.setAttribute("stroke", "rgba(255, 255, 255, 0.75)");
+  outline.setAttribute("stroke-width", String(FLOW_STROKE_WIDTH + 2));
+  outline.setAttribute("stroke-linecap", "round");
+  outline.setAttribute("stroke-linejoin", "round");
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  line.setAttribute("points", toSvgPoints(flowPath.points));
+  line.setAttribute("fill", "none");
+  line.setAttribute("stroke", FLOW_STROKE);
+  line.setAttribute("stroke-width", String(FLOW_STROKE_WIDTH));
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("stroke-linejoin", "round");
+
+  overlay.append(outline, line);
+  svg.append(overlay);
+}
+
+function clearFlowOverlay() {
+  svg.querySelector(`#${FLOW_OVERLAY_ID}`)?.remove();
+}
+
+function toSvgPoints(points) {
+  return points.map((point) => `${point.x},${point.y}`).join(" ");
 }

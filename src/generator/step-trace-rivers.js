@@ -1,30 +1,42 @@
 /*
  * WHAT: Trace river networks across the canonical map and annotate touched cells and edges.
- * HOW: Pick inland boundary starts, route toward the sea through edge midpoints, and commit one river at a time.
- * WHY: Rivers are the final structural feature and need both traversal metadata and renderable geometry.
+ * HOW: Pick inland boundary starts, route one trunk river to the sea, then force later rivers to merge as tributaries.
+ * WHY: Rivers should read as a connected drainage system with one outlet, distinct sources, and named confluences.
  */
 
 import { centerBias, clamp, cross, distanceBetween, dot, normalizeVector, pointsMatch } from "./geometry.js";
 
 const MAX_RIVER_COUNT = 4;
-const MIN_RIVER_START_DISTANCE = 3;
-const RIVER_START_DISTANCE_RATIO = 0.35;
+const MIN_RIVER_START_DISTANCE = 5;
+const RIVER_START_DISTANCE_RATIO = 0.55;
 const MIN_RIVER_STEPS = 12;
 const RIVER_MAX_STEP_RATIO = 0.3;
 const RIVER_START_POOL_SIZE = 8;
 const RIVER_START_CENTER_WEIGHT = 3;
 const RIVER_DISTANCE_WEIGHT = 2.8;
 const RIVER_BASE_WIDTH = 2.8;
-const RIVER_MERGE_WIDTH_INCREMENT = 1.1;
+const RIVER_FLOW_WIDTH_INCREMENT = 0.7;
 const RIVER_MEANDER_BIAS = 0.65;
 const RIVER_TURN_WEIGHT = 0.6;
 const RIVER_MEANDER_WEIGHT = 0.75;
-const RIVER_MERGE_ATTRACTION = 4;
+const RIVER_MERGE_ATTRACTION = 7;
 const RIVER_JITTER_WEIGHT = 0.55;
 const RIVER_ATTRACTION_RADIUS_RATIO = 0.18;
 const RIVER_ATTRACTION_WEIGHT = 2.2;
 const CENTER_BIAS_RADIUS_RATIO = 0.68;
 const RIVER_SOURCE_OUTSET = 1;
+const RIVER_NAMES = [
+  "Valdombra",
+  "Fiume Serrano",
+  "Torrente Belloro",
+  "Rio Castellano",
+  "Fiumara Lucente",
+  "Torrente Virelli",
+  "Rio Montesco",
+  "Fiume Caldoro",
+  "Torrente Azzurri",
+  "Rio Ventoro",
+];
 
 export function runTraceRiversStep(map, { rng }) {
   const rivers = traceRivers(map, rng);
@@ -59,6 +71,7 @@ function traceRivers(map, rng) {
     return [];
   }
 
+  const riverNames = chooseRiverNames(rng, requestedCount);
   const seaDistances = computeSeaDistances(map);
   const adjacency = buildAdjacencyMap(map);
   const boundaryEntries = buildBoundaryEntryMap(map);
@@ -67,6 +80,14 @@ function traceRivers(map, rng) {
   const occupiedSegments = new Set();
   const maxDistance = Math.max(...seaDistances.filter((distance) => Number.isFinite(distance)), 0);
   const minStartDistance = Math.max(MIN_RIVER_START_DISTANCE, Math.ceil(maxDistance * RIVER_START_DISTANCE_RATIO));
+  let seaRiverId = null;
+
+  console.debug("[rivers] start", {
+    requestedCount,
+    maxDistance,
+    preferredMinStartDistance: minStartDistance,
+    boundaryEntryCellCount: boundaryEntries.size,
+  });
 
   for (let riverIndex = 0; riverIndex < requestedCount; riverIndex += 1) {
     const rejectedStartEdges = new Set();
@@ -84,12 +105,20 @@ function traceRivers(map, rng) {
       );
 
       if (!startEntry) {
+        console.debug("[rivers] no valid start entry left", {
+          riverIndex,
+          rejectedStartEdges: rejectedStartEdges.size,
+          allowSeaTermination: seaRiverId === null,
+        });
         break;
       }
 
       river = traceSingleRiver({
         rng,
         riverIndex,
+        riverName: riverNames[riverIndex],
+        sourceWater: initialSourceWater(riverIndex, requestedCount),
+        allowSeaTermination: seaRiverId === null,
         startEntry,
         map,
         adjacency,
@@ -101,9 +130,26 @@ function traceRivers(map, rng) {
 
       if (river) {
         rivers.push(river);
+        console.debug("[rivers] committed", {
+          riverIndex,
+          name: river.name,
+          termination: river.termination,
+          sourceWater: river.sourceWater,
+          totalWater: river.totalWater,
+          cellCount: river.cellIds.length,
+          edgeCount: river.edgeIds.length,
+        });
+        if (river.termination === "sea") {
+          seaRiverId = river.id;
+        }
         break;
       }
 
+      console.debug("[rivers] rejected start entry after failed trace", {
+        riverIndex,
+        startCellId: startEntry.cellId,
+        startEdgeId: startEntry.entry.edgeId,
+      });
       rejectedStartEdges.add(startEntry.entry.edgeId);
     }
 
@@ -215,41 +261,81 @@ function buildBoundaryEntryMap(map) {
 }
 
 function chooseRiverStartCell(rng, map, seaDistances, occupiedCells, minStartDistance, boundaryEntries, rejectedStartEdges) {
-  const candidates = map.cells
-    .filter((cell) => {
-      if (!cell.features.boundary) {
-        return false;
-      }
-      const entries = (boundaryEntries.get(cell.id) || []).filter((entry) => !rejectedStartEdges.has(entry.edgeId));
-      return !cell.features.sea && !occupiedCells.has(cell.id) && seaDistances[cell.id] >= 1 && entries.length > 0;
-    })
-    .map((cell) => {
-      const entries = (boundaryEntries.get(cell.id) || []).filter((entry) => !rejectedStartEdges.has(entry.edgeId));
-      const inlandBonus = Math.max(0, seaDistances[cell.id] - minStartDistance);
-      const nearSeaPenalty = Math.max(0, minStartDistance - seaDistances[cell.id]);
-      return {
-        cellId: cell.id,
-        entry: entries[Math.floor(rng.next() * entries.length)],
-        score:
-          seaDistances[cell.id]
-          + inlandBonus
-          - nearSeaPenalty * 1.5
-          + centerBias(cell.centroid, map.meta.size, CENTER_BIAS_RADIUS_RATIO) * RIVER_START_CENTER_WEIGHT,
-      };
-    })
-    .sort((first, second) => second.score - first.score);
+  // Prefer starts far from the sea, but do not hard-fail generation when the coastline
+  // leaves too few true boundary cells at that preferred distance.
+  const preferredCandidates = collectStartCandidates(
+    rng,
+    map,
+    seaDistances,
+    occupiedCells,
+    minStartDistance,
+    boundaryEntries,
+    rejectedStartEdges,
+  );
+  const fallbackCandidates = preferredCandidates.length
+    ? preferredCandidates
+    : collectStartCandidates(
+        rng,
+        map,
+        seaDistances,
+        occupiedCells,
+        Math.max(1, Math.floor(minStartDistance * 0.5)),
+        boundaryEntries,
+        rejectedStartEdges,
+      );
+  const candidates = fallbackCandidates;
 
   if (!candidates.length) {
+    console.debug("[rivers] no start candidates", {
+      preferredMinStartDistance: minStartDistance,
+      fallbackMinStartDistance: Math.max(1, Math.floor(minStartDistance * 0.5)),
+      rejectedStartEdges: rejectedStartEdges.size,
+      occupiedCells: occupiedCells.size,
+    });
     return null;
+  }
+
+  if (preferredCandidates.length === 0) {
+    console.debug("[rivers] falling back to a closer-to-sea start threshold", {
+      preferredMinStartDistance: minStartDistance,
+      fallbackMinStartDistance: Math.max(1, Math.floor(minStartDistance * 0.5)),
+      candidateCount: candidates.length,
+    });
   }
 
   const poolSize = Math.min(RIVER_START_POOL_SIZE, candidates.length);
   return candidates[Math.floor(rng.next() * poolSize)] || null;
 }
 
+function collectStartCandidates(rng, map, seaDistances, occupiedCells, minDistance, boundaryEntries, rejectedStartEdges) {
+  return map.cells
+    .filter((cell) => {
+      if (!cell.features.boundary) {
+        return false;
+      }
+
+      const entries = (boundaryEntries.get(cell.id) || []).filter((entry) => !rejectedStartEdges.has(entry.edgeId));
+      return !cell.features.sea && !occupiedCells.has(cell.id) && seaDistances[cell.id] >= minDistance && entries.length > 0;
+    })
+    .map((cell) => {
+      const entries = (boundaryEntries.get(cell.id) || []).filter((entry) => !rejectedStartEdges.has(entry.edgeId));
+      return {
+        cellId: cell.id,
+        entry: entries[Math.floor(rng.next() * entries.length)],
+        score:
+          seaDistances[cell.id] * 2
+          + centerBias(cell.centroid, map.meta.size, CENTER_BIAS_RADIUS_RATIO) * RIVER_START_CENTER_WEIGHT,
+      };
+    })
+    .sort((first, second) => second.score - first.score);
+}
+
 function traceSingleRiver({
   rng,
   riverIndex,
+  riverName,
+  sourceWater,
+  allowSeaTermination,
   startEntry,
   map,
   adjacency,
@@ -258,6 +344,8 @@ function traceSingleRiver({
   occupiedCells,
   occupiedSegments,
 }) {
+  // Each traced river carries its own source flow. At merges we add that flow to the
+  // receiver river downstream from the confluence only.
   const startCellId = startEntry.cellId;
   const riverCells = new Set([startCellId]);
   const committedCells = new Set([startCellId]);
@@ -266,8 +354,8 @@ function traceSingleRiver({
   const path = [sourcePoint];
   const segments = [];
   const traversal = [
-    { type: "edge", edgeId: startEntry.entry.edgeId },
-    { type: "cell", cellId: startCellId },
+    { type: "edge", edgeId: startEntry.entry.edgeId, waterAmount: sourceWater },
+    { type: "cell", cellId: startCellId, waterAmount: sourceWater },
   ];
   const edgeIds = [startEntry.entry.edgeId];
   let currentCellId = startCellId;
@@ -285,6 +373,7 @@ function traceSingleRiver({
     const nextChoice = chooseRiverNeighbor({
       rng,
       riverIndex,
+      allowSeaTermination,
       currentCell,
       previousCellId,
       previousDirection,
@@ -300,44 +389,33 @@ function traceSingleRiver({
     });
 
     if (!nextChoice) {
+      console.debug("[rivers] trace stalled", {
+        riverIndex,
+        riverName,
+        step,
+        currentCellId,
+        allowSeaTermination,
+      });
       break;
     }
 
     edgeIds.push(nextChoice.edgeId);
-    traversal.push({ type: "edge", edgeId: nextChoice.edgeId });
+    traversal.push({ type: "edge", edgeId: nextChoice.edgeId, waterAmount: sourceWater });
 
     if (step === 0) {
       path.push(nextChoice.midpoint);
-      segments.push({
-        from: currentEntryPoint,
-        to: nextChoice.midpoint,
-        cellId: currentCellId,
-        edgeId: nextChoice.edgeId,
-        width: RIVER_BASE_WIDTH,
-      });
+      segments.push(createRiverSegment(currentEntryPoint, nextChoice.midpoint, currentCellId, nextChoice.edgeId, sourceWater));
     } else {
       path.push(currentCell.centroid);
       path.push(nextChoice.midpoint);
-      segments.push({
-        from: currentEntryPoint,
-        to: currentCell.centroid,
-        cellId: currentCellId,
-        edgeId: currentEntryEdge.edgeId,
-        width: RIVER_BASE_WIDTH,
-      });
-      segments.push({
-        from: currentCell.centroid,
-        to: nextChoice.midpoint,
-        cellId: currentCellId,
-        edgeId: nextChoice.edgeId,
-        width: RIVER_BASE_WIDTH,
-      });
+      segments.push(createRiverSegment(currentEntryPoint, currentCell.centroid, currentCellId, currentEntryEdge.edgeId, sourceWater));
+      segments.push(createRiverSegment(currentCell.centroid, nextChoice.midpoint, currentCellId, nextChoice.edgeId, sourceWater));
     }
     committedSegments.add(nextChoice.edgeId);
 
     if (nextChoice.termination === "sea") {
       riverCells.add(nextChoice.targetCellId);
-      traversal.push({ type: "cell", cellId: nextChoice.targetCellId });
+      traversal.push({ type: "cell", cellId: nextChoice.targetCellId, waterAmount: sourceWater });
       endCellId = nextChoice.targetCellId;
       termination = "sea";
       break;
@@ -345,15 +423,9 @@ function traceSingleRiver({
 
     if (nextChoice.termination === "merge") {
       riverCells.add(nextChoice.targetCellId);
-      traversal.push({ type: "cell", cellId: nextChoice.targetCellId });
+      traversal.push({ type: "cell", cellId: nextChoice.targetCellId, waterAmount: sourceWater });
       path.push(nextChoice.mergePoint);
-      segments.push({
-        from: nextChoice.midpoint,
-        to: nextChoice.mergePoint,
-        cellId: nextChoice.targetCellId,
-        edgeId: nextChoice.edgeId,
-        width: RIVER_BASE_WIDTH,
-      });
+      segments.push(createRiverSegment(nextChoice.midpoint, nextChoice.mergePoint, nextChoice.targetCellId, nextChoice.edgeId, sourceWater));
       endCellId = nextChoice.targetCellId;
       mergeTarget = nextChoice;
       termination = "merge";
@@ -363,7 +435,7 @@ function traceSingleRiver({
     const nextCell = map.cells[nextChoice.targetCellId];
     committedCells.add(nextCell.id);
     riverCells.add(nextCell.id);
-    traversal.push({ type: "cell", cellId: nextCell.id });
+    traversal.push({ type: "cell", cellId: nextCell.id, waterAmount: sourceWater });
     previousDirection = normalizeVector(
       nextChoice.midpoint.x - currentCell.centroid.x,
       nextChoice.midpoint.y - currentCell.centroid.y,
@@ -375,32 +447,48 @@ function traceSingleRiver({
   }
 
   if (termination !== "sea" && termination !== "merge") {
+    console.debug("[rivers] discarded traced path", {
+      riverIndex,
+      riverName,
+      startCellId,
+      endCellId,
+      reason: termination,
+      traversedCells: riverCells.size,
+    });
     return null;
   }
 
-  committedCells.forEach((cellId) => occupiedCells.add(cellId));
-  committedSegments.forEach((edgeId) => occupiedSegments.add(edgeId));
-
-  if (mergeTarget) {
-    strengthenRiverFromMerge(existingRivers[mergeTarget.mergeRiverIndex], mergeTarget.targetCellId);
-  }
-
-  return {
+  const river = {
     id: riverIndex,
+    name: riverName,
     startCellId,
     endCellId,
     termination,
+    sourceWater,
+    totalWater: sourceWater,
     traversal,
     cellIds: Array.from(riverCells),
     edgeIds,
     path,
     segments,
+    sourceOrder: riverIndex,
   };
+
+  committedCells.forEach((cellId) => occupiedCells.add(cellId));
+  committedSegments.forEach((edgeId) => occupiedSegments.add(edgeId));
+
+  if (mergeTarget) {
+    const receiver = existingRivers[mergeTarget.mergeRiverIndex];
+    integrateTributary(receiver, river, mergeTarget.targetCellId);
+  }
+
+  return river;
 }
 
 function chooseRiverNeighbor({
   rng,
   riverIndex,
+  allowSeaTermination,
   currentCell,
   previousCellId,
   previousDirection,
@@ -416,18 +504,46 @@ function chooseRiverNeighbor({
 }) {
   const meanderBias = (riverIndex % 2 === 0 ? 1 : -1) * RIVER_MEANDER_BIAS;
   const options = [];
+  const rejectionCounts = {
+    backtrackOrLoop: 0,
+    missingOrOccupiedEdge: 0,
+    touchingEntryEdge: 0,
+    seaBlocked: 0,
+    occupiedLandCell: 0,
+    notDownhillEnough: 0,
+  };
 
   currentCell.neighborCellIds.forEach((neighborId) => {
     if (neighborId === previousCellId || riverCells.has(neighborId)) {
+      rejectionCounts.backtrackOrLoop += 1;
       return;
     }
 
     const neighbor = map.cells[neighborId];
     const edge = adjacency.get(edgeKey(currentCell.id, neighborId));
     if (!edge || occupiedSegments.has(edge.edgeId)) {
+      rejectionCounts.missingOrOccupiedEdge += 1;
       return;
     }
     if (edgesTouch(currentEntryEdge, edge)) {
+      rejectionCounts.touchingEntryEdge += 1;
+      return;
+    }
+
+    const mergeTarget = findMergeTarget(existingRivers, neighborId);
+    const touchingRiver = mergeTarget !== null;
+    if (neighbor.features.sea && !allowSeaTermination) {
+      rejectionCounts.seaBlocked += 1;
+      return;
+    }
+    if (!neighbor.features.sea && !touchingRiver && occupiedCells.has(neighborId)) {
+      rejectionCounts.occupiedLandCell += 1;
+      return;
+    }
+
+    const distanceDelta = seaDistances[currentCell.id] - seaDistances[neighborId];
+    if (!neighbor.features.sea && !touchingRiver && distanceDelta < 0) {
+      rejectionCounts.notDownhillEnough += 1;
       return;
     }
 
@@ -439,18 +555,6 @@ function chooseRiverNeighbor({
       edge.midpoint.x - currentCell.centroid.x,
       edge.midpoint.y - currentCell.centroid.y,
     );
-    const distanceDelta = seaDistances[currentCell.id] - seaDistances[neighborId];
-    const mergeTarget = findMergeTarget(existingRivers, neighborId);
-    const touchingRiver = mergeTarget !== null;
-
-    if (!neighbor.features.sea && !touchingRiver && occupiedCells.has(neighborId)) {
-      return;
-    }
-
-    if (!neighbor.features.sea && !touchingRiver && distanceDelta < 1) {
-      return;
-    }
-
     const referenceDirection = previousDirection || incomingDirection;
     const straightness = dot(referenceDirection, direction);
     const bend = cross(referenceDirection, direction);
@@ -473,6 +577,12 @@ function chooseRiverNeighbor({
   });
 
   if (!options.length) {
+    console.debug("[rivers] no neighbor candidates", {
+      riverIndex,
+      currentCellId: currentCell.id,
+      allowSeaTermination,
+      rejectionCounts,
+    });
     return null;
   }
 
@@ -519,17 +629,103 @@ function findMergeTarget(rivers, cellId) {
   return riverIndex >= 0 ? riverIndex : null;
 }
 
-function strengthenRiverFromMerge(river, mergeCellId) {
-  let shouldGrow = false;
-
-  river.segments.forEach((segment) => {
-    if (segment.cellId === mergeCellId) {
-      shouldGrow = true;
-    }
-    if (shouldGrow) {
-      segment.width = (segment.width || RIVER_BASE_WIDTH) + RIVER_MERGE_WIDTH_INCREMENT;
-    }
+function integrateTributary(receiver, tributary, mergeCellId) {
+  // Confluence naming rule:
+  // 1. more water wins
+  // 2. if equal, longer river wins
+  // 3. if equal, older source wins
+  const winningName = dominantRiverName(receiver, tributary);
+  receiver.totalWater += tributary.totalWater;
+  receiver.name = winningName;
+  console.debug("[rivers] merge", {
+    receiverId: receiver.id,
+    receiverName: receiver.name,
+    tributaryId: tributary.id,
+    tributaryName: tributary.name,
+    mergeCellId,
+    totalWaterAfterMerge: receiver.totalWater,
   });
+
+  let downstream = false;
+  receiver.traversal = receiver.traversal.map((part) => {
+    if (!downstream && part.type === "cell" && part.cellId === mergeCellId) {
+      downstream = true;
+    }
+
+    if (!downstream) {
+      return part;
+    }
+
+    return {
+      ...part,
+      waterAmount: (part.waterAmount || receiver.sourceWater) + tributary.totalWater,
+    };
+  });
+
+  downstream = false;
+  receiver.segments = receiver.segments.map((segment) => {
+    if (!downstream && segment.cellId === mergeCellId) {
+      downstream = true;
+    }
+
+    if (!downstream) {
+      return segment;
+    }
+
+    const waterAmount = (segment.waterAmount || receiver.sourceWater) + tributary.totalWater;
+    return {
+      ...segment,
+      waterAmount,
+      width: riverWidthForWater(waterAmount),
+    };
+  });
+}
+
+function dominantRiverName(first, second) {
+  if (first.totalWater !== second.totalWater) {
+    return first.totalWater > second.totalWater ? first.name : second.name;
+  }
+
+  const firstLength = riverLength(first);
+  const secondLength = riverLength(second);
+  if (firstLength !== secondLength) {
+    return firstLength > secondLength ? first.name : second.name;
+  }
+
+  return first.sourceOrder <= second.sourceOrder ? first.name : second.name;
+}
+
+function riverLength(river) {
+  return river.segments.reduce((sum, segment) => sum + distanceBetween(segment.from, segment.to), 0);
+}
+
+function createRiverSegment(from, to, cellId, edgeId, waterAmount) {
+  return {
+    from,
+    to,
+    cellId,
+    edgeId,
+    waterAmount,
+    width: riverWidthForWater(waterAmount),
+  };
+}
+
+function riverWidthForWater(waterAmount) {
+  return RIVER_BASE_WIDTH + Math.max(0, waterAmount - 1) * RIVER_FLOW_WIDTH_INCREMENT;
+}
+
+function chooseRiverNames(rng, count) {
+  const names = [...RIVER_NAMES];
+  for (let index = names.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(rng.next() * (index + 1));
+    [names[index], names[swapIndex]] = [names[swapIndex], names[index]];
+  }
+
+  return Array.from({ length: count }, (_, index) => names[index % names.length]);
+}
+
+function initialSourceWater(riverIndex, requestedCount) {
+  return requestedCount - riverIndex + 1;
 }
 
 function normalizeRiverCount(params) {

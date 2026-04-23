@@ -20,7 +20,6 @@ export function runScatterPointsStep(map, { rng }) {
     points,
     cells: [],
     edges: [],
-    rivers: [],
     water: {
       sides: [],
       seaCellIds: [],
