@@ -40,7 +40,7 @@ export function buildVoronoiDiagram({ points, width, height }) {
 
   const edges = collectEdges(cells, width, height);
 
-  return { cells, edges };
+  return { cells, edges, width, height };
 }
 
 function sanitizePolygon(polygon) {
@@ -122,6 +122,7 @@ function collectEdges(cells, width, height) {
           from: existing.from,
           to: existing.to,
           kind: "land",
+          isBoundary: false,
         });
       } else {
         bucket.push(candidate);
@@ -157,6 +158,7 @@ function collectEdges(cells, width, height) {
         from: segment.from,
         to: segment.to,
         kind: "land",
+        isBoundary: false,
       });
     }
   }
@@ -174,6 +176,7 @@ function collectEdges(cells, width, height) {
       from: segment.from,
       to: segment.to,
       kind: "land",
+      isBoundary: true,
     });
   });
 

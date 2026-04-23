@@ -192,7 +192,7 @@ function buildBoundaryEntryMap(map) {
   const lookup = new Map();
 
   map.edges.forEach((edge) => {
-    if (!edge.features.boundary) {
+    if (!edge.features.boundary || !isCanvasBoundaryEdge(edge, map.meta.size)) {
       return;
     }
 
@@ -217,15 +217,24 @@ function buildBoundaryEntryMap(map) {
 function chooseRiverStartCell(rng, map, seaDistances, occupiedCells, minStartDistance, boundaryEntries, rejectedStartEdges) {
   const candidates = map.cells
     .filter((cell) => {
+      if (!cell.features.boundary) {
+        return false;
+      }
       const entries = (boundaryEntries.get(cell.id) || []).filter((entry) => !rejectedStartEdges.has(entry.edgeId));
-      return !cell.features.sea && !occupiedCells.has(cell.id) && seaDistances[cell.id] >= minStartDistance && entries.length > 0;
+      return !cell.features.sea && !occupiedCells.has(cell.id) && seaDistances[cell.id] >= 1 && entries.length > 0;
     })
     .map((cell) => {
       const entries = (boundaryEntries.get(cell.id) || []).filter((entry) => !rejectedStartEdges.has(entry.edgeId));
+      const inlandBonus = Math.max(0, seaDistances[cell.id] - minStartDistance);
+      const nearSeaPenalty = Math.max(0, minStartDistance - seaDistances[cell.id]);
       return {
         cellId: cell.id,
         entry: entries[Math.floor(rng.next() * entries.length)],
-        score: seaDistances[cell.id] + centerBias(cell.centroid, map.meta.size, CENTER_BIAS_RADIUS_RATIO) * RIVER_START_CENTER_WEIGHT,
+        score:
+          seaDistances[cell.id]
+          + inlandBonus
+          - nearSeaPenalty * 1.5
+          + centerBias(cell.centroid, map.meta.size, CENTER_BIAS_RADIUS_RATIO) * RIVER_START_CENTER_WEIGHT,
       };
     })
     .sort((first, second) => second.score - first.score);
@@ -568,4 +577,13 @@ function projectBoundarySourcePoint(entry, mapSize) {
   }
 
   return midpoint;
+}
+
+function isCanvasBoundaryEdge(edge, mapSize, epsilon = 0.75) {
+  const onNorth = Math.abs(edge.from.y) <= epsilon && Math.abs(edge.to.y) <= epsilon;
+  const onSouth = Math.abs(edge.from.y - mapSize) <= epsilon && Math.abs(edge.to.y - mapSize) <= epsilon;
+  const onWest = Math.abs(edge.from.x) <= epsilon && Math.abs(edge.to.x) <= epsilon;
+  const onEast = Math.abs(edge.from.x - mapSize) <= epsilon && Math.abs(edge.to.x - mapSize) <= epsilon;
+
+  return onNorth || onSouth || onWest || onEast;
 }

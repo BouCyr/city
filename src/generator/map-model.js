@@ -101,7 +101,7 @@ export function buildCanonicalGeometry(diagram) {
 
   const cellById = new Map(cells.map((cell) => [cell.id, cell]));
   const edges = diagram.edges.map((edge) => {
-    const oriented = orientEdge(edge, cellById);
+    const oriented = orientEdge(edge, cellById, diagram.width, diagram.height);
     if (oriented.leftCellId !== null) {
       cellById.get(oriented.leftCellId)?.edgeIds.push(oriented.id);
     }
@@ -124,12 +124,13 @@ export function buildSummary(map) {
   };
 }
 
-function orientEdge(edge, cellById) {
+function orientEdge(edge, cellById, width, height) {
   const midpoint = {
     x: (edge.from.x + edge.to.x) / 2,
     y: (edge.from.y + edge.to.y) / 2,
   };
   const adjacentCellIds = [edge.a, edge.b].filter((cellId) => cellId !== null);
+  const isBoundary = edge.isBoundary === true || liesOnCanvasBoundary(edge, width, height);
 
   if (adjacentCellIds.length === 1) {
     const cellId = adjacentCellIds[0];
@@ -142,7 +143,7 @@ function orientEdge(edge, cellById) {
       leftCellId: side >= 0 ? cellId : null,
       rightCellId: side < 0 ? cellId : null,
       features: {
-        boundary: true,
+        boundary: isBoundary,
         sea: false,
         river: false,
       },
@@ -161,11 +162,20 @@ function orientEdge(edge, cellById) {
     leftCellId: firstSide >= secondSide ? firstId : secondId,
     rightCellId: firstSide >= secondSide ? secondId : firstId,
     features: {
-      boundary: false,
+      boundary: isBoundary,
       sea: false,
       river: false,
     },
   };
+}
+
+function liesOnCanvasBoundary(edge, width, height, epsilon = 0.75) {
+  return (
+    (Math.abs(edge.from.x) <= epsilon && Math.abs(edge.to.x) <= epsilon)
+    || (Math.abs(edge.from.x - width) <= epsilon && Math.abs(edge.to.x - width) <= epsilon)
+    || (Math.abs(edge.from.y) <= epsilon && Math.abs(edge.to.y) <= epsilon)
+    || (Math.abs(edge.from.y - height) <= epsilon && Math.abs(edge.to.y - height) <= epsilon)
+  );
 }
 
 function pointSide(from, to, point) {
