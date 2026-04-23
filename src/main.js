@@ -109,7 +109,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
   currentMap = map;
-  resetViewport(map.size);
+  resetViewport(map.meta.size);
   syncReplayUi(map, 0);
   renderReplayIndex(0);
   startReplay();
@@ -138,7 +138,7 @@ function renderReplayIndex(index) {
   }
 
   const frame = currentMap.frames[index];
-  drawReplayFrame(svg, frame, currentMap.size);
+  drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
   summary.textContent = describeFrame(currentMap, frame);
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
@@ -198,11 +198,11 @@ function describeFrame(map, frame) {
   }
 
   const frameMap = frame.map;
-  const seaCellCount = frameMap.cells.filter((cell) => cell.isSea).length;
+  const seaCellCount = frameMap.cells.filter((cell) => cell.features.sea).length;
   const riverCount = frameMap.rivers?.length || 0;
   return [
     frame.label,
-    `Seed ${map.seed}`,
+    `Seed ${map.init.seed}`,
     `${frameMap.points.length} points`,
     `${frameMap.cells.length} cells`,
     `${frameMap.edges.length} edges`,
@@ -240,7 +240,7 @@ function findReplayIndexForStep(stepIndex) {
 function handleViewportWheel(event) {
   event.preventDefault();
   const direction = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-  const targetSize = currentMap?.size || CANVAS_SIZE;
+  const targetSize = currentMap?.meta.size || CANVAS_SIZE;
   const focusPoint = getFocusPoint(event, targetSize);
   zoomBy(direction, focusPoint, targetSize);
 }
@@ -261,7 +261,7 @@ function handlePointerMove(event) {
     return;
   }
 
-  const targetSize = currentMap?.size || CANVAS_SIZE;
+  const targetSize = currentMap?.meta.size || CANVAS_SIZE;
   const deltaX = (event.clientX - dragStart.x) * (viewportState.width / mapViewport.clientWidth);
   const deltaY = (event.clientY - dragStart.y) * (viewportState.height / mapViewport.clientHeight);
   viewportState.x = dragStart.offsetX - deltaX;
@@ -288,7 +288,7 @@ function handlePointerUp(event) {
  * HOW: Convert the desired zoom factor into a new viewBox rectangle anchored at the pointer or viewport center.
  * WHY: Users need precise inspection of dense maps without losing their place in the replay.
  */
-function zoomBy(factor, focusPoint = null, size = currentMap?.size || CANVAS_SIZE) {
+function zoomBy(factor, focusPoint = null, size = currentMap?.meta.size || CANVAS_SIZE) {
   const nextZoom = clamp(viewportState.zoom * factor, MIN_ZOOM, MAX_ZOOM);
   const appliedFactor = nextZoom / viewportState.zoom;
 
@@ -314,7 +314,7 @@ function zoomBy(factor, focusPoint = null, size = currentMap?.size || CANVAS_SIZ
   applyViewport();
 }
 
-function resetViewport(size = currentMap?.size || CANVAS_SIZE) {
+function resetViewport(size = currentMap?.meta.size || CANVAS_SIZE) {
   viewportState.zoom = 1;
   viewportState.width = size;
   viewportState.height = size;

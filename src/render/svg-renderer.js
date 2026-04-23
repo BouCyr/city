@@ -50,8 +50,8 @@ export function drawReplayFrame(svg, frame, size) {
  * HOW: Clear the base layer, then append grouped SVG primitives for every visible map feature.
  * WHY: The renderer should accept plain generator data and stay stateless between frames.
  */
-export function drawCityMap(svg, map, fallbackSize = map.size) {
-  const size = map.size || fallbackSize;
+export function drawCityMap(svg, map, fallbackSize = map.meta?.size) {
+  const size = map.meta?.size || fallbackSize;
   clearSvg(svg, size);
   svg.append(createMapLayer(map));
 }
@@ -120,7 +120,7 @@ function createCellsGroup(cells) {
     group.append(
       createElement("polygon", {
         points: toSvgPoints(cell.polygon),
-        fill: cell.isSea ? COLORS.seaFill : cell.isCityCenter ? COLORS.centerFill : COLORS.landFill,
+        fill: cell.features.sea ? COLORS.seaFill : cell.features.cityCenter ? COLORS.centerFill : COLORS.landFill,
       }),
     );
   });
@@ -142,7 +142,7 @@ function createEdgesGroup(edges) {
         y1: edge.from.y,
         x2: edge.to.x,
         y2: edge.to.y,
-        stroke: edge.kind === "sea" ? COLORS.seaEdge : COLORS.edge,
+        stroke: edge.features.sea ? COLORS.seaEdge : COLORS.edge,
       }),
     );
   });
