@@ -38,7 +38,7 @@ export function buildVoronoiDiagram({ points, width, height }) {
     };
   });
 
-  const edges = collectEdges(cells);
+  const edges = collectEdges(cells, width, height);
 
   return { cells, edges };
 }
@@ -96,7 +96,7 @@ function detectTouches(polygon, width, height) {
   };
 }
 
-function collectEdges(cells) {
+function collectEdges(cells, width, height) {
   const segmentBuckets = new Map();
   const edges = [];
 
@@ -130,18 +130,52 @@ function collectEdges(cells) {
     }
   }
 
-  for (const [key, bucket] of segmentBuckets) {
-    for (const segment of bucket) {
+  const unmatchedSegments = [];
+  for (const bucket of segmentBuckets.values()) {
+    unmatchedSegments.push(...bucket);
+  }
+
+  const resolved = new Set();
+  for (let index = 0; index < unmatchedSegments.length; index += 1) {
+    if (resolved.has(index)) {
+      continue;
+    }
+
+    const segment = unmatchedSegments[index];
+    const matchIndex = unmatchedSegments.findIndex((candidate, candidateIndex) =>
+      candidateIndex > index && !resolved.has(candidateIndex) && segmentsMatch(segment, candidate),
+    );
+
+    if (matchIndex >= 0) {
+      const match = unmatchedSegments[matchIndex];
+      resolved.add(index);
+      resolved.add(matchIndex);
       edges.push({
-        id: `boundary-${segment.a}-${key}`,
+        id: `${segment.a}-${match.a}-${segmentBucketKey(segment.from, segment.to)}`,
         a: segment.a,
-        b: null,
+        b: match.a,
         from: segment.from,
         to: segment.to,
         kind: "land",
       });
     }
   }
+
+  unmatchedSegments.forEach((segment, index) => {
+    if (resolved.has(index) || !segmentLiesOnBoundary(segment, width, height)) {
+      return;
+    }
+
+    const key = segmentBucketKey(segment.from, segment.to);
+    edges.push({
+      id: `boundary-${segment.a}-${key}`,
+      a: segment.a,
+      b: null,
+      from: segment.from,
+      to: segment.to,
+      kind: "land",
+    });
+  });
 
   return edges;
 }
@@ -165,6 +199,15 @@ function segmentsMatch(first, second) {
 
 function pointsNear(first, second, epsilon = SEGMENT_MATCH_EPSILON) {
   return distanceSquared(first, second) <= epsilon ** 2;
+}
+
+function segmentLiesOnBoundary(segment, width, height, epsilon = BOUNDARY_TOUCH_THRESHOLD) {
+  return (
+    (Math.abs(segment.from.x) <= epsilon && Math.abs(segment.to.x) <= epsilon)
+    || (Math.abs(segment.from.x - width) <= epsilon && Math.abs(segment.to.x - width) <= epsilon)
+    || (Math.abs(segment.from.y) <= epsilon && Math.abs(segment.to.y) <= epsilon)
+    || (Math.abs(segment.from.y - height) <= epsilon && Math.abs(segment.to.y - height) <= epsilon)
+  );
 }
 
 function normalizeScalar(value) {
