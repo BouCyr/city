@@ -1,9 +1,27 @@
+/*
+ * WHAT: Wrap d3-delaunay so the generator receives a cleaned Voronoi graph instead of raw library objects.
+ * HOW: Build clipped cell polygons, centroids, neighbor lists, and shared-edge records from the Delaunay output.
+ * WHY: The generator and renderer need a stable geometry format that is easy to reason about and replay.
+ */
+
 import { Delaunay } from "https://cdn.jsdelivr.net/npm/d3-delaunay@6/+esm";
 
+const VORONOI_BOUNDS_MIN = 0;
+const DEGENERATE_AREA_EPSILON = 0.0001;
+const BOUNDARY_TOUCH_THRESHOLD = 0.5;
+const POINT_DEDUPE_DISTANCE_SQUARED = 0.01;
+const SEGMENT_MATCH_EPSILON = 0.75;
+const SEGMENT_BUCKET_PRECISION_DIGITS = 1;
+
+/**
+ * WHAT: Convert a point cloud into cells and shared edges clipped to the map bounds.
+ * HOW: Ask d3-delaunay for the Voronoi diagram, then normalize the output into plain serializable objects.
+ * WHY: Later generation steps need deterministic geometry they can annotate with water, center, and river metadata.
+ */
 export function buildVoronoiDiagram({ points, width, height }) {
   const coordinates = points.map((point) => [point.x, point.y]);
   const delaunay = Delaunay.from(coordinates);
-  const voronoi = delaunay.voronoi([0, 0, width, height]);
+  const voronoi = delaunay.voronoi([VORONOI_BOUNDS_MIN, VORONOI_BOUNDS_MIN, width, height]);
 
   const cells = points.map((point, index) => {
     const polygon = sanitizePolygon(voronoi.cellPolygon(index));
@@ -38,7 +56,7 @@ function dedupePoints(points) {
   const result = [];
   for (const point of points) {
     const previous = result[result.length - 1];
-    if (!previous || distanceSquared(previous, point) > 0.01) {
+    if (!previous || distanceSquared(previous, point) > POINT_DEDUPE_DISTANCE_SQUARED) {
       result.push(point);
     }
   }
@@ -59,7 +77,7 @@ function computeCentroid(polygon) {
     y += (current.y + next.y) * cross;
   }
 
-  if (Math.abs(twiceArea) < 0.0001) {
+  if (Math.abs(twiceArea) < DEGENERATE_AREA_EPSILON) {
     return polygon[0] || { x: 0, y: 0 };
   }
 
@@ -70,12 +88,11 @@ function computeCentroid(polygon) {
 }
 
 function detectTouches(polygon, width, height) {
-  const threshold = 0.5;
   return {
-    north: polygon.some((point) => point.y <= threshold),
-    south: polygon.some((point) => point.y >= height - threshold),
-    west: polygon.some((point) => point.x <= threshold),
-    east: polygon.some((point) => point.x >= width - threshold),
+    north: polygon.some((point) => point.y <= BOUNDARY_TOUCH_THRESHOLD),
+    south: polygon.some((point) => point.y >= height - BOUNDARY_TOUCH_THRESHOLD),
+    west: polygon.some((point) => point.x <= BOUNDARY_TOUCH_THRESHOLD),
+    east: polygon.some((point) => point.x >= width - BOUNDARY_TOUCH_THRESHOLD),
   };
 }
 
@@ -146,12 +163,12 @@ function segmentsMatch(first, second) {
   );
 }
 
-function pointsNear(first, second, epsilon = 0.75) {
+function pointsNear(first, second, epsilon = SEGMENT_MATCH_EPSILON) {
   return distanceSquared(first, second) <= epsilon ** 2;
 }
 
 function normalizeScalar(value) {
-  return value.toFixed(1);
+  return value.toFixed(SEGMENT_BUCKET_PRECISION_DIGITS);
 }
 
 function distanceSquared(a, b) {

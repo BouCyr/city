@@ -1,10 +1,26 @@
+/*
+ * WHAT: Manage the step list UI that reflects generation progress and replay selection.
+ * HOW: Re-render the ordered list whenever the active or selected step changes.
+ * WHY: The generator needs a lightweight status view without coupling map logic to the DOM.
+ */
+
 import { GENERATION_STEPS } from "../generator/steps.js";
 
+const STATUS_IDLE = "Idle";
+const STATUS_COMPLETE = "Complete";
+const STEP_RENDER_DELAY_MS = 120;
+const STEP_SELECTION_KEYS = new Set(["Enter", " "]);
+
+/**
+ * WHAT: Create a small stateful controller around the step list and status badge.
+ * HOW: Track the active and selected indices locally, then rebuild the list with the right classes and handlers.
+ * WHY: The replay UI needs one source of truth for which step is running and which frame is currently selected.
+ */
 export function createStepTracker({ listElement, statusElement, onStepSelect }) {
   let activeIndex = -1;
   let selectedIndex = -1;
 
-  function render(status = "Idle") {
+  function render(status = STATUS_IDLE) {
     listElement.innerHTML = "";
     GENERATION_STEPS.forEach((label, index) => {
       const item = document.createElement("li");
@@ -21,7 +37,7 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
       }
       item.addEventListener("click", () => onStepSelect?.(index));
       item.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
+        if (STEP_SELECTION_KEYS.has(event.key)) {
           event.preventDefault();
           onStepSelect?.(index);
         }
@@ -37,21 +53,21 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
     reset() {
       activeIndex = -1;
       selectedIndex = -1;
-      render("Idle");
+      render(STATUS_IDLE);
     },
     async advance(index, status, work) {
       activeIndex = index;
       render(status);
-      await new Promise((resolve) => window.setTimeout(resolve, 120));
+      await new Promise((resolve) => window.setTimeout(resolve, STEP_RENDER_DELAY_MS));
       return work();
     },
     complete() {
       activeIndex = GENERATION_STEPS.length;
-      render("Complete");
+      render(STATUS_COMPLETE);
     },
     setSelectedStep(index) {
       selectedIndex = index;
-      render(activeIndex >= GENERATION_STEPS.length ? "Complete" : "Idle");
+      render(activeIndex >= GENERATION_STEPS.length ? STATUS_COMPLETE : STATUS_IDLE);
     },
   };
 }

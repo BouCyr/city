@@ -32,6 +32,12 @@
             <output for="pointCount" id="pointCountValue">1000</output>
           </label>
 
+          <label>
+            <span class="field-title">Rivers <button class="help-dot" type="button" data-tooltip="Choose how many rivers to trace. The default is the number of land sides minus one, and island maps with water on all four sides cannot have rivers." aria-label="River count help">?</button></span>
+            <input id="riverCount" name="riverCount" type="range" min="0" max="4" value="1">
+            <output for="riverCount" id="riverCountValue">1</output>
+          </label>
+
           <fieldset class="water-sides">
             <legend>Water Sides <button class="help-dot" type="button" data-tooltip="Choose which outer borders can flood inward. No sides gives an inland city, one or two sides yields a coastal city, and all four sides tends toward an island core." aria-label="Water sides help">?</button></legend>
             <label><input type="checkbox" name="waterSides" value="north">North</label>

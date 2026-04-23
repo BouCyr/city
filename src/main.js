@@ -1,3 +1,9 @@
+/*
+ * WHAT: Orchestrate the browser app by wiring form input, replay controls, generation, and SVG viewport state.
+ * HOW: Read normalized form options, generate deterministic frames, and redraw the selected frame while tracking zoom/pan.
+ * WHY: The entrypoint keeps DOM-specific behavior in one place so the generator and renderer stay data-focused.
+ */
+
 import { readFormState, bindFormInteractions } from "./ui/form-controller.js";
 import { createStepTracker } from "./ui/step-tracker.js";
 import { generateCity } from "./generator/city-generator.js";
@@ -9,6 +15,10 @@ const REGENERATE_DEBOUNCE_MS = 250;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 12;
 const ZOOM_STEP = 1.25;
+const PLAY_BUTTON_LABEL = "Play";
+const PAUSE_BUTTON_LABEL = "Pause";
+const REPLAY_START_INDEX = 0;
+const VIEWPORT_FALLBACK_RATIO = 0.5;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
@@ -25,7 +35,7 @@ const stepTracker = createStepTracker({
   statusElement: document.querySelector("#statusBadge"),
   onStepSelect: (stepIndex) => {
     stopReplay();
-    const replayIndex = stepIndex + 1;
+    const replayIndex = findReplayIndexForStep(stepIndex);
     replaySlider.value = String(replayIndex);
     renderReplayIndex(replayIndex);
   },
@@ -85,21 +95,7 @@ playReplayButton.addEventListener("click", () => {
     return;
   }
 
-  replaySlider.value = "0";
-  renderReplayIndex(0);
-  playReplayButton.textContent = "Pause";
-  let index = 0;
-
-  replayTimer = window.setInterval(() => {
-    index += 1;
-    if (index >= currentMap.frames.length) {
-      stopReplay();
-      return;
-    }
-
-    replaySlider.value = String(index);
-    renderReplayIndex(index);
-  }, REPLAY_DELAY_MS);
+  startReplay();
 });
 
 form.addEventListener("submit", async (event) => {
@@ -128,6 +124,11 @@ mapViewport.addEventListener("pointerleave", handlePointerUp);
 
 form.requestSubmit();
 
+/**
+ * WHAT: Draw one replay frame and synchronize the side-panel UI with it.
+ * HOW: Clear or redraw the SVG, update the summary text, and select the matching generation step.
+ * WHY: Replay navigation should update the viewport, summary, and step list as one consistent action.
+ */
 function renderReplayIndex(index) {
   currentFrameIndex = index;
   if (!currentMap) {
@@ -140,7 +141,7 @@ function renderReplayIndex(index) {
   drawReplayFrame(svg, frame, currentMap.size);
   applyViewport();
   summary.textContent = describeFrame(currentMap, frame);
-  stepTracker.setSelectedStep(index - 1);
+  stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
 
 function syncReplayUi(map, index) {
@@ -154,25 +155,30 @@ function syncReplayUi(map, index) {
 
 function stopReplay() {
   if (!replayTimer) {
-    playReplayButton.textContent = "Play";
+    playReplayButton.textContent = PLAY_BUTTON_LABEL;
     return;
   }
 
   window.clearInterval(replayTimer);
   replayTimer = null;
-  playReplayButton.textContent = "Play";
+  playReplayButton.textContent = PLAY_BUTTON_LABEL;
 }
 
+/**
+ * WHAT: Start playback from the first replay frame and advance at a fixed cadence.
+ * HOW: Reset the slider to frame zero, redraw immediately, then step forward on an interval timer.
+ * WHY: Autoplay should always show a complete generation run rather than resuming mid-stream unpredictably.
+ */
 function startReplay() {
   if (!currentMap || !currentMap.frames.length) {
     return;
   }
 
   stopReplay();
-  replaySlider.value = "0";
-  renderReplayIndex(0);
-  playReplayButton.textContent = "Pause";
-  let index = 0;
+  replaySlider.value = String(REPLAY_START_INDEX);
+  renderReplayIndex(REPLAY_START_INDEX);
+  playReplayButton.textContent = PAUSE_BUTTON_LABEL;
+  let index = REPLAY_START_INDEX;
 
   replayTimer = window.setInterval(() => {
     index += 1;
@@ -193,12 +199,15 @@ function describeFrame(map, frame) {
 
   const frameMap = frame.map;
   const seaCellCount = frameMap.cells.filter((cell) => cell.isSea).length;
+  const riverCount = frameMap.rivers?.length || 0;
   return [
+    frame.label,
     `Seed ${map.seed}`,
     `${frameMap.points.length} points`,
     `${frameMap.cells.length} cells`,
     `${frameMap.edges.length} edges`,
     `${seaCellCount} sea cells`,
+    `${riverCount} rivers`,
   ].join(" | ");
 }
 
@@ -217,6 +226,15 @@ function scheduleRegeneration() {
   regenerateTimer = window.setTimeout(() => {
     form.requestSubmit();
   }, REGENERATE_DEBOUNCE_MS);
+}
+
+function findReplayIndexForStep(stepIndex) {
+  if (!currentMap) {
+    return 0;
+  }
+
+  const replayIndex = currentMap.frames.findIndex((frame) => frame.stepIndex === stepIndex);
+  return replayIndex >= 0 ? replayIndex : 0;
 }
 
 function handleViewportWheel(event) {
@@ -265,6 +283,11 @@ function handlePointerUp(event) {
   }
 }
 
+/**
+ * WHAT: Zoom the SVG viewBox around a focus point while keeping the viewport inside map bounds.
+ * HOW: Convert the desired zoom factor into a new viewBox rectangle anchored at the pointer or viewport center.
+ * WHY: Users need precise inspection of dense maps without losing their place in the replay.
+ */
 function zoomBy(factor, focusPoint = null, size = currentMap?.size || CANVAS_SIZE) {
   const nextZoom = clamp(viewportState.zoom * factor, MIN_ZOOM, MAX_ZOOM);
   const appliedFactor = nextZoom / viewportState.zoom;
@@ -273,7 +296,10 @@ function zoomBy(factor, focusPoint = null, size = currentMap?.size || CANVAS_SIZ
     return;
   }
 
-  const anchor = focusPoint || { x: viewportState.x + viewportState.width / 2, y: viewportState.y + viewportState.height / 2 };
+  const anchor = focusPoint || {
+    x: viewportState.x + viewportState.width * VIEWPORT_FALLBACK_RATIO,
+    y: viewportState.y + viewportState.height * VIEWPORT_FALLBACK_RATIO,
+  };
   const nextWidth = size / nextZoom;
   const nextHeight = size / nextZoom;
   const ratioX = (anchor.x - viewportState.x) / viewportState.width;
@@ -308,8 +334,8 @@ function applyViewport() {
 
 function getFocusPoint(event, size) {
   const bounds = mapViewport.getBoundingClientRect();
-  const ratioX = bounds.width > 0 ? (event.clientX - bounds.left) / bounds.width : 0.5;
-  const ratioY = bounds.height > 0 ? (event.clientY - bounds.top) / bounds.height : 0.5;
+  const ratioX = bounds.width > 0 ? (event.clientX - bounds.left) / bounds.width : VIEWPORT_FALLBACK_RATIO;
+  const ratioY = bounds.height > 0 ? (event.clientY - bounds.top) / bounds.height : VIEWPORT_FALLBACK_RATIO;
 
   return {
     x: viewportState.x + viewportState.width * ratioX,
