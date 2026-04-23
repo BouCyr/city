@@ -98,6 +98,18 @@ label {
   gap: 6px;
 }
 
+.seed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.seed-button {
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
 .field-title,
 .steps-header {
   font-weight: 700;

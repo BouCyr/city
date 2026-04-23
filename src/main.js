@@ -37,6 +37,8 @@ const zoomInButton = document.querySelector("#zoomInButton");
 const zoomOutButton = document.querySelector("#zoomOutButton");
 const resetViewButton = document.querySelector("#resetViewButton");
 const hoveredCellData = document.querySelector("#hoveredCellData");
+const randomSeedButton = document.querySelector("#randomSeedButton");
+const seedInput = document.querySelector("#seed");
 const stepTracker = createStepTracker({
   listElement: document.querySelector("#stepsList"),
   statusElement: document.querySelector("#statusBadge"),
@@ -107,6 +109,15 @@ playReplayButton.addEventListener("click", () => {
   startReplay();
 });
 
+randomSeedButton?.addEventListener("click", () => {
+  if (!(seedInput instanceof HTMLInputElement)) {
+    return;
+  }
+
+  seedInput.value = generateRandomSeed();
+  form.requestSubmit();
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   stopReplay();
@@ -119,9 +130,9 @@ form.addEventListener("submit", async (event) => {
   }
   currentMap = map;
   resetViewport(map.meta.size);
-  syncReplayUi(map, 0);
-  renderReplayIndex(0);
-  startReplay();
+  const finalIndex = Math.max(0, map.frames.length - 1);
+  syncReplayUi(map, finalIndex);
+  renderReplayIndex(finalIndex);
 });
 
 mapViewport.addEventListener("wheel", handleViewportWheel, { passive: false });
@@ -204,6 +215,10 @@ function startReplay() {
     replaySlider.value = String(index);
     renderReplayIndex(index);
   }, REPLAY_DELAY_MS);
+}
+
+function generateRandomSeed() {
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function describeFrame(map, frame) {
@@ -440,7 +455,7 @@ function renderHoveredCell(cell) {
     .join(", ") || "none";
   const boundarySides = cell.boundarySides.length ? cell.boundarySides.join(", ") : "none";
   const previewRiverPath = shouldShowRiverPreview() ? computeCenterSeaFlowPath(cell.id) : null;
-  const river = currentFrame?.type === "map" ? currentFrame.map.rivers.find((candidate) => candidate.cellIds.includes(cell.id)) : null;
+  const rivers = currentFrame?.type === "map" ? currentFrame.map.rivers.filter((candidate) => candidate.cellIds.includes(cell.id)) : [];
 
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
@@ -450,8 +465,8 @@ function renderHoveredCell(cell) {
     createCellDataRow("Hill", cell.features.hill ? "yes" : "no"),
     createCellDataRow("Hillside", cell.features.hillside ? "yes" : "no"),
     createCellDataRow("River Preview", shouldShowRiverPreview() ? describeFlowPath(previewRiverPath) : "hidden outside step 5"),
-    createCellDataRow("River", river ? river.name : "none"),
-    createCellDataRow("River Length", river ? `${river.length.toFixed(1)} px` : "n/a"),
+    createCellDataRow("Rivers", rivers.length ? rivers.map((river) => river.name).join(", ") : "none"),
+    createCellDataRow("River Length", rivers.length ? rivers.map((river) => `${river.name}: ${river.length.toFixed(1)} px`).join(" | ") : "n/a"),
     createCellDataRow("Boundary Sides", boundarySides),
     createCellDataRow("Edges", cell.edgeIds.join(", ") || "none"),
     createCellDataRow("Neighbors", cell.neighborCellIds.join(", ") || "none"),

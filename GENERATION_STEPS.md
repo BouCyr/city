@@ -19,3 +19,6 @@ Select land cells that are at least four cell-to-cell steps away from the sea. T
 
 6. Trace the first river.
 Evaluate one-side boundary land cells as possible sources, compute each cell's shortest land path to the sea cell nearest the geometric center, and keep the longest resulting path. The river is drawn from the boundary side toward the sea with a deterministic name.
+
+7. Trace the first tributary.
+Evaluate more one-side boundary land cells, route them with the same land-path rules, and keep the longest path that merges into the existing river at least five cells upstream from the outlet.
