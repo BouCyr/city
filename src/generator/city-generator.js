@@ -9,6 +9,7 @@ import { BLANK_STEP_INDEX, buildSummary, createFrame, createInitialMap, withStep
 import { runBuildVoronoiStep } from "./step-build-voronoi.js";
 import { runApplyWaterStep } from "./step-apply-water.js";
 import { runFlagHillsStep } from "./step-flag-hills.js";
+import { runFirstRiverStep } from "./step-first-river.js";
 import { runRelaxPointsStep } from "./step-relax-points.js";
 import { runScatterPointsStep } from "./step-scatter-points.js";
 import { GENERATION_STEPS } from "./steps.js";
@@ -19,6 +20,7 @@ const GENERATION_PIPELINE = [
   { status: "Water", run: runApplyWaterStep },
   { status: "Lloyd", run: runRelaxPointsStep },
   { status: "Hills", run: runFlagHillsStep },
+  { status: "River", run: runFirstRiverStep },
 ];
 
 export async function generateCity(options, stepTracker) {

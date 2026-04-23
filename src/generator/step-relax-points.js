@@ -30,6 +30,7 @@ export function runRelaxPointsStep(map, { rng }) {
     ...map,
     points,
     ...geometry,
+    rivers: [],
     cityCenterCellId: null,
   };
   const nextMap = applyWaterClassification(rebuiltMap, rng);

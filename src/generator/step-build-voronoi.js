@@ -17,6 +17,7 @@ export function runBuildVoronoiStep(map) {
   const nextMap = {
     ...map,
     ...geometry,
+    rivers: [],
     water: {
       sides: [],
       seaCellIds: [],

@@ -7,6 +7,7 @@
 import { readFormState, bindFormInteractions } from "./ui/form-controller.js";
 import { createStepTracker } from "./ui/step-tracker.js";
 import { generateCity } from "./generator/city-generator.js";
+import { findCenterSeaLandPath } from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 
 const CANVAS_SIZE = 768;
@@ -23,6 +24,7 @@ const DOTTED_EDGE_PATTERN = "4 6";
 const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
 const FLOW_STROKE = "#4f7cff";
 const FLOW_STROKE_WIDTH = 4;
+const HILLS_STEP_INDEX = 4;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
@@ -213,6 +215,7 @@ function describeFrame(map, frame) {
   const seaCellCount = frameMap.cells.filter((cell) => cell.features.sea).length;
   const hillCount = frameMap.cells.filter((cell) => cell.features.hill).length;
   const hillsideCount = frameMap.cells.filter((cell) => cell.features.hillside).length;
+  const riverCount = frameMap.rivers.length;
   return [
     frame.label,
     `Seed ${map.init.seed}`,
@@ -222,6 +225,7 @@ function describeFrame(map, frame) {
     `${seaCellCount} sea cells`,
     `${hillCount} hills`,
     `${hillsideCount} hillsides`,
+    `${riverCount} rivers`,
   ].join(" | ");
 }
 
@@ -435,7 +439,8 @@ function renderHoveredCell(cell) {
     .map(([name]) => name)
     .join(", ") || "none";
   const boundarySides = cell.boundarySides.length ? cell.boundarySides.join(", ") : "none";
-  const flowPath = computeFlowPath(cell.id);
+  const previewRiverPath = shouldShowRiverPreview() ? computeCenterSeaFlowPath(cell.id) : null;
+  const river = currentFrame?.type === "map" ? currentFrame.map.rivers.find((candidate) => candidate.cellIds.includes(cell.id)) : null;
 
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
@@ -444,12 +449,14 @@ function renderHoveredCell(cell) {
     createCellDataRow("Features", features),
     createCellDataRow("Hill", cell.features.hill ? "yes" : "no"),
     createCellDataRow("Hillside", cell.features.hillside ? "yes" : "no"),
-    createCellDataRow("Flow To Sea", describeFlowPath(flowPath)),
+    createCellDataRow("River Preview", shouldShowRiverPreview() ? describeFlowPath(previewRiverPath) : "hidden outside step 5"),
+    createCellDataRow("River", river ? river.name : "none"),
+    createCellDataRow("River Length", river ? `${river.length.toFixed(1)} px` : "n/a"),
     createCellDataRow("Boundary Sides", boundarySides),
     createCellDataRow("Edges", cell.edgeIds.join(", ") || "none"),
     createCellDataRow("Neighbors", cell.neighborCellIds.join(", ") || "none"),
   ].join("");
-  drawFlowOverlay(flowPath);
+  drawFlowOverlay(previewRiverPath);
 }
 
 function createCellDataRow(label, value) {
@@ -530,78 +537,15 @@ function parseOptionalCellId(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function computeFlowPath(startCellId) {
+function computeCenterSeaFlowPath(startCellId) {
   if (!currentFrame || currentFrame.type !== "map") {
     return null;
   }
 
-  const { cells } = currentFrame.map;
-  const startCell = cells.find((cell) => cell.id === startCellId);
-  if (!startCell || startCell.features.sea) {
+  if (!shouldShowRiverPreview()) {
     return null;
   }
-
-  const previousByCellId = new Map();
-  const visited = new Set([startCellId]);
-  const queue = [startCellId];
-
-  for (let index = 0; index < queue.length; index += 1) {
-    const cellId = queue[index];
-    const cell = cells[cellId];
-    if (!cell) {
-      continue;
-    }
-
-    for (const neighborId of cell.neighborCellIds) {
-      if (visited.has(neighborId)) {
-        continue;
-      }
-
-      const neighbor = cells[neighborId];
-      if (!neighbor) {
-        continue;
-      }
-
-      if (!neighbor.features.sea && (neighbor.features.hill || neighbor.features.hillside)) {
-        continue;
-      }
-
-      visited.add(neighborId);
-      previousByCellId.set(neighborId, cellId);
-      if (neighbor.features.sea) {
-        return buildFlowPath(cells, previousByCellId, startCellId, neighborId);
-      }
-      queue.push(neighborId);
-    }
-  }
-
-  return null;
-}
-
-function buildFlowPath(cells, previousByCellId, startCellId, endCellId) {
-  const cellIds = [];
-  let cursor = endCellId;
-
-  while (cursor !== undefined) {
-    cellIds.push(cursor);
-    if (cursor === startCellId) {
-      break;
-    }
-    cursor = previousByCellId.get(cursor);
-  }
-
-  if (cellIds[cellIds.length - 1] !== startCellId) {
-    return null;
-  }
-
-  cellIds.reverse();
-  return {
-    cellIds,
-    points: cellIds
-      .map((cellId) => cells[cellId])
-      .filter(Boolean)
-      .map((cell) => ({ x: cell.centroid.x, y: cell.centroid.y })),
-  };
+  return findCenterSeaLandPath(currentFrame.map.cells, currentFrame.map.edges, startCellId, currentFrame.map.meta.size);
 }
 
 function describeFlowPath(flowPath) {
@@ -622,6 +566,23 @@ function drawFlowOverlay(flowPath) {
   overlay.setAttribute("id", FLOW_OVERLAY_ID);
   overlay.setAttribute("pointer-events", "none");
 
+  appendFlowPolyline(overlay, flowPath, FLOW_STROKE);
+  svg.append(overlay);
+}
+
+function clearFlowOverlay() {
+  svg.querySelector(`#${FLOW_OVERLAY_ID}`)?.remove();
+}
+
+function toSvgPoints(points) {
+  return points.map((point) => `${point.x},${point.y}`).join(" ");
+}
+
+function appendFlowPolyline(overlay, flowPath, stroke) {
+  if (!flowPath || flowPath.points.length < 2) {
+    return;
+  }
+
   const outline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
   outline.setAttribute("points", toSvgPoints(flowPath.points));
   outline.setAttribute("fill", "none");
@@ -633,19 +594,14 @@ function drawFlowOverlay(flowPath) {
   const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
   line.setAttribute("points", toSvgPoints(flowPath.points));
   line.setAttribute("fill", "none");
-  line.setAttribute("stroke", FLOW_STROKE);
+  line.setAttribute("stroke", stroke);
   line.setAttribute("stroke-width", String(FLOW_STROKE_WIDTH));
   line.setAttribute("stroke-linecap", "round");
   line.setAttribute("stroke-linejoin", "round");
 
   overlay.append(outline, line);
-  svg.append(overlay);
 }
 
-function clearFlowOverlay() {
-  svg.querySelector(`#${FLOW_OVERLAY_ID}`)?.remove();
-}
-
-function toSvgPoints(points) {
-  return points.map((point) => `${point.x},${point.y}`).join(" ");
+function shouldShowRiverPreview() {
+  return Boolean(currentFrame && currentFrame.type === "map" && currentFrame.stepIndex === HILLS_STEP_INDEX);
 }

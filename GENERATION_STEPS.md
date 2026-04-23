@@ -15,4 +15,7 @@ Cells touching the selected outer sides seed the sea, then pseudo-random flood e
 Each site is moved once to the centroid of its current Voronoi cell, the diagram is rebuilt, and water selection is recomputed on the smoothed cells.
 
 5. Flag inland hill cells.
-Select land cells that are at least three cell-to-cell steps away from the sea. The first hill is chosen randomly from the valid inland land cells, then each later hill greedily picks the valid candidate that is farthest from the already chosen hills.
+Select land cells that are at least four cell-to-cell steps away from the sea. The first hill is chosen randomly from the valid inland land cells, then each later hill greedily picks the valid candidate that is farthest from the already chosen hills.
+
+6. Trace the first river.
+Evaluate one-side boundary land cells as possible sources, compute each cell's shortest land path to the sea cell nearest the geometric center, and keep the longest resulting path. The river is drawn from the boundary side toward the sea with a deterministic name.

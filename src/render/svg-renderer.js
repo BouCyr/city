@@ -7,6 +7,9 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
 const EDGE_STROKE_WIDTH = 1.2;
+const RIVER_STROKE_WIDTH = 6;
+const RIVER_DIRECTION_STROKE_WIDTH = 1.6;
+const RIVER_DIRECTION_MARKER_ID = "riverDirectionMarker";
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -18,6 +21,9 @@ const COLORS = {
   edge: "#1a2026",
   seaFill: "#7ebbd4",
   seaEdge: "#1f4e72",
+  river: "#3e7be0",
+  riverHighlight: "rgba(255, 255, 255, 0.38)",
+  riverDirection: "rgba(20, 47, 96, 0.42)",
 };
 
 /**
@@ -28,7 +34,7 @@ const COLORS = {
 export function clearSvg(svg, size) {
   svg.replaceChildren();
   svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
-  svg.append(createBaseLayer(size));
+  svg.append(createDefs(), createBaseLayer(size));
 }
 
 /**
@@ -100,13 +106,34 @@ function createGrid(size) {
 
 function createMapLayer(map) {
   const layer = createElement("g");
-  layer.append(createCellsGroup(map.cells), createEdgesGroup(map.edges));
+  layer.append(createCellsGroup(map.cells), createEdgesGroup(map.edges), createRiversGroup(map.rivers || []));
 
   if (!map.cells.length) {
     layer.append(createPointsGroup(map.points));
   }
 
   return layer;
+}
+
+function createDefs() {
+  const defs = createElement("defs");
+  const marker = createElement("marker", {
+    id: RIVER_DIRECTION_MARKER_ID,
+    markerWidth: 7,
+    markerHeight: 7,
+    refX: 6,
+    refY: 3.5,
+    orient: "auto",
+    markerUnits: "strokeWidth",
+  });
+  marker.append(
+    createElement("path", {
+      d: "M 0 0 L 7 3.5 L 0 7 z",
+      fill: COLORS.riverDirection,
+    }),
+  );
+  defs.append(marker);
+  return defs;
 }
 
 function createCellsGroup(cells) {
@@ -175,6 +202,51 @@ function createPointsGroup(points) {
         cy: point.y,
         r: 1.8,
         fill: COLORS.point,
+      }),
+    );
+  });
+
+  return group;
+}
+
+function createRiversGroup(rivers) {
+  const group = createElement("g", {
+    fill: "none",
+    "pointer-events": "none",
+  });
+
+  rivers.forEach((river) => {
+    if (!river.points || river.points.length < 2) {
+      return;
+    }
+
+    group.append(
+      createElement("polyline", {
+        points: toSvgPoints(river.points),
+        fill: "none",
+        stroke: COLORS.river,
+        "stroke-width": RIVER_STROKE_WIDTH,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      }),
+      createElement("polyline", {
+        points: toSvgPoints(river.points),
+        fill: "none",
+        stroke: COLORS.riverHighlight,
+        "stroke-width": 2,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+      }),
+      createElement("polyline", {
+        points: toSvgPoints(river.points),
+        fill: "none",
+        stroke: COLORS.riverDirection,
+        "stroke-width": RIVER_DIRECTION_STROKE_WIDTH,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+        "stroke-dasharray": "8 16",
+        "marker-mid": `url(#${RIVER_DIRECTION_MARKER_ID})`,
+        "marker-end": `url(#${RIVER_DIRECTION_MARKER_ID})`,
       }),
     );
   });

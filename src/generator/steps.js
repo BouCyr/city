@@ -10,4 +10,5 @@ export const GENERATION_STEPS = [
   "Select and paint sea areas",
   "Apply one Lloyd relaxation pass",
   "Flag inland hill cells",
+  "Trace the first river",
 ];

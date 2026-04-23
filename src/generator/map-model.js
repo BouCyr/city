@@ -30,6 +30,7 @@ export function createInitialMap(options) {
     points: [],
     cells: [],
     edges: [],
+    rivers: [],
     water: {
       sides: [],
       seaCellIds: [],
@@ -93,6 +94,7 @@ export function buildCanonicalGeometry(diagram) {
         sea: false,
         hill: false,
         hillside: false,
+        river: false,
         boundary: boundarySides.length > 0,
         cityCenter: false,
       },
@@ -137,6 +139,7 @@ export function buildSummary(map) {
     seaCellCount: map.cells.filter((cell) => cell.features.sea).length,
     hillCount: map.cells.filter((cell) => cell.features.hill).length,
     hillsideCount: map.cells.filter((cell) => cell.features.hillside).length,
+    riverCount: map.rivers.length,
   };
 }
 
@@ -161,6 +164,7 @@ function orientEdge(edge, cellById, width, height) {
       features: {
         boundary: isBoundary,
         sea: false,
+        river: false,
       },
     };
   }
@@ -179,6 +183,7 @@ function orientEdge(edge, cellById, width, height) {
       features: {
         boundary: isBoundary,
         sea: false,
+        river: false,
       },
   };
 }
