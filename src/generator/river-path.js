@@ -44,9 +44,18 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size) {
     return null;
   }
 
+  const edgeLookup = buildEdgeLookup(edges);
   const centerSeaCellId = findCenterSeaCellId(cells, size);
   if (centerSeaCellId === null) {
-    return null;
+    const westOutlet = findWestOutlet(cells, edges, size);
+    if (!westOutlet) {
+      return null;
+    }
+
+    return findBestShortestPath(cells, edgeLookup, startCellId, {
+      isTarget: (cell) => cell.id === westOutlet.cellId,
+      targetExitPoint: () => westOutlet.point,
+    });
   }
 
   const targetCoastCellIds = new Set(
@@ -58,9 +67,15 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size) {
     return null;
   }
 
-  return findBestShortestPath(cells, buildEdgeLookup(edges), startCellId, {
+  return findBestShortestPath(cells, edgeLookup, startCellId, {
     isTarget: (cell) => targetCoastCellIds.has(cell.id),
-    targetSeaCellId: () => centerSeaCellId,
+    targetExitPoint: (cell) => {
+      const seaNeighborIds = cell.neighborCellIds.filter((neighborId) => cells[neighborId]?.features.sea);
+      const coastEdge = seaNeighborIds
+        .map((neighborId) => edgeLookup.get(edgeKey(cell.id, neighborId)))
+        .find(Boolean);
+      return coastEdge ? { x: coastEdge.midpoint.x, y: coastEdge.midpoint.y } : null;
+    },
   });
 }
 
@@ -70,16 +85,20 @@ export function findAnySeaLandPath(cells, edges, startCellId) {
     return null;
   }
 
-  return findBestShortestPath(cells, buildEdgeLookup(edges), startCellId, {
+  const edgeLookup = buildEdgeLookup(edges);
+  return findBestShortestPath(cells, edgeLookup, startCellId, {
     isTarget: (cell) => cell.features.land && cell.neighborCellIds.some((neighborId) => cells[neighborId]?.features.sea),
-    targetSeaCellId: (cell) => {
+    targetExitPoint: (cell) => {
       const seaNeighborIds = cell.neighborCellIds.filter((neighborId) => cells[neighborId]?.features.sea);
-      return seaNeighborIds[0] ?? null;
+      const coastEdge = seaNeighborIds
+        .map((neighborId) => edgeLookup.get(edgeKey(cell.id, neighborId)))
+        .find(Boolean);
+      return coastEdge ? { x: coastEdge.midpoint.x, y: coastEdge.midpoint.y } : null;
     },
   });
 }
 
-function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, targetSeaCellId }) {
+function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, targetExitPoint }) {
   const previousByCellId = new Map();
   let currentLevel = [startCellId];
   const visitedDepth = new Map([[startCellId, 0]]);
@@ -143,7 +162,7 @@ function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, target
       .sort((first, second) => second[1].length - first[1].length);
     if (targetCandidates.length) {
       const endCellId = targetCandidates[0][0];
-      return buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCellId, targetSeaCellId?.(cells[endCellId]) ?? null);
+      return buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCellId, targetExitPoint?.(cells[endCellId]) ?? null);
     }
 
     currentLevel = nextLevel;
@@ -152,7 +171,7 @@ function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, target
   return null;
 }
 
-function buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCellId, seaCellId = null) {
+function buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCellId, targetExitPoint = null) {
   const cellIds = [];
   let cursor = endCellId;
 
@@ -188,11 +207,8 @@ function buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCell
     }
   });
 
-  if (seaCellId !== null) {
-    const coastlineEdge = edgeLookup.get(edgeKey(endCellId, seaCellId));
-    if (coastlineEdge) {
-      points.push({ x: coastlineEdge.midpoint.x, y: coastlineEdge.midpoint.y });
-    }
+  if (targetExitPoint !== null) {
+    points.push(targetExitPoint);
   }
 
   return {
@@ -220,4 +236,32 @@ function pathLength(points) {
 
 function pointDistance(firstPoint, secondPoint) {
   return Math.hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y);
+}
+
+function findWestOutlet(cells, edges, size) {
+  const westTarget = { x: 0, y: size / 2 };
+  const westBoundaryEdges = edges.filter((edge) =>
+    edge.features.boundary
+    && Math.abs(edge.from.x) <= 0.75
+    && Math.abs(edge.to.x) <= 0.75,
+  );
+
+  const candidates = westBoundaryEdges
+    .map((edge) => {
+      const cellId = edge.leftCellId ?? edge.rightCellId;
+      const cell = cellId === null ? null : cells[cellId];
+      if (!cell || !cell.features.land || cell.features.hill || cell.features.hillside) {
+        return null;
+      }
+
+      return {
+        cellId,
+        point: { x: edge.midpoint.x, y: edge.midpoint.y },
+        distance: pointDistance(edge.midpoint, westTarget),
+      };
+    })
+    .filter(Boolean)
+    .sort((first, second) => first.distance - second.distance || first.cellId - second.cellId);
+
+  return candidates[0] || null;
 }
