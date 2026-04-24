@@ -29,6 +29,10 @@ Notes:
 ## Shared Data Rules
 
 - The generator operates on one canonical `map` object.
+- User-facing generation controls are grouped in collapsible UI sections:
+  - one root group for `Geographical Feature Controls`
+  - one root group for `Human Usage Controls`
+  - nested subgroups per implemented generation step
 - Cells expose:
   - `id`
   - `site`
@@ -64,7 +68,9 @@ Business rules:
 - The seeded RNG is the only source of randomness for point placement.
 - `pointCount` points are created.
 - Points are not allowed to lie directly on the map border.
-- A padding of `1%` of map size is applied on every side.
+- The scatter padding ratio is user-controlled.
+- Default scatter padding ratio is `0.01`.
+- Allowed scatter padding ratio range is `0` to `0.1`.
 - Point ids are sequential and stable from `0` to `pointCount - 1`.
 
 State effects:
@@ -98,16 +104,29 @@ Source: `src/generator/step-apply-water.js`
 
 Business rules:
 - Only user-enabled outer sides may seed water.
+- Water behavior is user-configurable through:
+  - water reach ratio
+  - water expansion base
+  - water edge weight
+  - water pressure range ratio
+  - water center-bias radius ratio
 - Water seeding starts from cells touching enabled sides.
-- A cell is seed-eligible only if it lies within `20%` of map size from at least one enabled water side.
+- A cell is seed-eligible only if it lies within the configured water reach ratio of map size from at least one enabled water side.
 - Water then expands by graph flood through cell neighbors.
 - Expansion is probabilistic, not purely deterministic by distance.
 - Expansion probability is influenced by:
-  - a base chance of `0.14`
-  - stronger pressure near enabled water sides
-  - resistance toward the center of the map
+  - the configured water expansion base
+  - stronger pressure near enabled water sides scaled by the configured water edge weight
+  - resistance toward the center of the map scaled by the configured center-bias radius
 - If no water sides are enabled, no sea is created.
 - An edge is marked `sea` only when both adjacent cells are sea.
+
+Default values:
+- water reach ratio: `0.2`
+- water expansion base: `0.14`
+- water edge weight: `0.52`
+- water pressure range ratio: `0.42`
+- water center-bias radius ratio: `0.68`
 
 State effects:
 - Sets cell `features.sea` and `features.land`.
@@ -126,7 +145,9 @@ Business rules:
 - Protected cells include:
   - all boundary cells
   - every cell neighboring a boundary cell
-- Relaxed points are clamped away from the border with `4%` padding.
+- Relaxed points are clamped away from the border with a user-controlled padding ratio.
+- Default relax padding ratio is `0.04`.
+- Allowed relax padding ratio range is `0` to `0.15`.
 - After rebuilding the geometry, sea classification is recomputed from scratch.
 
 State effects:
@@ -140,9 +161,13 @@ Source: `src/generator/step-flag-hills.js`
 
 Business rules:
 - Hill placement uses graph distance in cells, not Euclidean distance.
+- Hill behavior is user-configurable through:
+  - hill count
+  - hill sea distance
+  - hillside radius
 - A hill candidate must:
   - be `land`
-  - be at least `4` cells away from the sea
+  - be at least the configured hill sea distance away from the sea
 - The first hill is chosen pseudo-randomly from the valid candidate set.
 - Each later hill is chosen greedily to maximize graph distance from already selected hills.
 - Tie-breaks for later hills are:
@@ -151,8 +176,13 @@ Business rules:
   - then lower cell id
 - If there are no valid hill candidates, no hills are placed.
 - `hillCount` is an upper bound, not a guarantee.
-- `hillside` cells are all land cells within graph distance `1` or `2` from any hill.
+- `hillside` cells are all land cells within graph distance `1` up to the configured hillside radius from any hill.
 - Hillsides exclude the hill cells themselves.
+
+Default values:
+- hill count: `15`
+- hill sea distance: `4`
+- hillside radius: `2`
 
 State effects:
 - Sets cell `features.hill`.
@@ -184,6 +214,9 @@ Path target rules:
 Path traversal rules:
 - Rivers move only through land cells.
 - Rivers cannot traverse hills or hillsides.
+- River routing uses a user-controlled minimum turn angle parameter.
+- The allowed range is `0` to `120` degrees.
+- The default minimum turn angle is `90` degrees.
 - Path geometry is segmented:
   - source boundary midpoint
   - source cell centroid
@@ -191,6 +224,9 @@ Path traversal rules:
   - next cell centroid
   - ...
   - outlet midpoint
+- Rivers must avoid turns sharper than the configured minimum turn angle.
+- At any cell where a path turns from one edge midpoint to another edge midpoint through the cell centroid, the angle must be at least the configured minimum.
+- The same minimum-angle rule also applies to the first turn leaving the boundary source cell.
 - Shortest path means shortest in cell-step count first.
 - If several candidate paths have the same cell-step count, the longest segmented geometric path wins.
 - When the map contains sea:
@@ -236,11 +272,15 @@ Merge target rules:
 - Tributaries may merge only into the primary river.
 - Merge must happen well upstream from the outlet.
 - When sea exists:
-  - merge cell must be at least `5` graph steps from the sea
+  - merge cell must be at least the configured tributary merge distance in graph steps from the sea
 - When no sea exists:
-  - merge cell must be at least `5` cells away from the river outlet along the primary river ordering
+  - merge cell must be at least the configured tributary merge distance away from the river outlet along the primary river ordering
 - Tributary routing targets a land neighbor of the chosen merge cell.
 - The tributary geometry then extends to the centroid of the actual merge cell.
+
+Default values:
+- tributary merge distance: `5`
+- allowed tributary merge distance range: `0` to `20`
 
 Source-cell rules:
 - Tributary source cell must:
@@ -257,6 +297,7 @@ Traversal rules:
   - hill
   - hillside
   - any existing river cell
+- Tributaries must obey the same configured minimum turn-angle rule as the first river.
 - When sea exists, the same monotonic sea-seeking constraints apply during pathfinding because the shared river-path helper is used.
 
 Selection rules:

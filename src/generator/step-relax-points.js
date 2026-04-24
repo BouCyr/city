@@ -9,10 +9,8 @@ import { clamp } from "./geometry.js";
 import { buildCanonicalGeometry } from "./map-model.js";
 import { applyWaterClassification } from "./step-apply-water.js";
 
-const RELAX_PADDING_RATIO = 0.04;
-
 export function runRelaxPointsStep(map, { rng }) {
-  const padding = map.meta.size * RELAX_PADDING_RATIO;
+  const padding = map.meta.size * (map.init.params.relaxPaddingRatio ?? 0.04);
   const protectedCellIds = collectProtectedCellIds(map);
   const points = map.cells.map((cell) => ({
     id: cell.site.id ?? cell.id,

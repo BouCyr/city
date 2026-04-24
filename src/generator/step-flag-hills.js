@@ -5,9 +5,6 @@
  * WHY: Hills should form a distinct inland belt, and the surrounding slopes should read as a secondary terrain zone.
  */
 
-const HILL_SEA_DISTANCE = 4;
-const HILLSIDE_RADIUS = 2;
-
 export function runFlagHillsStep(map, { rng }) {
   const hillCellIds = chooseHillCells(map, rng, map.init.params.hillCount ?? 0);
   const hillIds = new Set(hillCellIds);
@@ -43,7 +40,8 @@ function chooseHillCells(map, rng, targetCount) {
   }
 
   const seaDistances = computeCellDistances(map, map.cells.filter((cell) => cell.features.sea).map((cell) => cell.id));
-  const candidates = map.cells.filter((cell) => cell.features.land && seaDistances[cell.id] >= HILL_SEA_DISTANCE);
+  const hillSeaDistance = map.init.params.hillSeaDistance ?? 4;
+  const candidates = map.cells.filter((cell) => cell.features.land && seaDistances[cell.id] >= hillSeaDistance);
   if (!candidates.length) {
     return [];
   }
@@ -94,10 +92,11 @@ function collectHillsides(map, hillCellIds) {
     return new Set();
   }
 
+  const hillsideRadius = map.init.params.hillsideRadius ?? 2;
   const hillDistances = computeCellDistances(map, hillCellIds);
   return new Set(
     map.cells
-      .filter((cell) => cell.features.land && hillDistances[cell.id] > 0 && hillDistances[cell.id] <= HILLSIDE_RADIUS)
+      .filter((cell) => cell.features.land && hillDistances[cell.id] > 0 && hillDistances[cell.id] <= hillsideRadius)
       .map((cell) => cell.id),
   );
 }

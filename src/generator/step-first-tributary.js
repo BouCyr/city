@@ -7,7 +7,6 @@
 
 import { computeSeaDistances, findLandPathToTargets } from "./river-path.js";
 
-const MIN_MERGE_SEA_DISTANCE = 5;
 const RIVER_NAMES = [
   "Valdombra",
   "Fiume Serrano",
@@ -42,8 +41,10 @@ function chooseFirstTributary(map, rng) {
   if (!primaryRiver) {
     return null;
   }
+  const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
+  const minMergeSeaDistance = map.init.params.tributaryMergeSeaDistance ?? 5;
 
-  const mergeTargets = buildMergeTargetMap(map, primaryRiver);
+  const mergeTargets = buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance);
   if (!mergeTargets.size) {
     return null;
   }
@@ -59,24 +60,31 @@ function chooseFirstTributary(map, rng) {
   const candidates = eligibleCells
     .map((cell) => ({
       cell,
-      path: findLandPathToTargets(map.cells, map.edges, cell.id, {
-        isTarget: (targetCell) => mergeTargets.has(targetCell.id),
-        targetExitPoint: (targetCell) => {
-          const mergeInfo = mergeTargets.get(targetCell.id);
-          if (!mergeInfo) {
-            return null;
-          }
-
-          const mergeCell = map.cells[mergeInfo.mergeCellId];
-          return mergeCell ? { x: mergeCell.centroid.x, y: mergeCell.centroid.y } : null;
-        },
-        canTraverse: (targetCell) =>
-          targetCell.features.land
-          && !targetCell.features.hill
-          && !targetCell.features.hillside
-          && !targetCell.features.river,
-      }),
       sourcePoint: findSourceBoundaryMidpoint(map, cell),
+    }))
+    .map((candidate) => ({
+      ...candidate,
+      path: candidate.sourcePoint
+        ? findLandPathToTargets(map.cells, map.edges, candidate.cell.id, {
+          isTarget: (targetCell) => mergeTargets.has(targetCell.id),
+          targetExitPoint: (targetCell) => {
+            const mergeInfo = mergeTargets.get(targetCell.id);
+            if (!mergeInfo) {
+              return null;
+            }
+
+            const mergeCell = map.cells[mergeInfo.mergeCellId];
+            return mergeCell ? { x: mergeCell.centroid.x, y: mergeCell.centroid.y } : null;
+          },
+          canTraverse: (targetCell) =>
+            targetCell.features.land
+            && !targetCell.features.hill
+            && !targetCell.features.hillside
+            && !targetCell.features.river,
+          startEntryPoint: candidate.sourcePoint,
+          minTurnAngleDegrees,
+        })
+        : null,
     }))
     .filter((candidate) => candidate.path && candidate.path.points.length >= 2 && candidate.sourcePoint)
     .sort((first, second) => {
@@ -112,15 +120,15 @@ function chooseFirstTributary(map, rng) {
   };
 }
 
-function buildMergeTargetMap(map, primaryRiver) {
+function buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance) {
   const mergeTargets = new Map();
   const seaDistances = map.cells.some((cell) => cell.features.sea) ? computeSeaDistances(map.cells) : null;
   const validMergeCellIds = primaryRiver.cellIds.filter((cellId, index) => {
     if (seaDistances) {
-      return seaDistances[cellId] >= MIN_MERGE_SEA_DISTANCE;
+      return seaDistances[cellId] >= minMergeSeaDistance;
     }
 
-    return primaryRiver.cellIds.length - 1 - index >= MIN_MERGE_SEA_DISTANCE;
+    return primaryRiver.cellIds.length - 1 - index >= minMergeSeaDistance;
   });
 
   validMergeCellIds.forEach((mergeCellId) => {

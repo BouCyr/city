@@ -770,7 +770,14 @@ function computeCenterSeaFlowPath(startCellId) {
   if (!shouldShowRiverPreview()) {
     return null;
   }
-  return findCenterSeaLandPath(currentFrame.map.cells, currentFrame.map.edges, startCellId, currentFrame.map.meta.size);
+  return findCenterSeaLandPath(
+    currentFrame.map.cells,
+    currentFrame.map.edges,
+    startCellId,
+    currentFrame.map.meta.size,
+    null,
+    currentFrame.map.init?.params?.riverTurnAngle ?? 90,
+  );
 }
 
 function describeFlowPath(flowPath) {

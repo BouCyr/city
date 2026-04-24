@@ -4,10 +4,8 @@
  * WHY: Point generation is the deterministic source for every later step.
  */
 
-const SCATTER_PADDING_RATIO = 0.01;
-
 export function runScatterPointsStep(map, { rng }) {
-  const padding = map.meta.size * SCATTER_PADDING_RATIO;
+  const padding = map.meta.size * (map.init.params.scatterPaddingRatio ?? 0.01);
   const pointCount = map.init.params.pointCount;
   const points = Array.from({ length: pointCount }, (_, index) => ({
     id: index,

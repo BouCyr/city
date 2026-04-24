@@ -6,12 +6,6 @@
 
 import { centerBias, distanceToSide } from "./geometry.js";
 
-const WATER_REACH_RATIO = 0.2;
-const WATER_EXPANSION_BASE = 0.14;
-const WATER_EXPANSION_EDGE_WEIGHT = 0.52;
-const PRESSURE_RANGE_RATIO = 0.42;
-const CENTER_BIAS_RADIUS_RATIO = 0.68;
-
 export function runApplyWaterStep(map, { rng }) {
   const nextMap = applyWaterClassification(map, rng);
   return {
@@ -26,12 +20,17 @@ export function runApplyWaterStep(map, { rng }) {
 }
 
 export function applyWaterClassification(map, rng) {
+  const waterReachRatio = map.init.params.waterReachRatio ?? 0.2;
+  const waterExpansionBase = map.init.params.waterExpansionBase ?? 0.14;
+  const waterExpansionEdgeWeight = map.init.params.waterExpansionEdgeWeight ?? 0.52;
+  const waterPressureRangeRatio = map.init.params.waterPressureRangeRatio ?? 0.42;
+  const waterCenterBiasRadiusRatio = map.init.params.waterCenterBiasRadiusRatio ?? 0.68;
   const activeSides = map.init.params.waterSides
     .filter((side) => side.enabled)
     .map((side) => side.name);
   const selected = new Set();
   const queue = [];
-  const maxWaterReach = map.meta.size * WATER_REACH_RATIO;
+  const maxWaterReach = map.meta.size * waterReachRatio;
 
   map.cells.forEach((cell) => {
     if (activeSides.some((side) => cell.boundarySides.includes(side)) && isWithinWaterReach(cell, activeSides, map.meta.size, maxWaterReach)) {
@@ -43,8 +42,8 @@ export function applyWaterClassification(map, rng) {
   while (queue.length > 0) {
     const cellId = queue.shift();
     const cell = map.cells[cellId];
-    const edgePressure = pressureFromSides(cell, map);
-    const expansionChance = WATER_EXPANSION_BASE + edgePressure * WATER_EXPANSION_EDGE_WEIGHT;
+    const edgePressure = pressureFromSides(cell, map, waterPressureRangeRatio);
+    const expansionChance = waterExpansionBase + edgePressure * waterExpansionEdgeWeight;
 
     cell.neighborCellIds.forEach((neighborId) => {
       if (selected.has(neighborId)) {
@@ -56,7 +55,7 @@ export function applyWaterClassification(map, rng) {
         return;
       }
 
-      const inwardResistance = centerBias(neighbor.centroid, map.meta.size, CENTER_BIAS_RADIUS_RATIO);
+      const inwardResistance = centerBias(neighbor.centroid, map.meta.size, waterCenterBiasRadiusRatio);
       if (rng.next() < expansionChance * (1 - inwardResistance)) {
         selected.add(neighborId);
         queue.push(neighborId);
@@ -110,7 +109,7 @@ function isWithinWaterReach(cell, activeSides, size, maxWaterReach) {
   return nearestWaterDistance <= maxWaterReach;
 }
 
-function pressureFromSides(cell, map) {
+function pressureFromSides(cell, map, waterPressureRangeRatio) {
   const distances = map.init.params.waterSides
     .filter((side) => side.enabled)
     .map((side) => distanceToSide(cell.centroid, map.meta.size, side.name));
@@ -120,5 +119,5 @@ function pressureFromSides(cell, map) {
   }
 
   const nearest = Math.min(...distances);
-  return 1 - Math.min(nearest / (map.meta.size * PRESSURE_RANGE_RATIO), 1);
+  return 1 - Math.min(nearest / (map.meta.size * waterPressureRangeRatio), 1);
 }

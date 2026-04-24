@@ -35,6 +35,7 @@ export function runFirstRiverStep(map, { rng }) {
 }
 
 function chooseFirstRiver(map, rng) {
+  const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
   const eligibleCells = map.cells.filter((cell) =>
     cell.features.land
     && !cell.features.hill
@@ -45,8 +46,20 @@ function chooseFirstRiver(map, rng) {
   const candidates = eligibleCells
     .map((cell) => ({
       cell,
-      path: findCenterSeaLandPath(map.cells, map.edges, cell.id, map.meta.size),
       sourcePoint: findSourceBoundaryMidpoint(map, cell),
+    }))
+    .map((candidate) => ({
+      ...candidate,
+      path: candidate.sourcePoint
+        ? findCenterSeaLandPath(
+          map.cells,
+          map.edges,
+          candidate.cell.id,
+          map.meta.size,
+          candidate.sourcePoint,
+          minTurnAngleDegrees,
+        )
+        : null,
     }))
     .filter((candidate) => candidate.path && candidate.path.points.length >= 2 && candidate.sourcePoint)
     .sort((first, second) => {

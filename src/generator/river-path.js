@@ -71,7 +71,7 @@ export function findCenterSeaCellId(cells, size) {
   return bestCellId;
 }
 
-export function findCenterSeaLandPath(cells, edges, startCellId, size) {
+export function findCenterSeaLandPath(cells, edges, startCellId, size, startEntryPoint = null, minTurnAngleDegrees = 90) {
   const edgeLookup = buildEdgeLookup(edges);
   const centerSeaCellId = findCenterSeaCellId(cells, size);
   if (centerSeaCellId === null) {
@@ -83,6 +83,8 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size) {
     return findBestShortestPath(cells, edgeLookup, startCellId, {
       isTarget: (cell) => cell.id === westOutlet.cellId,
       targetExitPoint: () => westOutlet.point,
+      startEntryPoint,
+      minTurnAngleDegrees,
     });
   }
 
@@ -106,6 +108,8 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size) {
       return coastEdge ? { x: coastEdge.midpoint.x, y: coastEdge.midpoint.y } : null;
     },
     coastData,
+    startEntryPoint,
+    minTurnAngleDegrees,
   });
 }
 
@@ -125,7 +129,13 @@ export function findAnySeaLandPath(cells, edges, startCellId) {
   });
 }
 
-export function findLandPathToTargets(cells, edges, startCellId, { isTarget, targetExitPoint, canTraverse }) {
+export function findLandPathToTargets(cells, edges, startCellId, {
+  isTarget,
+  targetExitPoint,
+  canTraverse,
+  startEntryPoint = null,
+  minTurnAngleDegrees = 90,
+}) {
   const edgeLookup = buildEdgeLookup(edges);
   const hasSea = cells.some((cell) => cell.features.sea);
   return findBestShortestPath(cells, edgeLookup, startCellId, {
@@ -133,10 +143,19 @@ export function findLandPathToTargets(cells, edges, startCellId, { isTarget, tar
     targetExitPoint,
     canTraverse,
     coastData: hasSea ? buildCoastDistanceData(cells, edges) : null,
+    startEntryPoint,
+    minTurnAngleDegrees,
   });
 }
 
-function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, targetExitPoint, canTraverse, coastData }) {
+function findBestShortestPath(cells, edgeLookup, startCellId, {
+  isTarget,
+  targetExitPoint,
+  canTraverse,
+  coastData,
+  startEntryPoint = null,
+  minTurnAngleDegrees = 90,
+}) {
   const startCell = cells.find((cell) => cell.id === startCellId);
   if (!startCell || !(canTraverse ? canTraverse(startCell, null) : defaultTraversable(startCell))) {
     return null;
@@ -176,6 +195,9 @@ function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, target
         if (!edge) {
           continue;
         }
+        if (!allowsTurn(previousByCellId.get(cellId), cell, edge, edgeLookup, startEntryPoint, minTurnAngleDegrees)) {
+          continue;
+        }
 
         const candidateLength = (bestLengthByCellId.get(cellId) || 0) + segmentLengthThroughEdge(cell, neighbor, edge);
         const existingCandidate = candidateStates.get(neighborId);
@@ -207,6 +229,9 @@ function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, target
       .filter(([cellId]) => isTarget(cells[cellId]))
       .map(([cellId, state]) => {
         const exitPoint = targetExitPoint?.(cells[cellId]) ?? null;
+        if (!allowsExitTurn(state.previousCellId, cells[cellId], exitPoint, edgeLookup, startEntryPoint, minTurnAngleDegrees)) {
+          return null;
+        }
         return {
           cellId,
           state,
@@ -214,6 +239,7 @@ function findBestShortestPath(cells, edgeLookup, startCellId, { isTarget, target
           totalLength: state.length + (exitPoint ? pointDistance(cells[cellId].centroid, exitPoint) : 0),
         };
       })
+      .filter(Boolean)
       .sort((first, second) => second.totalLength - first.totalLength);
     if (targetCandidates.length) {
       const target = targetCandidates[0];
@@ -291,6 +317,59 @@ function pathLength(points) {
 
 function pointDistance(firstPoint, secondPoint) {
   return Math.hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y);
+}
+
+function allowsTurn(previousCellId, currentCell, nextEdge, edgeLookup, startEntryPoint, minTurnAngleDegrees) {
+  const incomingPoint = previousCellId === undefined
+    ? startEntryPoint
+    : getSharedEdgeMidpoint(previousCellId, currentCell.id, edgeLookup);
+  if (!incomingPoint) {
+    return true;
+  }
+
+  return angleDegreesBetween(incomingPoint, currentCell.centroid, nextEdge.midpoint) >= minTurnAngleDegrees;
+}
+
+function allowsExitTurn(previousCellId, currentCell, exitPoint, edgeLookup, startEntryPoint, minTurnAngleDegrees) {
+  if (!exitPoint) {
+    return true;
+  }
+
+  const incomingPoint = previousCellId === undefined
+    ? startEntryPoint
+    : getSharedEdgeMidpoint(previousCellId, currentCell.id, edgeLookup);
+  if (!incomingPoint) {
+    return true;
+  }
+
+  return angleDegreesBetween(incomingPoint, currentCell.centroid, exitPoint) >= minTurnAngleDegrees;
+}
+
+function getSharedEdgeMidpoint(firstCellId, secondCellId, edgeLookup) {
+  const edge = edgeLookup.get(edgeKey(firstCellId, secondCellId));
+  return edge ? edge.midpoint : null;
+}
+
+function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
+  const firstVector = {
+    x: firstPoint.x - pivotPoint.x,
+    y: firstPoint.y - pivotPoint.y,
+  };
+  const secondVector = {
+    x: secondPoint.x - pivotPoint.x,
+    y: secondPoint.y - pivotPoint.y,
+  };
+  const firstLength = Math.hypot(firstVector.x, firstVector.y);
+  const secondLength = Math.hypot(secondVector.x, secondVector.y);
+  if (firstLength === 0 || secondLength === 0) {
+    return 180;
+  }
+
+  const cosine = (
+    (firstVector.x * secondVector.x) + (firstVector.y * secondVector.y)
+  ) / (firstLength * secondLength);
+  const clampedCosine = Math.min(1, Math.max(-1, cosine));
+  return Math.acos(clampedCosine) * (180 / Math.PI);
 }
 
 function defaultTraversable(cell) {

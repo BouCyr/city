@@ -92,6 +92,65 @@ h1 {
   gap: 18px;
 }
 
+.controls-root,
+.control-section {
+  margin: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.controls-root {
+  padding: 10px;
+}
+
+.control-section {
+  padding: 10px;
+}
+
+.controls-root[open] {
+  display: grid;
+  gap: 12px;
+}
+
+.control-section[open] {
+  display: grid;
+  gap: 12px;
+}
+
+.controls-root > summary,
+.control-section > summary {
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.controls-root > summary {
+  font-size: 0.95rem;
+}
+
+.control-section > summary {
+  font-size: 0.88rem;
+}
+
+.controls-root > summary::-webkit-details-marker,
+.control-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.controls-root > summary::before,
+.control-section > summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1rem;
+  color: var(--muted);
+}
+
+.controls-root[open] > summary::before,
+.control-section[open] > summary::before {
+  content: "-";
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -114,6 +173,12 @@ label {
   color: rgba(24, 33, 38, 0.5);
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.72rem;
+}
+
+.empty-controls {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .field-title,
