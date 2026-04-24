@@ -7,7 +7,6 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
 const EDGE_STROKE_WIDTH = 1.2;
-const RIVER_STROKE_WIDTH = 6;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -197,26 +196,67 @@ function createRiversGroup(rivers) {
     }
 
     group.append(
-      createElement("polyline", {
-        points: toSvgPoints(river.points),
-        fill: "none",
-        stroke: COLORS.river,
-        "stroke-width": RIVER_STROKE_WIDTH,
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-      }),
-      createElement("polyline", {
-        points: toSvgPoints(river.points),
-        fill: "none",
-        stroke: COLORS.riverHighlight,
-        "stroke-width": 2,
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-      }),
+      ...createRiverStrokes(river),
     );
   });
 
   return group;
+}
+
+function createRiverStrokes(river) {
+  const widthBeforeMerge = river.strokeWidthBeforeMerge ?? river.strokeWidth ?? 6;
+  const widthAfterMerge = river.strokeWidthAfterMerge ?? river.strokeWidth ?? widthBeforeMerge;
+  const mergePointIndex = findRiverMergePointIndex(river);
+
+  if (mergePointIndex === null || mergePointIndex <= 0 || mergePointIndex >= river.points.length - 1 || widthBeforeMerge === widthAfterMerge) {
+    return [
+      createRiverStroke(river.points, widthBeforeMerge),
+      createRiverHighlight(river.points),
+    ];
+  }
+
+  const upstreamPoints = river.points.slice(0, mergePointIndex + 1);
+  const downstreamPoints = river.points.slice(mergePointIndex);
+  return [
+    createRiverStroke(upstreamPoints, widthBeforeMerge),
+    createRiverStroke(downstreamPoints, widthAfterMerge),
+    createRiverHighlight(river.points),
+  ];
+}
+
+function findRiverMergePointIndex(river) {
+  if (river.widthMergeCellId === null || river.widthMergeCellId === undefined) {
+    return null;
+  }
+
+  const cellIndex = river.cellIds?.indexOf(river.widthMergeCellId) ?? -1;
+  if (cellIndex < 0) {
+    return null;
+  }
+
+  return 1 + (cellIndex * 2);
+}
+
+function createRiverStroke(points, width) {
+  return createElement("polyline", {
+    points: toSvgPoints(points),
+    fill: "none",
+    stroke: COLORS.river,
+    "stroke-width": width,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+  });
+}
+
+function createRiverHighlight(points) {
+  return createElement("polyline", {
+    points: toSvgPoints(points),
+    fill: "none",
+    stroke: COLORS.riverHighlight,
+    "stroke-width": 2,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+  });
 }
 
 function toSvgPoints(points) {

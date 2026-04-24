@@ -22,7 +22,7 @@ const RIVER_NAMES = [
 
 export function runFirstTributaryStep(map, { rng }) {
   const tributary = chooseFirstTributary(map, rng);
-  const rivers = tributary ? [...map.rivers, tributary] : map.rivers;
+  const rivers = tributary ? applyRiverWidths(map, map.rivers, tributary) : map.rivers;
   const nextMap = attachRiverData(map, rivers);
 
   return {
@@ -42,11 +42,13 @@ function chooseFirstTributary(map, rng) {
     return null;
   }
   const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
+  const primaryRiverWidth = map.init.params.primaryRiverWidth ?? 6;
+  const tributaryWidthRatio = map.init.params.tributaryWidthRatio ?? 0.72;
   const minSourceRiverDistance = map.init.params.tributarySourceRiverDistance ?? 6;
   const minMergeSeaDistance = map.init.params.tributaryMergeSeaDistance ?? 5;
   const riverDistances = computeDistancesFromSources(map, primaryRiver.cellIds);
 
-  const mergeTargets = buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance);
+  const mergeTargets = buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance, minTurnAngleDegrees);
   if (!mergeTargets.size) {
     return null;
   }
@@ -110,7 +112,10 @@ function chooseFirstTributary(map, rng) {
 
   const selected = candidates[0];
   const mergeInfo = mergeTargets.get(selected.path.cellIds[selected.path.cellIds.length - 1]);
-  const points = [selected.sourcePoint, ...selected.path.points];
+  const pathPoints = mergeInfo
+    ? [...selected.path.points.slice(0, -1), mergeInfo.point, selected.path.points[selected.path.points.length - 1]]
+    : selected.path.points;
+  const points = [selected.sourcePoint, ...pathPoints];
   return {
     id: map.rivers.length,
     name: chooseRiverName(rng, map.rivers),
@@ -119,11 +124,12 @@ function chooseFirstTributary(map, rng) {
     mergeCellId: mergeInfo?.mergeCellId ?? null,
     cellIds: selected.path.cellIds,
     points,
-    length: buildRiverLength(selected.sourcePoint, selected.path.points),
+    length: buildRiverLength(selected.sourcePoint, pathPoints),
+    strokeWidth: primaryRiverWidth * tributaryWidthRatio,
   };
 }
 
-function buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance) {
+function buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance, minTurnAngleDegrees) {
   const mergeTargets = new Map();
   const seaDistances = map.cells.some((cell) => cell.features.sea) ? computeSeaDistances(map.cells) : null;
   const validMergeCellIds = primaryRiver.cellIds.filter((cellId, index) => {
@@ -151,6 +157,9 @@ function buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance) {
         && [edge.leftCellId, edge.rightCellId].includes(neighborId),
       );
       if (!sharedEdge) {
+        return;
+      }
+      if (!isMergeAngleValid(map, primaryRiver, mergeCellId, sharedEdge.midpoint, minTurnAngleDegrees)) {
         return;
       }
 
@@ -236,6 +245,71 @@ function chooseRiverName(rng, existingRivers) {
   const usedNames = new Set(existingRivers.map((river) => river.name));
   const availableNames = RIVER_NAMES.filter((name) => !usedNames.has(name));
   return rng.pick(availableNames.length ? availableNames : RIVER_NAMES);
+}
+
+function applyRiverWidths(map, rivers, tributary) {
+  const primaryMergeWidthGain = map.init.params.primaryMergeWidthGain ?? 1.2;
+  const updatedPrimary = rivers.map((river) => {
+    if (river.id !== tributary.mergedIntoRiverId) {
+      return river;
+    }
+
+    const baseWidth = river.strokeWidth ?? map.init.params.primaryRiverWidth ?? 6;
+    return {
+      ...river,
+      strokeWidth: baseWidth,
+      strokeWidthBeforeMerge: baseWidth,
+      strokeWidthAfterMerge: baseWidth + primaryMergeWidthGain,
+      widthMergeCellId: tributary.mergeCellId,
+    };
+  });
+
+  return [...updatedPrimary, tributary];
+}
+
+function isMergeAngleValid(map, primaryRiver, mergeCellId, tributaryEntryPoint, minTurnAngleDegrees) {
+  const mergeCellIndex = primaryRiver.cellIds.indexOf(mergeCellId);
+  if (mergeCellIndex < 0 || mergeCellIndex >= primaryRiver.cellIds.length - 1) {
+    return false;
+  }
+
+  const mergeCell = map.cells[mergeCellId];
+  if (!mergeCell) {
+    return false;
+  }
+
+  const downstreamCellId = primaryRiver.cellIds[mergeCellIndex + 1];
+  const downstreamEdge = map.edges.find((edge) =>
+    [edge.leftCellId, edge.rightCellId].includes(mergeCellId)
+    && [edge.leftCellId, edge.rightCellId].includes(downstreamCellId),
+  );
+  if (!downstreamEdge) {
+    return false;
+  }
+
+  return angleDegreesBetween(tributaryEntryPoint, mergeCell.centroid, downstreamEdge.midpoint) >= minTurnAngleDegrees;
+}
+
+function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
+  const firstVector = {
+    x: firstPoint.x - pivotPoint.x,
+    y: firstPoint.y - pivotPoint.y,
+  };
+  const secondVector = {
+    x: secondPoint.x - pivotPoint.x,
+    y: secondPoint.y - pivotPoint.y,
+  };
+  const firstLength = Math.hypot(firstVector.x, firstVector.y);
+  const secondLength = Math.hypot(secondVector.x, secondVector.y);
+  if (firstLength === 0 || secondLength === 0) {
+    return 180;
+  }
+
+  const cosine = (
+    (firstVector.x * secondVector.x) + (firstVector.y * secondVector.y)
+  ) / (firstLength * secondLength);
+  const clampedCosine = Math.min(1, Math.max(-1, cosine));
+  return Math.acos(clampedCosine) * (180 / Math.PI);
 }
 
 function computeDistancesFromSources(map, sourceCellIds) {

@@ -283,6 +283,10 @@ Default values:
 - allowed tributary source distance range: `0` to `20`
 - tributary merge distance: `5`
 - allowed tributary merge distance range: `0` to `20`
+- tributary width ratio: `0.72`
+- allowed tributary width ratio range: `0.3` to `1`
+- primary merge width gain: `1.2`
+- allowed primary merge width gain range: `0` to `4`
 
 Source-cell rules:
 - Tributary source cell must:
@@ -301,6 +305,7 @@ Traversal rules:
   - hillside
   - any existing river cell
 - Tributaries must obey the same configured minimum turn-angle rule as the first river.
+- The merge angle between tributary entry and the downstream direction of the primary river must also satisfy the configured minimum turn angle.
 - When sea exists, the same monotonic sea-seeking constraints apply during pathfinding because the shared river-path helper is used.
 
 Selection rules:
@@ -318,6 +323,8 @@ Naming rules:
 State effects:
 - Appends one river object to `map.rivers` when successful.
 - Marks tributary cells with `features.river`.
+- Stores tributary stroke width separately from the primary river width.
+- Widens the primary river slightly downstream from the merge cell.
 
 ## Rendering And Replay Constraints Tied To Steps
 

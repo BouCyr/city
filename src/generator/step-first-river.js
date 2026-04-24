@@ -91,6 +91,10 @@ function chooseFirstRiver(map, rng) {
     cellIds: selected.path.cellIds,
     points,
     length: buildRiverLength(selected.sourcePoint, selected.path.points),
+    strokeWidth: map.init.params.primaryRiverWidth ?? 6,
+    strokeWidthBeforeMerge: map.init.params.primaryRiverWidth ?? 6,
+    strokeWidthAfterMerge: map.init.params.primaryRiverWidth ?? 6,
+    widthMergeCellId: null,
   };
 }
 
