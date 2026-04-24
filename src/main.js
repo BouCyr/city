@@ -23,10 +23,13 @@ const REPLAY_START_INDEX = 0;
 const VIEWPORT_FALLBACK_RATIO = 0.5;
 const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
 const HOVER_NEIGHBOR_OVERLAY_ID = "hoveredNeighborOverlay";
+const HOVER_RIVER_OVERLAY_ID = "hoveredRiverOverlay";
 const HOVER_NEIGHBOR_STROKE = "#7a5a2e";
 const HOVER_NEIGHBOR_STROKE_WIDTH = 1.5;
 const FLOW_STROKE = "#4f7cff";
 const FLOW_STROKE_WIDTH = 4;
+const RIVER_HOVER_STROKE = "#1e56c5";
+const RIVER_HOVER_GLOW = "rgba(255, 255, 255, 0.82)";
 const HILLS_STEP_INDEX = 4;
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
@@ -61,6 +64,7 @@ let generationToken = 0;
 let activeWorker = null;
 let currentFrame = null;
 let hoveredCellId = null;
+let hoveredRiverId = null;
 let isDragging = false;
 let dragPointerId = null;
 let dragStart = null;
@@ -145,9 +149,9 @@ mapViewport.addEventListener("pointermove", handlePointerMove);
 mapViewport.addEventListener("pointerup", handlePointerUp);
 mapViewport.addEventListener("pointercancel", handlePointerUp);
 mapViewport.addEventListener("pointerleave", handlePointerUp);
-svg.addEventListener("pointermove", handleCellHover);
-svg.addEventListener("pointerleave", clearHoveredCell);
-svg.addEventListener("click", handleCellClick);
+svg.addEventListener("pointermove", handleMapHover);
+svg.addEventListener("pointerleave", clearHoverState);
+svg.addEventListener("click", handleMapClick);
 
 form.requestSubmit();
 
@@ -167,7 +171,7 @@ function renderReplayIndex(index) {
   currentFrame = frame;
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
-  clearHoveredCell();
+  clearHoverState();
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
 
@@ -231,7 +235,7 @@ function runSingleGeneration(options) {
   setAsyncControlsDisabled(true);
   syncReplayUi(null, 0);
   resetViewport(CANVAS_SIZE);
-  clearHoveredCell();
+  clearHoverState();
 
   activeWorker = createGenerationWorker(requestId, (message) => {
     if (message.requestId !== requestId) {
@@ -410,9 +414,10 @@ function renderInterimFrame(frame) {
   currentMap = null;
   currentFrame = frame;
   hoveredCellId = null;
+  hoveredRiverId = null;
   drawReplayFrame(svg, frame, CANVAS_SIZE);
   applyViewport();
-  clearHoveredCell();
+  clearHoverState();
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
 
@@ -508,29 +513,43 @@ function handlePointerUp(event) {
   }
 }
 
-function handleCellHover(event) {
+function handleMapHover(event) {
+  const river = getRiverFromEvent(event);
+  if (river) {
+    renderHoveredRiver(river);
+    return;
+  }
+
   const cell = getCellFromEvent(event);
   if (!cell) {
-    clearHoveredCell();
+    clearHoverState();
     return;
   }
 
   renderHoveredCell(cell);
 }
 
-function clearHoveredCell() {
+function clearHoverState() {
   if (!(hoveredCellData instanceof HTMLElement)) {
     return;
   }
 
   hoveredCellId = null;
+  hoveredRiverId = null;
   clearFlowOverlay();
   clearNeighborOverlay();
+  clearRiverOverlay();
   hoveredCellData.className = "cell-data empty";
-  hoveredCellData.textContent = "Hover an area to inspect its data.";
+  hoveredCellData.textContent = "Hover a lot or river to inspect its data.";
 }
 
-function handleCellClick(event) {
+function handleMapClick(event) {
+  const river = getRiverFromEvent(event);
+  if (river) {
+    focusRiver(river, currentFrame?.map?.meta.size || currentMap?.meta.size || CANVAS_SIZE);
+    return;
+  }
+
   const cell = getCellFromEvent(event);
   if (!cell) {
     return;
@@ -628,12 +647,26 @@ function getCellFromEvent(event) {
   const target = event.target instanceof Element ? event.target.closest("[data-lot-id], [data-cell-id]") : null;
   const cellId = target
     ? Number(target.getAttribute("data-lot-id") || target.getAttribute("data-cell-id"))
-    : hoveredCellId;
+    : Number.NaN;
   if (!Number.isFinite(cellId)) {
     return null;
   }
 
   return getMapLots(currentFrame.map).find((cell) => cell.id === cellId) || null;
+}
+
+function getRiverFromEvent(event) {
+  if (!currentFrame || currentFrame.type !== "map") {
+    return null;
+  }
+
+  const target = event.target instanceof Element ? event.target.closest("[data-river-id]") : null;
+  const riverId = target ? Number(target.getAttribute("data-river-id")) : Number.NaN;
+  if (!Number.isFinite(riverId)) {
+    return null;
+  }
+
+  return currentFrame.map.rivers?.find((river) => river.id === riverId) || null;
 }
 
 function renderHoveredCell(cell) {
@@ -642,6 +675,8 @@ function renderHoveredCell(cell) {
   }
 
   hoveredCellId = cell.id;
+  hoveredRiverId = null;
+  clearRiverOverlay();
   drawNeighborOverlay(cell);
   const isLotGeometry = Array.isArray(currentFrame?.map?.lots);
   const areaLabel = isLotGeometry ? "Lot" : "Cell";
@@ -671,6 +706,31 @@ function renderHoveredCell(cell) {
   drawFlowOverlay(previewRiverPath);
 }
 
+function renderHoveredRiver(river) {
+  if (!(hoveredCellData instanceof HTMLElement)) {
+    return;
+  }
+
+  hoveredCellId = null;
+  hoveredRiverId = river.id;
+  clearFlowOverlay();
+  clearNeighborOverlay();
+  drawRiverOverlay(river);
+
+  hoveredCellData.className = "cell-data river-hover";
+  hoveredCellData.innerHTML = [
+    createCellDataRow("River", river.name || `River ${river.id}`),
+    createCellDataRow("Id", String(river.id)),
+    createCellDataRow("Length", `${river.length.toFixed(1)} px`),
+    createCellDataRow("Cells", String(river.cellIds?.length || 0)),
+    createCellDataRow("Width", formatRiverWidth(river)),
+    createCellDataRow("Source Cell", river.sourceCellId ?? "n/a"),
+    createCellDataRow("Merge Cell", river.mergeCellId ?? river.widthMergeCellId ?? "n/a"),
+    createCellDataRow("Target Sea Cell", river.targetSeaCellId ?? "n/a"),
+    createCellDataRow("Branch", describeRiverBranch(river)),
+  ].join("");
+}
+
 function createCellDataRow(label, value) {
   return `
     <div class="cell-data-row">
@@ -686,6 +746,34 @@ function focusCell(cell, size) {
   const cellWidth = bounds.maxX - bounds.minX;
   const cellHeight = bounds.maxY - bounds.minY;
   const targetSpan = clamp(Math.max(cellWidth, cellHeight) + padding * 2, size / MAX_ZOOM, size);
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+
+  viewportState.width = targetSpan;
+  viewportState.height = targetSpan;
+  viewportState.zoom = size / targetSpan;
+  viewportState.x = centerX - targetSpan / 2;
+  viewportState.y = centerY - targetSpan / 2;
+  clampViewport(size);
+  applyViewport();
+}
+
+function focusRiver(river, size) {
+  const bounds = river.points.reduce((accumulator, point) => ({
+    minX: Math.min(accumulator.minX, point.x),
+    minY: Math.min(accumulator.minY, point.y),
+    maxX: Math.max(accumulator.maxX, point.x),
+    maxY: Math.max(accumulator.maxY, point.y),
+  }), {
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity,
+  });
+  const padding = 20;
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  const targetSpan = clamp(Math.max(width, height) + padding * 2, size / MAX_ZOOM, size);
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
 
@@ -785,6 +873,40 @@ function clearNeighborOverlay() {
   svg.querySelector(`#${HOVER_NEIGHBOR_OVERLAY_ID}`)?.remove();
 }
 
+function drawRiverOverlay(river) {
+  clearRiverOverlay();
+  if (!river?.points || river.points.length < 2) {
+    return;
+  }
+
+  const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  overlay.setAttribute("id", HOVER_RIVER_OVERLAY_ID);
+  overlay.setAttribute("pointer-events", "none");
+
+  const glow = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  glow.setAttribute("points", toSvgPoints(river.points));
+  glow.setAttribute("fill", "none");
+  glow.setAttribute("stroke", RIVER_HOVER_GLOW);
+  glow.setAttribute("stroke-width", String((river.strokeWidthAfterMerge ?? river.strokeWidth ?? 6) + 3));
+  glow.setAttribute("stroke-linecap", "round");
+  glow.setAttribute("stroke-linejoin", "round");
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  line.setAttribute("points", toSvgPoints(river.points));
+  line.setAttribute("fill", "none");
+  line.setAttribute("stroke", RIVER_HOVER_STROKE);
+  line.setAttribute("stroke-width", String((river.strokeWidthAfterMerge ?? river.strokeWidth ?? 6) + 1));
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("stroke-linejoin", "round");
+
+  overlay.append(glow, line);
+  svg.append(overlay);
+}
+
+function clearRiverOverlay() {
+  svg.querySelector(`#${HOVER_RIVER_OVERLAY_ID}`)?.remove();
+}
+
 function createNeighborArrow(from, to) {
   const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line.setAttribute("x1", String(from.x));
@@ -837,4 +959,20 @@ function appendFlowPolyline(overlay, flowPath, stroke) {
 
 function shouldShowRiverPreview() {
   return Boolean(currentFrame && currentFrame.type === "map" && currentFrame.stepIndex === HILLS_STEP_INDEX);
+}
+
+function formatRiverWidth(river) {
+  const before = river.strokeWidthBeforeMerge ?? river.strokeWidth ?? 0;
+  const after = river.strokeWidthAfterMerge ?? river.strokeWidth ?? before;
+  return before === after ? `${before}` : `${before} -> ${after}`;
+}
+
+function describeRiverBranch(river) {
+  if (river.mergedIntoRiverId !== undefined) {
+    return `tributary of ${river.mergedIntoRiverId}`;
+  }
+  if (river.widthMergeCellId !== null && river.widthMergeCellId !== undefined) {
+    return "primary with downstream merge gain";
+  }
+  return "primary";
 }

@@ -4,7 +4,8 @@
  * WHY: The generator and renderer need a stable geometry format that is easy to reason about and replay.
  */
 
-import { Delaunay } from "https://cdn.jsdelivr.net/npm/d3-delaunay@6/+esm";
+import { Delaunay } from "./d3-delaunay/index.js";
+
 
 const VORONOI_BOUNDS_MIN = 0;
 const DEGENERATE_AREA_EPSILON = 0.0001;

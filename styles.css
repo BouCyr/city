@@ -451,6 +451,10 @@ output {
   color: var(--muted);
 }
 
+.cell-data.river-hover {
+  color: #17417f;
+}
+
 .cell-data-row {
   display: grid;
   gap: 2px;

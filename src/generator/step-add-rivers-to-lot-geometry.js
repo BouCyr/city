@@ -18,7 +18,8 @@ import {
 } from "./map-model.js";
 
 const EPSILON = 0.0001;
-const POINT_EPSILON = 0.75;
+const POINT_EPSILON = 0.05;
+const GRAPH_NODE_EPSILON = 0.05;
 
 export function runAddRiversToLotGeometryStep(map) {
   if (!Array.isArray(map.lots) || !map.lots.length || !Array.isArray(map.rivers) || !map.rivers.length) {
@@ -306,7 +307,8 @@ function traceGraphFaces(graph) {
 }
 
 function rebuildSegmentsFromLots(lots, riverGraph) {
-  const normalizedLots = lots.map((lot) => ({
+  const synchronizedLots = synchronizeLotBoundaryVertices(lots);
+  const normalizedLots = synchronizedLots.map((lot) => ({
     ...lot,
     polygon: normalizePolygon(lot.polygon),
     centroid: computePolygonCentroid(normalizePolygon(lot.polygon)),
@@ -380,7 +382,11 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     if (segment.rightLotId !== null && segment.rightLotId !== segment.leftLotId) {
       lotById.get(segment.rightLotId)?.segmentIds.push(segment.id);
     }
-    if (segment.leftLotId !== null && segment.rightLotId !== null && segment.leftLotId !== segment.rightLotId) {
+    if (
+      segment.leftLotId !== null
+      && segment.rightLotId !== null
+      && segment.leftLotId !== segment.rightLotId
+    ) {
       const leftLot = lotById.get(segment.leftLotId);
       const rightLot = lotById.get(segment.rightLotId);
       if (leftLot && !leftLot.neighborLotIds.includes(segment.rightLotId)) {
@@ -400,6 +406,52 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     lots: normalizedLots,
     segments,
   };
+}
+
+function synchronizeLotBoundaryVertices(lots) {
+  const allPoints = [];
+  const seen = new Set();
+
+  lots.forEach((lot) => {
+    lot.polygon.forEach((point) => {
+      const key = pointKey(point);
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      allPoints.push(clonePoint(point));
+    });
+  });
+
+  return lots.map((lot) => ({
+    ...lot,
+    polygon: insertSharedBoundaryVertices(lot.polygon, allPoints),
+  }));
+}
+
+function insertSharedBoundaryVertices(polygon, candidatePoints) {
+  const normalized = normalizePolygon(polygon);
+  const expanded = [];
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const from = normalized[index];
+    const to = normalized[(index + 1) % normalized.length];
+    expanded.push(clonePoint(from));
+
+    const insertions = candidatePoints
+      .filter((point) => !pointsMatch(point, from) && !pointsMatch(point, to))
+      .filter((point) => pointLiesOnSegment(point, from, to))
+      .sort((first, second) => pointDistance(from, first) - pointDistance(from, second));
+
+    insertions.forEach((point) => {
+      const previous = expanded[expanded.length - 1];
+      if (!pointsMatch(previous, point)) {
+        expanded.push(clonePoint(point));
+      }
+    });
+  }
+
+  return normalizePolygon(expanded);
 }
 
 function createSplitLot(lot, polygon, id) {
@@ -550,7 +602,12 @@ function getOrCreateNode(nodes, nodeByKey, point) {
 }
 
 function getOrCreateGraphNode(nodes, nodeByKey, point) {
-  const existing = findMatchingNode(nodes, point);
+  const keyed = nodeByKey.get(pointKey(point));
+  if (keyed !== undefined) {
+    return keyed;
+  }
+
+  const existing = findMatchingNode(nodes, point, GRAPH_NODE_EPSILON);
   if (existing !== -1) {
     return existing;
   }
@@ -561,9 +618,9 @@ function getOrCreateGraphNode(nodes, nodeByKey, point) {
   return nodeId;
 }
 
-function findMatchingNode(nodes, point) {
+function findMatchingNode(nodes, point, epsilon = POINT_EPSILON) {
   for (let index = 0; index < nodes.length; index += 1) {
-    if (pointsMatch(nodes[index], point)) {
+    if (pointsMatch(nodes[index], point, epsilon)) {
       return index;
     }
   }
@@ -591,6 +648,21 @@ function canonicalEdge(from, to) {
     from: clonePoint(to),
     to: clonePoint(from),
   };
+}
+
+function pointLiesOnSegment(point, from, to) {
+  const segmentLength = pointDistance(from, to);
+  if (segmentLength <= EPSILON) {
+    return false;
+  }
+
+  const offset = Math.abs(pointSide(from, to, point));
+  if (offset > EPSILON) {
+    return false;
+  }
+
+  const along = ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / (segmentLength ** 2);
+  return along > EPSILON && along < 1 - EPSILON;
 }
 
 function normalizePolygon(points) {
