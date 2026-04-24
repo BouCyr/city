@@ -38,6 +38,7 @@ const zoomOutButton = document.querySelector("#zoomOutButton");
 const resetViewButton = document.querySelector("#resetViewButton");
 const hoveredCellData = document.querySelector("#hoveredCellData");
 const randomSeedButton = document.querySelector("#randomSeedButton");
+const bestSeedButton = document.querySelector("#bestSeedButton");
 const seedInput = document.querySelector("#seed");
 const stepTracker = createStepTracker({
   listElement: document.querySelector("#stepsList"),
@@ -116,6 +117,28 @@ randomSeedButton?.addEventListener("click", () => {
 
   seedInput.value = generateRandomSeed();
   form.requestSubmit();
+});
+
+bestSeedButton?.addEventListener("click", async () => {
+  if (!(seedInput instanceof HTMLInputElement)) {
+    return;
+  }
+
+  bestSeedButton.disabled = true;
+  randomSeedButton && (randomSeedButton.disabled = true);
+
+  try {
+    const bestSeed = await findBestSeedFromSamples(50);
+    if (!bestSeed) {
+      return;
+    }
+
+    seedInput.value = bestSeed;
+    form.requestSubmit();
+  } finally {
+    bestSeedButton.disabled = false;
+    randomSeedButton && (randomSeedButton.disabled = false);
+  }
 });
 
 form.addEventListener("submit", async (event) => {
@@ -219,6 +242,39 @@ function startReplay() {
 
 function generateRandomSeed() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+async function findBestSeedFromSamples(sampleCount) {
+  const baseOptions = readFormState(form);
+  const silentStepTracker = createSilentStepTracker();
+  let bestCandidate = null;
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const seed = generateRandomSeed();
+    const map = await generateCity(
+      { ...baseOptions, seed, mapSize: CANVAS_SIZE },
+      silentStepTracker,
+    );
+    const tributary = map.rivers?.[1] || null;
+    const tributaryLength = tributary?.length || 0;
+
+    if (!bestCandidate || tributaryLength > bestCandidate.tributaryLength) {
+      bestCandidate = { seed, tributaryLength };
+    }
+  }
+
+  return bestCandidate?.seed || null;
+}
+
+function createSilentStepTracker() {
+  return {
+    reset() {},
+    async advance(_index, _status, work) {
+      return work();
+    },
+    complete() {},
+    setSelectedStep() {},
+  };
 }
 
 function describeFrame(map, frame) {

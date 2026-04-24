@@ -100,7 +100,7 @@ label {
 
 .seed-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -213,7 +213,18 @@ output {
 }
 
 .steps-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
+}
+
+.step-duration {
+  flex: 0 0 auto;
+  color: rgba(24, 33, 38, 0.42);
+  font-size: 0.72rem;
+  font-weight: 400;
 }
 
 .canvas-panel {

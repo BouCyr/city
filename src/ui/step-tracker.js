@@ -19,14 +19,27 @@ const STEP_SELECTION_KEYS = new Set(["Enter", " "]);
 export function createStepTracker({ listElement, statusElement, onStepSelect }) {
   let activeIndex = -1;
   let selectedIndex = -1;
+  const durationByStepIndex = new Map();
 
   function render(status = STATUS_IDLE) {
     listElement.innerHTML = "";
     GENERATION_STEPS.forEach((label, index) => {
       const item = document.createElement("li");
-      item.textContent = label;
       item.dataset.stepIndex = String(index);
       item.tabIndex = 0;
+
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = label;
+      item.appendChild(labelSpan);
+
+      const durationMs = durationByStepIndex.get(index);
+      if (typeof durationMs === "number") {
+        const durationSpan = document.createElement("span");
+        durationSpan.className = "step-duration";
+        durationSpan.textContent = `${Math.round(durationMs)} ms`;
+        item.appendChild(durationSpan);
+      }
+
       if (index < activeIndex) {
         item.className = "complete";
       } else if (index === activeIndex) {
@@ -53,13 +66,19 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
     reset() {
       activeIndex = -1;
       selectedIndex = -1;
+      durationByStepIndex.clear();
       render(STATUS_IDLE);
     },
     async advance(index, status, work) {
       activeIndex = index;
       render(status);
       await new Promise((resolve) => window.setTimeout(resolve, STEP_RENDER_DELAY_MS));
-      return work();
+      const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const result = await work();
+      const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+      durationByStepIndex.set(index, finishedAt - startedAt);
+      render(status);
+      return result;
     },
     complete() {
       activeIndex = GENERATION_STEPS.length;
