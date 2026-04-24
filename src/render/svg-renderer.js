@@ -8,7 +8,8 @@ import { getMapGeometry } from "../generator/map-model.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
-const EDGE_STROKE_WIDTH = 1.2;
+const EDGE_STROKE_WIDTH = 0.85;
+const SEGMENT_ENDPOINT_RADIUS = 1.0;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -145,22 +146,27 @@ function createLotsGroup(lots) {
 
 function createSegmentsGroup(segments) {
   const group = createElement("g", {
+    "pointer-events": "none",
+  });
+  const lineGroup = createElement("g", {
     fill: "none",
     "stroke-linecap": "round",
     "stroke-width": EDGE_STROKE_WIDTH,
-    "pointer-events": "none",
   });
+  const dotGroup = createElement("g");
 
   segments.forEach((segment) => {
     const leftId = segment.leftLotId ?? segment.leftCellId ?? "";
     const rightId = segment.rightLotId ?? segment.rightCellId ?? "";
-    group.append(
+    const stroke = segment.features.sea ? COLORS.seaEdge : COLORS.edge;
+
+    lineGroup.append(
       createElement("line", {
         x1: segment.from.x,
         y1: segment.from.y,
         x2: segment.to.x,
         y2: segment.to.y,
-        stroke: segment.features.sea ? COLORS.seaEdge : COLORS.edge,
+        stroke,
         "data-segment-id": segment.id,
         "data-edge-id": segment.id,
         "data-left-lot-id": leftId,
@@ -169,8 +175,23 @@ function createSegmentsGroup(segments) {
         "data-right-cell-id": rightId,
       }),
     );
-  });
 
+    dotGroup.append(
+      createElement("circle", {
+        cx: segment.from.x,
+        cy: segment.from.y,
+        r: SEGMENT_ENDPOINT_RADIUS,
+        fill: stroke,
+      }),
+      createElement("circle", {
+        cx: segment.to.x,
+        cy: segment.to.y,
+        r: SEGMENT_ENDPOINT_RADIUS,
+        fill: stroke,
+      }),
+    );
+  });
+  group.append(lineGroup, dotGroup);
   return group;
 }
 
