@@ -109,6 +109,13 @@ label {
   white-space: nowrap;
 }
 
+.task-status {
+  min-height: 1.1rem;
+  color: rgba(24, 33, 38, 0.5);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+}
+
 .field-title,
 .steps-header {
   font-weight: 700;

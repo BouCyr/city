@@ -26,22 +26,45 @@ const GENERATION_PIPELINE = [
 ];
 
 export async function generateCity(options, stepTracker) {
-  stepTracker.reset();
+  stepTracker?.reset?.();
 
   const rng = createSeededRandom(options.seed);
   let map = createInitialMap(options);
   const frames = [createFrame("Blank map", null, BLANK_STEP_INDEX)];
+  const stepDurations = [];
 
   for (let index = 0; index < GENERATION_PIPELINE.length; index += 1) {
     const step = GENERATION_PIPELINE[index];
-    const result = await stepTracker.advance(index, step.status, async () => step.run(map, { rng }));
+    stepTracker?.onStepStart?.({
+      index,
+      status: step.status,
+      label: GENERATION_STEPS[index],
+    });
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const result = await step.run(map, { rng });
+    const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const durationMs = finishedAt - startedAt;
+    stepDurations[index] = durationMs;
     map = withStepMetadata(result.map, index, GENERATION_STEPS[index]);
-    result.frameEntries.forEach((entry) => {
-      frames.push(createFrame(entry.label, entry.map, index, GENERATION_STEPS[index]));
+    const createdFrames = result.frameEntries.map((entry) =>
+      createFrame(entry.label, entry.map, index, GENERATION_STEPS[index])
+    );
+    createdFrames.forEach((frame) => {
+      frames.push(frame);
+    });
+    stepTracker?.onStepComplete?.({
+      index,
+      status: step.status,
+      label: GENERATION_STEPS[index],
+      durationMs,
+      frame: createdFrames.at(-1) || createFrame(GENERATION_STEPS[index], map, index, GENERATION_STEPS[index]),
+      stepDurations: [...stepDurations],
     });
   }
 
-  stepTracker.complete();
+  stepTracker?.complete?.({
+    stepDurations: [...stepDurations],
+  });
 
   const finalMap = withStepMetadata(map, GENERATION_STEPS.length - 1, GENERATION_STEPS[GENERATION_STEPS.length - 1]);
   return {
@@ -49,5 +72,6 @@ export async function generateCity(options, stepTracker) {
     summary: buildSummary(finalMap),
     steps: GENERATION_STEPS,
     frames,
+    stepDurations,
   };
 }

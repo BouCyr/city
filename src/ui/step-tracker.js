@@ -8,7 +8,6 @@ import { GENERATION_STEPS, GENERATION_STEP_TREE } from "../generator/steps.js";
 
 const STATUS_IDLE = "Idle";
 const STATUS_COMPLETE = "Complete";
-const STEP_RENDER_DELAY_MS = 120;
 const STEP_SELECTION_KEYS = new Set(["Enter", " "]);
 
 /**
@@ -20,6 +19,7 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
   let activeIndex = -1;
   let selectedIndex = -1;
   const durationByStepIndex = new Map();
+  let currentStatus = STATUS_IDLE;
 
   function getStepState(index) {
     if (index < activeIndex) {
@@ -65,7 +65,8 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
     return content;
   }
 
-  function render(status = STATUS_IDLE) {
+  function render(status = currentStatus) {
+    currentStatus = status;
     listElement.innerHTML = "";
     GENERATION_STEP_TREE.forEach((group, groupIndex) => {
       const groupItem = document.createElement("li");
@@ -128,7 +129,7 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
 
       listElement.appendChild(groupItem);
     });
-    statusElement.textContent = status;
+    statusElement.textContent = currentStatus;
   }
 
   render();
@@ -138,26 +139,37 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
       activeIndex = -1;
       selectedIndex = -1;
       durationByStepIndex.clear();
+      currentStatus = STATUS_IDLE;
       render(STATUS_IDLE);
     },
-    async advance(index, status, work) {
+    startStep(index, status) {
       activeIndex = index;
       render(status);
-      await new Promise((resolve) => window.setTimeout(resolve, STEP_RENDER_DELAY_MS));
-      const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const result = await work();
-      const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-      durationByStepIndex.set(index, finishedAt - startedAt);
+    },
+    finishStep(index, durationMs, status = currentStatus) {
+      activeIndex = index;
+      if (typeof durationMs === "number") {
+        durationByStepIndex.set(index, durationMs);
+      }
       render(status);
-      return result;
     },
     complete() {
       activeIndex = GENERATION_STEPS.length;
       render(STATUS_COMPLETE);
     },
+    setCompletedRun(stepDurations = []) {
+      activeIndex = GENERATION_STEPS.length;
+      durationByStepIndex.clear();
+      stepDurations.forEach((durationMs, index) => {
+        if (typeof durationMs === "number") {
+          durationByStepIndex.set(index, durationMs);
+        }
+      });
+      render(STATUS_COMPLETE);
+    },
     setSelectedStep(index) {
       selectedIndex = index;
-      render(activeIndex >= GENERATION_STEPS.length ? STATUS_COMPLETE : STATUS_IDLE);
+      render(activeIndex >= GENERATION_STEPS.length ? STATUS_COMPLETE : currentStatus);
     },
   };
 }

@@ -277,9 +277,15 @@ State effects:
 
 ## Rendering And Replay Constraints Tied To Steps
 
+- Generation runs in a background web worker so the UI remains responsive during map creation and seed search.
+- Single-map generation streams progress back to the UI after every top-level step.
+- During single-map generation, the visible map updates to the newest completed step frame as soon as that step finishes.
 - Generation returns a replay frame for every top-level step.
 - The UI initially shows the final frame after generation.
 - Replay is manual only.
+- `Best of 50` also runs in the background worker.
+- During `Best of 50`, the UI shows a small progress counter for completed samples.
+- During `Best of 50`, the visible map updates only when a newly sampled seed produces a better tributary than all previous sampled seeds.
 - Step 5 has a hover-only river preview overlay that uses the same center-sea path helper as step 6.
 - Step timing in milliseconds is shown beside each step in the UI and is approximate.
 

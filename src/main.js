@@ -6,7 +6,6 @@
 
 import { readFormState, bindFormInteractions } from "./ui/form-controller.js";
 import { createStepTracker } from "./ui/step-tracker.js";
-import { generateCity } from "./generator/city-generator.js";
 import { findCenterSeaLandPath } from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 
@@ -29,6 +28,7 @@ const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
 const summary = document.querySelector("#mapSummary");
+const backgroundTaskStatus = document.querySelector("#backgroundTaskStatus");
 const replaySlider = document.querySelector("#replaySlider");
 const playReplayButton = document.querySelector("#playReplayButton");
 const prevReplayButton = document.querySelector("#prevReplayButton");
@@ -54,6 +54,7 @@ let currentMap = null;
 let replayTimer = null;
 let regenerateTimer = null;
 let generationToken = 0;
+let activeWorker = null;
 let currentFrameIndex = 0;
 let currentFrame = null;
 let hoveredCellId = null;
@@ -115,47 +116,24 @@ randomSeedButton?.addEventListener("click", () => {
     return;
   }
 
+  cancelWorkerTask();
   seedInput.value = generateRandomSeed();
   form.requestSubmit();
 });
 
-bestSeedButton?.addEventListener("click", async () => {
+bestSeedButton?.addEventListener("click", () => {
   if (!(seedInput instanceof HTMLInputElement)) {
     return;
   }
 
-  bestSeedButton.disabled = true;
-  randomSeedButton && (randomSeedButton.disabled = true);
-
-  try {
-    const bestSeed = await findBestSeedFromSamples(50);
-    if (!bestSeed) {
-      return;
-    }
-
-    seedInput.value = bestSeed;
-    form.requestSubmit();
-  } finally {
-    bestSeedButton.disabled = false;
-    randomSeedButton && (randomSeedButton.disabled = false);
-  }
+  runBestOfSeeds(50);
 });
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   stopReplay();
-  const token = ++generationToken;
-
   const options = readFormState(form);
-  const map = await generateCity({ ...options, mapSize: CANVAS_SIZE }, stepTracker);
-  if (token !== generationToken) {
-    return;
-  }
-  currentMap = map;
-  resetViewport(map.meta.size);
-  const finalIndex = Math.max(0, map.frames.length - 1);
-  syncReplayUi(map, finalIndex);
-  renderReplayIndex(finalIndex);
+  runSingleGeneration(options);
 });
 
 mapViewport.addEventListener("wheel", handleViewportWheel, { passive: false });
@@ -246,37 +224,211 @@ function generateRandomSeed() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-async function findBestSeedFromSamples(sampleCount) {
-  const baseOptions = readFormState(form);
-  const silentStepTracker = createSilentStepTracker();
-  let bestCandidate = null;
+function runSingleGeneration(options) {
+  const requestId = ++generationToken;
+  cancelWorkerTask();
+  stepTracker.reset();
+  setBackgroundTaskStatus("Generating 0/7");
+  setAsyncControlsDisabled(true);
+  syncReplayUi(null, 0);
+  resetViewport(CANVAS_SIZE);
+  clearHoveredCell();
 
-  for (let index = 0; index < sampleCount; index += 1) {
-    const seed = generateRandomSeed();
-    const map = await generateCity(
-      { ...baseOptions, seed, mapSize: CANVAS_SIZE },
-      silentStepTracker,
-    );
-    const tributary = map.rivers?.[1] || null;
-    const tributaryLength = tributary?.length || 0;
-
-    if (!bestCandidate || tributaryLength > bestCandidate.tributaryLength) {
-      bestCandidate = { seed, tributaryLength };
+  activeWorker = createGenerationWorker(requestId, (message) => {
+    if (message.requestId !== requestId) {
+      return;
     }
-  }
 
-  return bestCandidate?.seed || null;
+    if (message.type === "generation-reset") {
+      stepTracker.reset();
+      setBackgroundTaskStatus("Generating 0/7");
+      return;
+    }
+
+    if (message.type === "generation-step-start") {
+      stepTracker.startStep(message.index, message.status);
+      setBackgroundTaskStatus(`Generating ${message.index + 1}/7`);
+      return;
+    }
+
+    if (message.type === "generation-step-complete") {
+      stepTracker.finishStep(message.index, message.durationMs, message.status);
+      renderInterimFrame(message.frame);
+      setBackgroundTaskStatus(`Generating ${message.index + 1}/7`);
+      return;
+    }
+
+    if (message.type === "generation-finished-steps") {
+      stepTracker.complete();
+      setBackgroundTaskStatus("");
+      return;
+    }
+
+    if (message.type === "generation-complete") {
+      applyGeneratedMap(message.map);
+      stepTracker.setCompletedRun(message.map.stepDurations || []);
+      setBackgroundTaskStatus("");
+      setAsyncControlsDisabled(false);
+      teardownWorkerTask();
+      return;
+    }
+
+    if (message.type === "task-error") {
+      console.error("[generation-worker]", message.message);
+      setBackgroundTaskStatus("Generation failed");
+      setAsyncControlsDisabled(false);
+      teardownWorkerTask();
+    }
+  });
+
+  activeWorker.postMessage({
+    type: "generate",
+    requestId,
+    options: { ...options, mapSize: CANVAS_SIZE },
+  });
 }
 
-function createSilentStepTracker() {
-  return {
-    reset() {},
-    async advance(_index, _status, work) {
-      return work();
-    },
-    complete() {},
-    setSelectedStep() {},
-  };
+function runBestOfSeeds(sampleCount) {
+  const requestId = ++generationToken;
+  const options = readFormState(form);
+
+  stopReplay();
+  cancelWorkerTask();
+  setAsyncControlsDisabled(true);
+  setBackgroundTaskStatus(`Best of ${sampleCount}: 0/${sampleCount}`);
+
+  activeWorker = createGenerationWorker(requestId, (message) => {
+    if (message.requestId !== requestId) {
+      return;
+    }
+
+    if (message.type === "best-of-start") {
+      setBackgroundTaskStatus(`Best of ${message.sampleCount}: 0/${message.sampleCount}`);
+      return;
+    }
+
+    if (message.type === "best-of-progress") {
+      setBackgroundTaskStatus(`Best of ${message.sampleCount}: ${message.completedCount}/${message.sampleCount}`);
+      return;
+    }
+
+    if (message.type === "best-of-better") {
+      renderBestCandidate(message.map);
+      setBackgroundTaskStatus(`Best of ${message.sampleCount}: ${message.completedCount}/${message.sampleCount}`);
+      return;
+    }
+
+    if (message.type === "best-of-complete") {
+      if (message.map) {
+        if (seedInput instanceof HTMLInputElement && message.seed) {
+          seedInput.value = message.seed;
+        }
+        applyGeneratedMap(message.map);
+        stepTracker.setCompletedRun(message.map.stepDurations || []);
+      }
+      setBackgroundTaskStatus("");
+      setAsyncControlsDisabled(false);
+      teardownWorkerTask();
+      return;
+    }
+
+    if (message.type === "task-error") {
+      console.error("[generation-worker]", message.message);
+      setBackgroundTaskStatus("Best of 50 failed");
+      setAsyncControlsDisabled(false);
+      teardownWorkerTask();
+    }
+  });
+
+  activeWorker.postMessage({
+    type: "best-of-50",
+    requestId,
+    sampleCount,
+    options: { ...options, mapSize: CANVAS_SIZE },
+  });
+}
+
+function createGenerationWorker(requestId, onMessage) {
+  const worker = new Worker(new URL("./generator/generation-worker.js", import.meta.url), {
+    type: "module",
+  });
+  worker.addEventListener("message", (event) => {
+    onMessage(event.data);
+  });
+  worker.addEventListener("error", (event) => {
+    onMessage({
+      type: "task-error",
+      requestId,
+      message: event.message || "Worker crashed",
+    });
+  });
+  return worker;
+}
+
+function teardownWorkerTask() {
+  if (!activeWorker) {
+    return;
+  }
+
+  activeWorker.terminate();
+  activeWorker = null;
+}
+
+function cancelWorkerTask() {
+  teardownWorkerTask();
+  setAsyncControlsDisabled(false);
+  setBackgroundTaskStatus("");
+}
+
+function setAsyncControlsDisabled(isDisabled) {
+  if (randomSeedButton) {
+    randomSeedButton.disabled = isDisabled;
+  }
+  if (bestSeedButton) {
+    bestSeedButton.disabled = isDisabled;
+  }
+}
+
+function setBackgroundTaskStatus(text) {
+  if (!backgroundTaskStatus) {
+    return;
+  }
+
+  backgroundTaskStatus.textContent = text;
+}
+
+function renderInterimFrame(frame) {
+  if (!frame || frame.type !== "map") {
+    return;
+  }
+
+  currentMap = null;
+  currentFrame = frame;
+  hoveredCellId = null;
+  drawReplayFrame(svg, frame, CANVAS_SIZE);
+  applyViewport();
+  clearHoveredCell();
+  stepTracker.setSelectedStep(frame.stepIndex ?? -1);
+}
+
+function renderBestCandidate(map) {
+  if (!map) {
+    return;
+  }
+
+  currentMap = map;
+  stepTracker.setCompletedRun(map.stepDurations || []);
+  const finalIndex = Math.max(0, map.frames.length - 1);
+  syncReplayUi(map, finalIndex);
+  renderReplayIndex(finalIndex);
+}
+
+function applyGeneratedMap(map) {
+  currentMap = map;
+  resetViewport(map.meta.size);
+  const finalIndex = Math.max(0, map.frames.length - 1);
+  syncReplayUi(map, finalIndex);
+  renderReplayIndex(finalIndex);
 }
 
 function describeFrame(map, frame) {
