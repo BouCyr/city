@@ -7,6 +7,7 @@
 import { cross } from "./geometry.js";
 
 export const BLANK_STEP_INDEX = -1;
+export const DEFAULT_SEGMENT_LENGTH = 5;
 
 const SNAPSHOT_FALLBACK = (value) => JSON.parse(JSON.stringify(value));
 
@@ -95,6 +96,7 @@ export function buildCanonicalGeometry(diagram) {
       site: {
         x: cell.site.x,
         y: cell.site.y,
+        id: cell.site.id ?? cell.id,
       },
       centroid: {
         x: cell.centroid.x,
@@ -146,16 +148,166 @@ export function buildCanonicalGeometry(diagram) {
   return { cells, edges };
 }
 
-export function buildSummary(map) {
+export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
+  if (Array.isArray(map.lots) && Array.isArray(map.segments) && !map.cells?.length && !map.edges?.length) {
+    return map;
+  }
+
+  const cells = map.cells || [];
+  const edges = map.edges || [];
+  const lots = cells.map((cell) => ({
+    id: cell.id,
+    site: clonePoint(cell.site),
+    centroid: clonePoint(cell.centroid),
+    polygon: cell.polygon.map((point) => clonePoint(point)),
+    segmentIds: [],
+    neighborLotIds: [],
+    boundarySides: [...(cell.boundarySides || [])],
+    features: {
+      ...cell.features,
+    },
+  }));
+  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+  const segments = [];
+
+  edges.forEach((edge) => {
+    const path = normalizePolyline(edge.path?.length ? edge.path : [edge.from, edge.to]);
+    const edgeLength = polylineLength(path);
+    const resolvedSegmentCount = Math.max(1, Math.round(edgeLength / segmentLength));
+    const sampledPoints = resamplePolyline(path, resolvedSegmentCount);
+    const leftLotId = edge.leftCellId;
+    const rightLotId = edge.rightCellId;
+
+    for (let index = 0; index < resolvedSegmentCount; index += 1) {
+      const from = sampledPoints[index];
+      const to = sampledPoints[index + 1];
+      const segment = {
+        id: `${edge.id}:${index}`,
+        edgeId: edge.id,
+        from: clonePoint(from),
+        to: clonePoint(to),
+        midpoint: midpointBetween(from, to),
+        length: pointDistance(from, to),
+        leftLotId,
+        rightLotId,
+        features: {
+          boundary: Boolean(edge.features?.boundary),
+          sea: Boolean(edge.features?.sea),
+          river: Boolean(edge.features?.river),
+        },
+      };
+      segments.push(segment);
+      if (leftLotId !== null) {
+        lotById.get(leftLotId)?.segmentIds.push(segment.id);
+      }
+      if (rightLotId !== null && rightLotId !== leftLotId) {
+        lotById.get(rightLotId)?.segmentIds.push(segment.id);
+      }
+    }
+
+    if (leftLotId !== null && rightLotId !== null) {
+      const leftLot = lotById.get(leftLotId);
+      const rightLot = lotById.get(rightLotId);
+      if (leftLot && !leftLot.neighborLotIds.includes(rightLotId)) {
+        leftLot.neighborLotIds.push(rightLotId);
+      }
+      if (rightLot && !rightLot.neighborLotIds.includes(leftLotId)) {
+        rightLot.neighborLotIds.push(leftLotId);
+      }
+    }
+  });
+
+  lots.forEach((lot) => {
+    lot.neighborLotIds.sort((first, second) => first - second);
+  });
+
+  const { cells: _cells, edges: _edges, ...rest } = map;
   return {
-    pointCount: map.points.length,
-    cellCount: map.cells.length,
-    edgeCount: map.edges.length,
-    seaCellCount: map.cells.filter((cell) => cell.features.sea).length,
-    hillCount: map.cells.filter((cell) => cell.features.hill).length,
-    hillsideCount: map.cells.filter((cell) => cell.features.hillside).length,
-    riverCount: map.rivers.length,
+    ...rest,
+    lots,
+    segments,
   };
+}
+
+export function buildEdgeGeometry(points) {
+  const normalized = normalizePolyline(points);
+  return {
+    from: clonePoint(normalized[0] || { x: 0, y: 0 }),
+    to: clonePoint(normalized[normalized.length - 1] || { x: 0, y: 0 }),
+    midpoint: midpointAlongPolyline(normalized, 0.5),
+    length: polylineLength(normalized),
+    path: normalized.map((point) => clonePoint(point)),
+  };
+}
+
+export function computePolygonCentroid(polygon) {
+  if (!polygon || polygon.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  let twiceArea = 0;
+  let x = 0;
+  let y = 0;
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    const crossProduct = current.x * next.y - next.x * current.y;
+    twiceArea += crossProduct;
+    x += (current.x + next.x) * crossProduct;
+    y += (current.y + next.y) * crossProduct;
+  }
+
+  if (Math.abs(twiceArea) < 0.0001) {
+    const total = polygon.reduce((sum, point) => ({
+      x: sum.x + point.x,
+      y: sum.y + point.y,
+    }), { x: 0, y: 0 });
+    return {
+      x: total.x / polygon.length,
+      y: total.y / polygon.length,
+    };
+  }
+
+  return {
+    x: x / (3 * twiceArea),
+    y: y / (3 * twiceArea),
+  };
+}
+
+export function buildSummary(map) {
+  const { lots, segments } = getMapGeometry(map);
+  const seaLots = lots.filter((lot) => lot.features.sea).length;
+  const hillCount = lots.filter((lot) => lot.features.hill).length;
+  const hillsideCount = lots.filter((lot) => lot.features.hillside).length;
+
+  return {
+    pointCount: map.points?.length || 0,
+    cellCount: lots.length,
+    lotCount: lots.length,
+    edgeCount: segments.length,
+    segmentCount: segments.length,
+    seaCellCount: seaLots,
+    seaLotCount: seaLots,
+    hillCount,
+    hillsideCount,
+    riverCount: map.rivers?.length || 0,
+  };
+}
+
+export function getMapGeometry(map) {
+  return {
+    lots: Array.isArray(map.lots) ? map.lots : map.cells || [],
+    segments: Array.isArray(map.segments) ? map.segments : map.edges || [],
+  };
+}
+
+export function getMapLots(map) {
+  return getMapGeometry(map).lots;
+}
+
+export function getMapSegments(map) {
+  return getMapGeometry(map).segments;
 }
 
 function orientEdge(edge, cellById, width, height) {
@@ -171,8 +323,8 @@ function orientEdge(edge, cellById, width, height) {
     const side = pointSide(edge.from, edge.to, cellById.get(cellId)?.centroid);
     return {
       id: edge.id,
-      from: { x: edge.from.x, y: edge.from.y },
-      to: { x: edge.to.x, y: edge.to.y },
+      from: clonePoint(edge.from),
+      to: clonePoint(edge.to),
       midpoint,
       leftCellId: side >= 0 ? cellId : null,
       rightCellId: side < 0 ? cellId : null,
@@ -190,17 +342,147 @@ function orientEdge(edge, cellById, width, height) {
 
   return {
     id: edge.id,
-    from: { x: edge.from.x, y: edge.from.y },
-    to: { x: edge.to.x, y: edge.to.y },
+    from: clonePoint(edge.from),
+    to: clonePoint(edge.to),
     midpoint,
     leftCellId: firstSide >= secondSide ? firstId : secondId,
     rightCellId: firstSide >= secondSide ? secondId : firstId,
-      features: {
-        boundary: isBoundary,
-        sea: false,
-        river: false,
-      },
+    features: {
+      boundary: isBoundary,
+      sea: false,
+      river: false,
+    },
   };
+}
+
+function normalizePolyline(points) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return [];
+  }
+
+  const normalized = points
+    .filter(Boolean)
+    .map((point) => clonePoint(point));
+  return dedupeConsecutivePoints(normalized);
+}
+
+function resamplePolyline(points, segmentCount) {
+  if (points.length === 0) {
+    return Array.from({ length: segmentCount + 1 }, () => ({ x: 0, y: 0 }));
+  }
+
+  if (points.length === 1) {
+    return Array.from({ length: segmentCount + 1 }, () => clonePoint(points[0]));
+  }
+
+  const cumulativeDistances = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulativeDistances[index] = cumulativeDistances[index - 1] + pointDistance(points[index - 1], points[index]);
+  }
+
+  const totalLength = cumulativeDistances[cumulativeDistances.length - 1];
+  if (totalLength === 0) {
+    return Array.from({ length: segmentCount + 1 }, () => clonePoint(points[0]));
+  }
+
+  const sampledPoints = [];
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const targetDistance = (totalLength * index) / segmentCount;
+    sampledPoints.push(pointAlongPolyline(points, cumulativeDistances, targetDistance));
+  }
+
+  sampledPoints[0] = clonePoint(points[0]);
+  sampledPoints[sampledPoints.length - 1] = clonePoint(points[points.length - 1]);
+  return sampledPoints;
+}
+
+function pointAlongPolyline(points, cumulativeDistances, targetDistance) {
+  const totalLength = cumulativeDistances[cumulativeDistances.length - 1];
+  if (targetDistance <= 0) {
+    return clonePoint(points[0]);
+  }
+  if (targetDistance >= totalLength) {
+    return clonePoint(points[points.length - 1]);
+  }
+
+  for (let index = 1; index < cumulativeDistances.length; index += 1) {
+    if (targetDistance > cumulativeDistances[index]) {
+      continue;
+    }
+
+    const segmentStart = points[index - 1];
+    const segmentEnd = points[index];
+    const segmentLength = cumulativeDistances[index] - cumulativeDistances[index - 1];
+    if (segmentLength === 0) {
+      return clonePoint(segmentEnd);
+    }
+
+    const localT = (targetDistance - cumulativeDistances[index - 1]) / segmentLength;
+    return {
+      x: segmentStart.x + (segmentEnd.x - segmentStart.x) * localT,
+      y: segmentStart.y + (segmentEnd.y - segmentStart.y) * localT,
+    };
+  }
+
+  return clonePoint(points[points.length - 1]);
+}
+
+function midpointAlongPolyline(points, ratio) {
+  if (points.length === 0) {
+    return { x: 0, y: 0 };
+  }
+  if (points.length === 1) {
+    return clonePoint(points[0]);
+  }
+
+  const cumulativeDistances = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulativeDistances[index] = cumulativeDistances[index - 1] + pointDistance(points[index - 1], points[index]);
+  }
+
+  const totalLength = cumulativeDistances[cumulativeDistances.length - 1];
+  return pointAlongPolyline(points, cumulativeDistances, totalLength * ratio);
+}
+
+function polylineLength(points) {
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    length += pointDistance(points[index - 1], points[index]);
+  }
+  return length;
+}
+
+function dedupeConsecutivePoints(points) {
+  const deduped = [];
+  points.forEach((point) => {
+    const previous = deduped[deduped.length - 1];
+    if (!previous || pointDistance(previous, point) > 0.0001) {
+      deduped.push(point);
+    }
+  });
+  return deduped;
+}
+
+function midpointBetween(first, second) {
+  return {
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2,
+  };
+}
+
+function pointDistance(first, second) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function clonePoint(point) {
+  const cloned = {
+    x: point.x,
+    y: point.y,
+  };
+  if (point.id !== undefined) {
+    cloned.id = point.id;
+  }
+  return cloned;
 }
 
 function liesOnCanvasBoundary(edge, width, height, epsilon = 0.75) {

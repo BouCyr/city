@@ -12,6 +12,7 @@ export const GENERATION_STEPS = [
   "Flag inland hill cells",
   "Trace the first river",
   "Trace the first tributary",
+  "Convert to lot geometry",
 ];
 
 export const GENERATION_STEP_TREE = [

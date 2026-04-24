@@ -8,6 +8,8 @@ import { readFormState, bindFormInteractions } from "./ui/form-controller.js";
 import { createStepTracker } from "./ui/step-tracker.js";
 import { findCenterSeaLandPath } from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
+import { GENERATION_STEPS } from "./generator/steps.js";
+import { getMapGeometry, getMapLots } from "./generator/map-model.js";
 
 const CANVAS_SIZE = 1000;
 const REPLAY_DELAY_MS = 1000;
@@ -19,11 +21,14 @@ const PLAY_BUTTON_LABEL = "Play";
 const PAUSE_BUTTON_LABEL = "Pause";
 const REPLAY_START_INDEX = 0;
 const VIEWPORT_FALLBACK_RATIO = 0.5;
-const DOTTED_EDGE_PATTERN = "4 6";
 const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
+const HOVER_NEIGHBOR_OVERLAY_ID = "hoveredNeighborOverlay";
+const HOVER_NEIGHBOR_STROKE = "#7a5a2e";
+const HOVER_NEIGHBOR_STROKE_WIDTH = 1.5;
 const FLOW_STROKE = "#4f7cff";
 const FLOW_STROKE_WIDTH = 4;
 const HILLS_STEP_INDEX = 4;
+const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
@@ -228,7 +233,7 @@ function runSingleGeneration(options) {
   const requestId = ++generationToken;
   cancelWorkerTask();
   stepTracker.reset();
-  setBackgroundTaskStatus("Generating 0/7");
+  setBackgroundTaskStatus(`Generating 0/${TOTAL_GENERATION_STEPS}`);
   setAsyncControlsDisabled(true);
   syncReplayUi(null, 0);
   resetViewport(CANVAS_SIZE);
@@ -241,20 +246,20 @@ function runSingleGeneration(options) {
 
     if (message.type === "generation-reset") {
       stepTracker.reset();
-      setBackgroundTaskStatus("Generating 0/7");
+      setBackgroundTaskStatus(`Generating 0/${TOTAL_GENERATION_STEPS}`);
       return;
     }
 
     if (message.type === "generation-step-start") {
       stepTracker.startStep(message.index, message.status);
-      setBackgroundTaskStatus(`Generating ${message.index + 1}/7`);
+      setBackgroundTaskStatus(`Generating ${message.index + 1}/${TOTAL_GENERATION_STEPS}`);
       return;
     }
 
     if (message.type === "generation-step-complete") {
       stepTracker.finishStep(message.index, message.durationMs, message.status);
       renderInterimFrame(message.frame);
-      setBackgroundTaskStatus(`Generating ${message.index + 1}/7`);
+      setBackgroundTaskStatus(`Generating ${message.index + 1}/${TOTAL_GENERATION_STEPS}`);
       return;
     }
 
@@ -443,17 +448,20 @@ function describeFrame(map, frame) {
   }
 
   const frameMap = frame.map;
-  const seaCellCount = frameMap.cells.filter((cell) => cell.features.sea).length;
-  const hillCount = frameMap.cells.filter((cell) => cell.features.hill).length;
-  const hillsideCount = frameMap.cells.filter((cell) => cell.features.hillside).length;
+  const { lots, segments } = getMapGeometry(frameMap);
+  const areaLabel = Array.isArray(frameMap.lots) ? "lots" : "cells";
+  const segmentLabel = Array.isArray(frameMap.segments) ? "segments" : "edges";
+  const seaCellCount = lots.filter((lot) => lot.features.sea).length;
+  const hillCount = lots.filter((lot) => lot.features.hill).length;
+  const hillsideCount = lots.filter((lot) => lot.features.hillside).length;
   const riverCount = frameMap.rivers.length;
   return [
     frame.label,
     `Seed ${map.init.seed}`,
     `${frameMap.points.length} points`,
-    `${frameMap.cells.length} cells`,
-    `${frameMap.edges.length} edges`,
-    `${seaCellCount} sea cells`,
+    `${lots.length} ${areaLabel}`,
+    `${segments.length} ${segmentLabel}`,
+    `${seaCellCount} sea ${areaLabel}`,
     `${hillCount} hills`,
     `${hillsideCount} hillsides`,
     `${riverCount} rivers`,
@@ -549,9 +557,9 @@ function clearHoveredCell() {
 
   hoveredCellId = null;
   clearFlowOverlay();
-  applyHoverPresentation(null);
+  clearNeighborOverlay();
   hoveredCellData.className = "cell-data empty";
-  hoveredCellData.textContent = "Hover a cell to inspect its data.";
+  hoveredCellData.textContent = "Hover an area to inspect its data.";
 }
 
 function handleCellClick(event) {
@@ -649,13 +657,15 @@ function getCellFromEvent(event) {
     return null;
   }
 
-  const target = event.target instanceof Element ? event.target.closest("[data-cell-id]") : null;
-  const cellId = target ? Number(target.getAttribute("data-cell-id")) : hoveredCellId;
+  const target = event.target instanceof Element ? event.target.closest("[data-lot-id], [data-cell-id]") : null;
+  const cellId = target
+    ? Number(target.getAttribute("data-lot-id") || target.getAttribute("data-cell-id"))
+    : hoveredCellId;
   if (!Number.isFinite(cellId)) {
     return null;
   }
 
-  return currentFrame.map.cells.find((cell) => cell.id === cellId) || null;
+  return getMapLots(currentFrame.map).find((cell) => cell.id === cellId) || null;
 }
 
 function renderHoveredCell(cell) {
@@ -664,7 +674,10 @@ function renderHoveredCell(cell) {
   }
 
   hoveredCellId = cell.id;
-  applyHoverPresentation(cell.id);
+  drawNeighborOverlay(cell);
+  const isLotGeometry = Array.isArray(currentFrame?.map?.lots);
+  const areaLabel = isLotGeometry ? "Lot" : "Cell";
+  const segmentCollectionLabel = isLotGeometry ? "Segments" : "Edges";
   const features = Object.entries(cell.features)
     .filter(([, enabled]) => enabled)
     .map(([name]) => name)
@@ -675,7 +688,7 @@ function renderHoveredCell(cell) {
 
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
-    createCellDataRow("Cell", String(cell.id)),
+    createCellDataRow(areaLabel, String(cell.id)),
     createCellDataRow("Centroid", `${cell.centroid.x.toFixed(1)}, ${cell.centroid.y.toFixed(1)}`),
     createCellDataRow("Features", features),
     createCellDataRow("Hill", cell.features.hill ? "yes" : "no"),
@@ -684,8 +697,8 @@ function renderHoveredCell(cell) {
     createCellDataRow("Rivers", rivers.length ? rivers.map((river) => river.name).join(", ") : "none"),
     createCellDataRow("River Length", rivers.length ? rivers.map((river) => `${river.name}: ${river.length.toFixed(1)} px`).join(" | ") : "n/a"),
     createCellDataRow("Boundary Sides", boundarySides),
-    createCellDataRow("Edges", cell.edgeIds.join(", ") || "none"),
-    createCellDataRow("Neighbors", cell.neighborCellIds.join(", ") || "none"),
+    createCellDataRow(segmentCollectionLabel, (cell.segmentIds || cell.edgeIds || []).join(", ") || "none"),
+    createCellDataRow("Neighbors", getNeighborIds(cell).join(", ") || "none"),
   ].join("");
   drawFlowOverlay(previewRiverPath);
 }
@@ -731,43 +744,6 @@ function getCellBounds(cell) {
   });
 }
 
-function applyHoverPresentation(cellId) {
-  const edgeElements = svg.querySelectorAll("[data-edge-id]");
-
-  if (!Number.isFinite(cellId)) {
-    edgeElements.forEach((element) => {
-      element.style.strokeDasharray = "";
-    });
-    return;
-  }
-
-  const highlightedCellIds = collectHighlightedCellIds(cellId);
-  edgeElements.forEach((element) => {
-    const leftCellId = parseOptionalCellId(element.getAttribute("data-left-cell-id"));
-    const rightCellId = parseOptionalCellId(element.getAttribute("data-right-cell-id"));
-    if (highlightedCellIds.has(leftCellId) || highlightedCellIds.has(rightCellId)) {
-      element.style.strokeDasharray = "";
-      return;
-    }
-
-    element.style.strokeDasharray = DOTTED_EDGE_PATTERN;
-  });
-}
-
-function collectHighlightedCellIds(cellId) {
-  if (!currentFrame || currentFrame.type !== "map") {
-    return new Set();
-  }
-
-  const hoveredCell = currentFrame.map.cells.find((cell) => cell.id === cellId);
-  return new Set([cellId, ...(hoveredCell?.neighborCellIds || [])]);
-}
-
-function parseOptionalCellId(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function computeCenterSeaFlowPath(startCellId) {
   if (!currentFrame || currentFrame.type !== "map") {
     return null;
@@ -810,6 +786,57 @@ function drawFlowOverlay(flowPath) {
 
 function clearFlowOverlay() {
   svg.querySelector(`#${FLOW_OVERLAY_ID}`)?.remove();
+}
+
+function drawNeighborOverlay(cell) {
+  clearNeighborOverlay();
+  const neighbors = getNeighborIds(cell);
+  if (!neighbors.length) {
+    return;
+  }
+
+  const lots = getMapLots(currentFrame?.map || {});
+  const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  overlay.setAttribute("id", HOVER_NEIGHBOR_OVERLAY_ID);
+  overlay.setAttribute("pointer-events", "none");
+
+  const origin = cell.centroid;
+  neighbors.forEach((neighborId) => {
+    const neighbor = lots.find((lot) => lot.id === neighborId);
+    if (!neighbor) {
+      return;
+    }
+
+    overlay.append(createNeighborArrow(origin, neighbor.centroid));
+  });
+
+  svg.append(overlay);
+}
+
+function clearNeighborOverlay() {
+  svg.querySelector(`#${HOVER_NEIGHBOR_OVERLAY_ID}`)?.remove();
+}
+
+function createNeighborArrow(from, to) {
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", String(from.x));
+  line.setAttribute("y1", String(from.y));
+  line.setAttribute("x2", String(to.x));
+  line.setAttribute("y2", String(to.y));
+  line.setAttribute("stroke", HOVER_NEIGHBOR_STROKE);
+  line.setAttribute("stroke-width", String(HOVER_NEIGHBOR_STROKE_WIDTH));
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("opacity", "0.85");
+
+  return line;
+}
+
+function getNeighborIds(cell) {
+  if (!cell) {
+    return [];
+  }
+
+  return cell.neighborLotIds || cell.neighborCellIds || [];
 }
 
 function toSvgPoints(points) {

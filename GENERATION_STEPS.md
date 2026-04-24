@@ -20,6 +20,7 @@ If generation rules change, update this file in the same change.
 1.5 Flag inland hill cells
 1.6 Trace the first river
 1.7 Trace the first tributary
+1.9 Convert to lot geometry
 2. Human usage
 
 Notes:
@@ -33,7 +34,7 @@ Notes:
   - one root group for `Geographical Feature Controls`
   - one root group for `Human Usage Controls`
   - nested subgroups per implemented generation step
-- Cells expose:
+- Cells expose, through step 1.7:
   - `id`
   - `site`
   - `centroid`
@@ -50,15 +51,26 @@ Notes:
   - `river`
   - `boundary`
   - `cityCenter`
-- Edges expose:
+- Lots expose, from step 1.9 onward:
+  - `id`
+  - `site`
+  - `centroid`
+  - `polygon`
+  - `segmentIds`
+  - `neighborLotIds`
+  - `boundarySides`
+  - `features`
+- Lot `features` preserve the same flags as cells.
+- Segments expose:
   - `id`
   - `from`
   - `to`
   - `midpoint`
-  - `leftCellId`
-  - `rightCellId`
+  - `length`
+  - `leftLotId`
+  - `rightLotId`
   - `features`
-- Cell adjacency is derived from real clipped Voronoi shared edges, not directly from raw Delaunay neighbors.
+- Cell and lot adjacency are derived from real clipped Voronoi shared edges, not directly from raw Delaunay neighbors.
 
 ## 1. Scatter Pseudo-Random Points
 
@@ -326,6 +338,26 @@ State effects:
 - Stores tributary stroke width separately from the primary river width.
 - Widens the primary river slightly downstream from the merge cell.
 
+## 8. Convert To Lot Geometry
+
+Source: `src/generator/step-convert-lots.js`
+
+Business rules:
+- The conversion runs once after the tributary is committed.
+- Every Voronoi cell becomes a lot with the same id, site, centroid, polygon, boundary flags, and feature flags.
+- Lot adjacency is preserved from the original shared-edge graph.
+- Each original edge is resampled into straight or polyline segments targeting about 5 map units each.
+- Segment count is `round(edgeLength / 5)` with a minimum of `1`.
+- Segment endpoints stay fixed at the original edge endpoints.
+- Boundary edges remain marked as boundary segments with only one adjacent lot.
+- Interior segments keep both adjacent lot ids.
+- Sea, river, and boundary classification is copied onto the new segment records.
+- The old `cells` and `edges` arrays are no longer the canonical geometry after conversion.
+
+State effects:
+- Replaces `cells` and `edges` with `lots` and `segments`.
+- Preserves rivers, water, and city-center metadata.
+
 ## Rendering And Replay Constraints Tied To Steps
 
 - Generation runs in a background web worker so the UI remains responsive during map creation and seed search.
@@ -340,6 +372,7 @@ State effects:
 - During `Best of 50`, the visible map updates only when a newly sampled seed produces a strictly better tributary than the current baseline and all previous sampled seeds.
 - If no better sampled map is found, the currently displayed map remains unchanged.
 - Step 5 has a hover-only river preview overlay that uses the same center-sea path helper as step 6.
+- Step 8 becomes the displayed canonical map model for replay, hover, and rendering.
 - Step timing in milliseconds is shown beside each step in the UI and is approximate.
 
 ## Maintenance Rule

@@ -1,8 +1,10 @@
 /*
  * WHAT: Render the current replay frame into an inline SVG map view.
- * HOW: Rebuild SVG groups for the background, cells, edges, rivers, and fallback points each time a frame changes.
+ * HOW: Rebuild SVG groups for the background, lots, segments, rivers, and fallback points each time a frame changes.
  * WHY: SVG keeps the map crisp at any zoom level and matches the viewport controls used by the UI.
  */
+
+import { getMapGeometry } from "../generator/map-model.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
@@ -101,37 +103,39 @@ function createGrid(size) {
 }
 
 function createMapLayer(map) {
+  const { lots, segments } = getMapGeometry(map);
   const layer = createElement("g");
-  layer.append(createCellsGroup(map.cells), createEdgesGroup(map.edges), createRiversGroup(map.rivers || []));
+  layer.append(createLotsGroup(lots), createSegmentsGroup(segments), createRiversGroup(map.rivers || []));
 
-  if (!map.cells.length) {
+  if (!lots.length) {
     layer.append(createPointsGroup(map.points));
   }
 
   return layer;
 }
 
-function createCellsGroup(cells) {
+function createLotsGroup(lots) {
   const group = createElement("g");
 
-  cells.forEach((cell) => {
-    if (cell.polygon.length < 3) {
+  lots.forEach((lot) => {
+    if (lot.polygon.length < 3) {
       return;
     }
 
     group.append(
       createElement("polygon", {
-        points: toSvgPoints(cell.polygon),
-        fill: cell.features.sea
+        points: toSvgPoints(lot.polygon),
+        fill: lot.features.sea
           ? COLORS.seaFill
-          : cell.features.hill
+          : lot.features.hill
             ? COLORS.hillFill
-            : cell.features.hillside
+            : lot.features.hillside
               ? COLORS.hillsideFill
-              : cell.features.cityCenter
+              : lot.features.cityCenter
                 ? COLORS.centerFill
                 : COLORS.landFill,
-        "data-cell-id": cell.id,
+        "data-lot-id": lot.id,
+        "data-cell-id": lot.id,
       }),
     );
   });
@@ -139,7 +143,7 @@ function createCellsGroup(cells) {
   return group;
 }
 
-function createEdgesGroup(edges) {
+function createSegmentsGroup(segments) {
   const group = createElement("g", {
     fill: "none",
     "stroke-linecap": "round",
@@ -147,17 +151,22 @@ function createEdgesGroup(edges) {
     "pointer-events": "none",
   });
 
-  edges.forEach((edge) => {
+  segments.forEach((segment) => {
+    const leftId = segment.leftLotId ?? segment.leftCellId ?? "";
+    const rightId = segment.rightLotId ?? segment.rightCellId ?? "";
     group.append(
       createElement("line", {
-        x1: edge.from.x,
-        y1: edge.from.y,
-        x2: edge.to.x,
-        y2: edge.to.y,
-        stroke: edge.features.sea ? COLORS.seaEdge : COLORS.edge,
-        "data-edge-id": edge.id,
-        "data-left-cell-id": edge.leftCellId ?? "",
-        "data-right-cell-id": edge.rightCellId ?? "",
+        x1: segment.from.x,
+        y1: segment.from.y,
+        x2: segment.to.x,
+        y2: segment.to.y,
+        stroke: segment.features.sea ? COLORS.seaEdge : COLORS.edge,
+        "data-segment-id": segment.id,
+        "data-edge-id": segment.id,
+        "data-left-lot-id": leftId,
+        "data-right-lot-id": rightId,
+        "data-left-cell-id": leftId,
+        "data-right-cell-id": rightId,
       }),
     );
   });

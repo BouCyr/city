@@ -106,9 +106,12 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
             item.classList.add("current");
           }
 
+          const stepNumber = index === GENERATION_STEPS.length - 1
+            ? `${groupIndex + 1}.9`
+            : `${groupIndex + 1}.${childIndex + 1}`;
           item.appendChild(
             buildItemLabel(
-              `${groupIndex + 1}.${childIndex + 1}`,
+              stepNumber,
               GENERATION_STEPS[index],
               durationByStepIndex.get(index)
             )
