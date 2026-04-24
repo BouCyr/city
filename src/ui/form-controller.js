@@ -17,6 +17,7 @@ const RANGE_FIELDS = [
   "hillSeaDistance",
   "hillsideRadius",
   "riverTurnAngle",
+  "tributarySourceRiverDistance",
   "tributaryMergeSeaDistance",
 ];
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
@@ -33,6 +34,7 @@ const DEFAULT_HILL_COUNT = 15;
 const DEFAULT_HILL_SEA_DISTANCE = 4;
 const DEFAULT_HILLSIDE_RADIUS = 2;
 const DEFAULT_RIVER_TURN_ANGLE = 90;
+const DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE = 6;
 const DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
 
 /**
@@ -78,6 +80,7 @@ export function readFormState(form) {
     hillSeaDistance: normalizeInteger(Number(data.get("hillSeaDistance") || DEFAULT_HILL_SEA_DISTANCE), 0, 12),
     hillsideRadius: normalizeInteger(Number(data.get("hillsideRadius") || DEFAULT_HILLSIDE_RADIUS), 0, 6),
     riverTurnAngle: normalizeBoundedCount(Number(data.get("riverTurnAngle") || DEFAULT_RIVER_TURN_ANGLE), 0, 120),
+    tributarySourceRiverDistance: normalizeInteger(Number(data.get("tributarySourceRiverDistance") || DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE), 0, 20),
     waterReachRatio: normalizeDecimal(Number(data.get("waterReachRatio") || DEFAULT_WATER_REACH_RATIO), 0, 0.5),
     waterExpansionBase: normalizeDecimal(Number(data.get("waterExpansionBase") || DEFAULT_WATER_EXPANSION_BASE), 0, 1),
     waterExpansionEdgeWeight: normalizeDecimal(Number(data.get("waterExpansionEdgeWeight") || DEFAULT_WATER_EXPANSION_EDGE_WEIGHT), 0, 1),

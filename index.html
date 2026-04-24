@@ -31,10 +31,10 @@
             <span id="backgroundTaskStatus" class="task-status" aria-live="polite"></span>
           </label>
 
-          <details class="controls-root" open>
+          <details class="controls-root">
             <summary>Geographical Feature Controls</summary>
 
-            <details class="control-section" open>
+            <details class="control-section">
               <summary>Step 1 / Scatter Points</summary>
 
               <label>
@@ -50,7 +50,7 @@
               </label>
             </details>
 
-            <details class="control-section" open>
+            <details class="control-section">
               <summary>Step 3 / Water Classification</summary>
 
               <fieldset class="water-sides">
@@ -92,7 +92,7 @@
               </label>
             </details>
 
-            <details class="control-section" open>
+            <details class="control-section">
               <summary>Step 4 / Lloyd Relaxation</summary>
 
               <label>
@@ -102,7 +102,7 @@
               </label>
             </details>
 
-            <details class="control-section" open>
+            <details class="control-section">
               <summary>Step 5 / Hills</summary>
 
               <label>
@@ -124,7 +124,7 @@
               </label>
             </details>
 
-            <details class="control-section" open>
+            <details class="control-section">
               <summary>Step 6 / First River</summary>
 
               <label>
@@ -134,8 +134,14 @@
               </label>
             </details>
 
-            <details class="control-section" open>
+            <details class="control-section">
               <summary>Step 7 / First Tributary</summary>
+
+              <label>
+                <span class="field-title">Tributary Source Distance <button class="help-dot" type="button" data-tooltip="Minimum graph distance a tributary source cell must keep from the main river." aria-label="Tributary source distance help">?</button></span>
+                <input id="tributarySourceRiverDistance" name="tributarySourceRiverDistance" type="range" min="0" max="20" step="1" value="6">
+                <output for="tributarySourceRiverDistance" id="tributarySourceRiverDistanceValue">6</output>
+              </label>
 
               <label>
                 <span class="field-title">Tributary Merge Distance <button class="help-dot" type="button" data-tooltip="Minimum number of cells upstream from the sea or outlet before a tributary may merge into the primary river." aria-label="Tributary merge distance help">?</button></span>
@@ -145,7 +151,7 @@
             </details>
           </details>
 
-          <details class="controls-root" open>
+          <details class="controls-root">
             <summary>Human Usage Controls</summary>
             <p class="empty-controls">No human-usage controls yet.</p>
           </details>

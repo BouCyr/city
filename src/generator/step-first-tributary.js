@@ -42,7 +42,9 @@ function chooseFirstTributary(map, rng) {
     return null;
   }
   const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
+  const minSourceRiverDistance = map.init.params.tributarySourceRiverDistance ?? 6;
   const minMergeSeaDistance = map.init.params.tributaryMergeSeaDistance ?? 5;
+  const riverDistances = computeDistancesFromSources(map, primaryRiver.cellIds);
 
   const mergeTargets = buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance);
   if (!mergeTargets.size) {
@@ -54,6 +56,7 @@ function chooseFirstTributary(map, rng) {
     && !cell.features.hill
     && !cell.features.hillside
     && !cell.features.river
+    && riverDistances[cell.id] >= minSourceRiverDistance
     && cell.boundarySides.length === 1,
   );
 
@@ -233,4 +236,33 @@ function chooseRiverName(rng, existingRivers) {
   const usedNames = new Set(existingRivers.map((river) => river.name));
   const availableNames = RIVER_NAMES.filter((name) => !usedNames.has(name));
   return rng.pick(availableNames.length ? availableNames : RIVER_NAMES);
+}
+
+function computeDistancesFromSources(map, sourceCellIds) {
+  const distances = Array.from({ length: map.cells.length }, () => Infinity);
+  const queue = [];
+
+  sourceCellIds.forEach((cellId) => {
+    distances[cellId] = 0;
+    queue.push(cellId);
+  });
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const cellId = queue[index];
+    const cell = map.cells[cellId];
+    if (!cell) {
+      continue;
+    }
+
+    cell.neighborCellIds.forEach((neighborId) => {
+      if (distances[cellId] + 1 >= distances[neighborId]) {
+        return;
+      }
+
+      distances[neighborId] = distances[cellId] + 1;
+      queue.push(neighborId);
+    });
+  }
+
+  return distances;
 }

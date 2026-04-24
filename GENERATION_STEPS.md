@@ -279,6 +279,8 @@ Merge target rules:
 - The tributary geometry then extends to the centroid of the actual merge cell.
 
 Default values:
+- tributary source distance from main river: `6`
+- allowed tributary source distance range: `0` to `20`
 - tributary merge distance: `5`
 - allowed tributary merge distance range: `0` to `20`
 
@@ -288,6 +290,7 @@ Source-cell rules:
   - not be `hill`
   - not be `hillside`
   - not already belong to a river
+  - be at least the configured tributary source distance away from the main river in graph cells
   - touch exactly one map side
 
 Traversal rules:
@@ -325,8 +328,10 @@ State effects:
 - The UI initially shows the final frame after generation.
 - Replay is manual only.
 - `Best of 50` also runs in the background worker.
+- `Best of 50` uses the currently displayed map as its baseline candidate.
 - During `Best of 50`, the UI shows a small progress counter for completed samples.
-- During `Best of 50`, the visible map updates only when a newly sampled seed produces a better tributary than all previous sampled seeds.
+- During `Best of 50`, the visible map updates only when a newly sampled seed produces a strictly better tributary than the current baseline and all previous sampled seeds.
+- If no better sampled map is found, the currently displayed map remains unchanged.
 - Step 5 has a hover-only river preview overlay that uses the same center-sea path helper as step 6.
 - Step timing in milliseconds is shown beside each step in the UI and is approximate.
 

@@ -291,6 +291,8 @@ function runSingleGeneration(options) {
 function runBestOfSeeds(sampleCount) {
   const requestId = ++generationToken;
   const options = readFormState(form);
+  const baselineTributaryLength = currentMap?.rivers?.[1]?.length || 0;
+  const baselineSeed = currentMap?.init?.seed || options.seed;
 
   stopReplay();
   cancelWorkerTask();
@@ -319,7 +321,7 @@ function runBestOfSeeds(sampleCount) {
     }
 
     if (message.type === "best-of-complete") {
-      if (message.map) {
+      if (message.improved && message.map) {
         if (seedInput instanceof HTMLInputElement && message.seed) {
           seedInput.value = message.seed;
         }
@@ -345,6 +347,10 @@ function runBestOfSeeds(sampleCount) {
     requestId,
     sampleCount,
     options: { ...options, mapSize: CANVAS_SIZE },
+    baseline: {
+      seed: baselineSeed,
+      tributaryLength: baselineTributaryLength,
+    },
   });
 }
 
