@@ -13,6 +13,7 @@ export const GENERATION_STEPS = [
   "Trace the first river",
   "Trace the first tributary",
   "Convert to lot geometry",
+  "Add rivers to lot geometry",
 ];
 
 export const GENERATION_STEP_TREE = [

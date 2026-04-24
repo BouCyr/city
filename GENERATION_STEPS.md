@@ -21,6 +21,7 @@ If generation rules change, update this file in the same change.
 1.6 Trace the first river
 1.7 Trace the first tributary
 1.9 Convert to lot geometry
+1.10 Add rivers to lot geometry
 2. Human usage
 
 Notes:
@@ -70,6 +71,7 @@ Notes:
   - `leftLotId`
   - `rightLotId`
   - `features`
+- From step 1.10 onward, river/lot crossing points are shared between lot polygons and river-derived segments.
 - Cell and lot adjacency are derived from real clipped Voronoi shared edges, not directly from raw Delaunay neighbors.
 
 ## 1. Scatter Pseudo-Random Points
@@ -357,6 +359,21 @@ Business rules:
 State effects:
 - Replaces `cells` and `edges` with `lots` and `segments`.
 - Preserves rivers, water, and city-center metadata.
+
+## 9. Add Rivers To Lot Geometry
+
+Source: `src/generator/step-add-rivers-to-lot-geometry.js`
+
+Business rules:
+- River polylines are resampled into a segment model using the same approximately `5`-unit target used for lot edges.
+- Where a river crosses a lot boundary, that crossing point becomes a shared topology point.
+- A lot crossed by one river is split into two lots, one on each side of the river.
+- A lot containing the primary/tributary merge is split into three lots that share the merge point.
+- The merge point is shared by the upstream primary branch, downstream primary branch, and tributary branch.
+
+State effects:
+- Rewrites `lots` and `segments` so rivers are part of canonical lot topology.
+- Preserves `map.rivers` as the source river metadata.
 
 ## Rendering And Replay Constraints Tied To Steps
 

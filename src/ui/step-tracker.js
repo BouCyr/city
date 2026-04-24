@@ -9,6 +9,17 @@ import { GENERATION_STEPS, GENERATION_STEP_TREE } from "../generator/steps.js";
 const STATUS_IDLE = "Idle";
 const STATUS_COMPLETE = "Complete";
 const STEP_SELECTION_KEYS = new Set(["Enter", " "]);
+const GEOGRAPHICAL_STEP_NUMBERS = [
+  "1.1",
+  "1.2",
+  "1.3",
+  "1.4",
+  "1.5",
+  "1.6",
+  "1.7",
+  "1.9",
+  "1.10",
+];
 
 /**
  * WHAT: Create a small stateful controller around the step list and status badge.
@@ -106,9 +117,7 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
             item.classList.add("current");
           }
 
-          const stepNumber = index === GENERATION_STEPS.length - 1
-            ? `${groupIndex + 1}.9`
-            : `${groupIndex + 1}.${childIndex + 1}`;
+          const stepNumber = GEOGRAPHICAL_STEP_NUMBERS[index] || `${groupIndex + 1}.${childIndex + 1}`;
           item.appendChild(
             buildItemLabel(
               stepNumber,

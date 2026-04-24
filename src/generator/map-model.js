@@ -285,7 +285,7 @@ function orientEdge(edge, cellById, width, height) {
   };
 }
 
-function normalizePolyline(points) {
+export function normalizePolyline(points) {
   if (!Array.isArray(points) || points.length === 0) {
     return [];
   }
@@ -296,7 +296,7 @@ function normalizePolyline(points) {
   return dedupeConsecutivePoints(normalized);
 }
 
-function resamplePolyline(points, segmentCount) {
+export function resamplePolyline(points, segmentCount) {
   if (points.length === 0) {
     return Array.from({ length: segmentCount + 1 }, () => ({ x: 0, y: 0 }));
   }
@@ -357,7 +357,7 @@ function pointAlongPolyline(points, cumulativeDistances, targetDistance) {
   return clonePoint(points[points.length - 1]);
 }
 
-function polylineLength(points) {
+export function polylineLength(points) {
   let length = 0;
   for (let index = 1; index < points.length; index += 1) {
     length += pointDistance(points[index - 1], points[index]);
@@ -365,7 +365,7 @@ function polylineLength(points) {
   return length;
 }
 
-function dedupeConsecutivePoints(points) {
+export function dedupeConsecutivePoints(points) {
   const deduped = [];
   points.forEach((point) => {
     const previous = deduped[deduped.length - 1];
@@ -376,18 +376,18 @@ function dedupeConsecutivePoints(points) {
   return deduped;
 }
 
-function midpointBetween(first, second) {
+export function midpointBetween(first, second) {
   return {
     x: (first.x + second.x) / 2,
     y: (first.y + second.y) / 2,
   };
 }
 
-function pointDistance(first, second) {
+export function pointDistance(first, second) {
   return Math.hypot(first.x - second.x, first.y - second.y);
 }
 
-function clonePoint(point) {
+export function clonePoint(point) {
   const cloned = {
     x: point.x,
     y: point.y,

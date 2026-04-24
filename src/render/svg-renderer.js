@@ -1,6 +1,6 @@
 /*
  * WHAT: Render the current replay frame into an inline SVG map view.
- * HOW: Rebuild SVG groups for the background, lots, segments, rivers, and fallback points each time a frame changes.
+ * HOW: Rebuild SVG groups for the background, lots, canonical segments, rivers, and fallback points each time a frame changes.
  * WHY: SVG keeps the map crisp at any zoom level and matches the viewport controls used by the UI.
  */
 
@@ -158,7 +158,11 @@ function createSegmentsGroup(segments) {
   segments.forEach((segment) => {
     const leftId = segment.leftLotId ?? segment.leftCellId ?? "";
     const rightId = segment.rightLotId ?? segment.rightCellId ?? "";
-    const stroke = segment.features.sea ? COLORS.seaEdge : COLORS.edge;
+    const stroke = segment.features.river
+      ? COLORS.river
+      : segment.features.sea
+        ? COLORS.seaEdge
+        : COLORS.edge;
 
     lineGroup.append(
       createElement("line", {

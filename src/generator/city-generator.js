@@ -12,6 +12,7 @@ import { runFlagHillsStep } from "./step-flag-hills.js";
 import { runFirstRiverStep } from "./step-first-river.js";
 import { runFirstTributaryStep } from "./step-first-tributary.js";
 import { runConvertLotsStep } from "./step-convert-lots.js";
+import { runAddRiversToLotGeometryStep } from "./step-add-rivers-to-lot-geometry.js";
 import { runRelaxPointsStep } from "./step-relax-points.js";
 import { runScatterPointsStep } from "./step-scatter-points.js";
 import { GENERATION_STEPS } from "./steps.js";
@@ -25,6 +26,7 @@ const GENERATION_PIPELINE = [
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },
   { status: "Lots", run: runConvertLotsStep },
+  { status: "River Lots", run: runAddRiversToLotGeometryStep },
 ];
 
 export async function generateCity(options, stepTracker) {
