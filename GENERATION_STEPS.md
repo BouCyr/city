@@ -12,13 +12,19 @@ If generation rules change, update this file in the same change.
 
 ## Canonical Order
 
-1. Scatter pseudo-random points
-2. Compute Voronoi cells and edges
-3. Select and paint sea areas
-4. Apply one Lloyd relaxation pass
-5. Flag inland hill cells
-6. Trace the first river
-7. Trace the first tributary
+1. Geographical feature
+1.1 Scatter pseudo-random points
+1.2 Compute Voronoi cells and edges
+1.3 Select and paint sea areas
+1.4 Apply one Lloyd relaxation pass
+1.5 Flag inland hill cells
+1.6 Trace the first river
+1.7 Trace the first tributary
+2. Human usage
+
+Notes:
+- The current implemented generation pipeline only executes the `Geographical feature` branch.
+- `Human usage` is a reserved root step in the UI tree and is currently empty.
 
 ## Shared Data Rules
 

@@ -45,8 +45,7 @@ body {
 
 .status-badge,
 output,
-.steps-list,
-#mapSummary {
+.steps-list {
   font-family: "IBM Plex Mono", monospace;
 }
 
@@ -192,7 +191,8 @@ output {
 
 .steps-list {
   margin: 10px 0 0;
-  padding-left: 20px;
+  padding-left: 0;
+  list-style: none;
   display: grid;
   gap: 6px;
   color: var(--muted);
@@ -213,11 +213,48 @@ output {
 }
 
 .steps-list li {
+  list-style: none;
+}
+
+.step-group {
+  display: grid;
+  gap: 6px;
+}
+
+.steps-sublist {
+  margin: 0;
+  padding-left: 18px;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.step-group-label,
+.steps-sublist li {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+}
+
+.steps-sublist li {
   cursor: pointer;
+}
+
+.step-group-label {
+  font-weight: 700;
+}
+
+.step-item-content {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.step-label {
+  min-width: 0;
 }
 
 .step-duration {
@@ -281,23 +318,10 @@ output {
   gap: 8px;
 }
 
-.canvas-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: start;
-}
-
 .map-controls {
   display: flex;
   justify-content: flex-start;
   gap: 8px;
-}
-
-#mapSummary {
-  color: var(--muted);
-  font-size: 0.75rem;
-  text-align: right;
 }
 
 .map-shell {
@@ -419,17 +443,12 @@ output {
   }
 
   .hero,
-  .layout,
-  .canvas-meta {
+  .layout {
     grid-template-columns: 1fr;
   }
 
   .map-shell {
     grid-template-columns: 1fr;
-  }
-
-  #mapSummary {
-    text-align: left;
   }
 
   .map-viewport {

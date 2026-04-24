@@ -188,7 +188,9 @@ function renderReplayIndex(index) {
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
   clearHoveredCell();
-  summary.textContent = describeFrame(currentMap, frame);
+  if (summary) {
+    summary.textContent = describeFrame(currentMap, frame);
+  }
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
 

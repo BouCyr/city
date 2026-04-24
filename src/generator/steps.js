@@ -13,3 +13,14 @@ export const GENERATION_STEPS = [
   "Trace the first river",
   "Trace the first tributary",
 ];
+
+export const GENERATION_STEP_TREE = [
+  {
+    label: "Geographical feature",
+    stepIndices: GENERATION_STEPS.map((_, index) => index),
+  },
+  {
+    label: "Human usage",
+    stepIndices: [],
+  },
+];
