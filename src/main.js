@@ -9,7 +9,7 @@ import { createStepTracker } from "./ui/step-tracker.js";
 import { findCenterSeaLandPath } from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 
-const CANVAS_SIZE = 768;
+const CANVAS_SIZE = 1000;
 const REPLAY_DELAY_MS = 1000;
 const REGENERATE_DEBOUNCE_MS = 250;
 const MIN_ZOOM = 1;
