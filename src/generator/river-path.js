@@ -4,7 +4,7 @@
  * WHY: Step 5 previews and the committed first river must follow the exact same routing rules.
  */
 
-export function buildEdgeLookup(edges) {
+function buildEdgeLookup(edges) {
   const lookup = new Map();
   edges.forEach((edge) => {
     const adjacentCellIds = [edge.leftCellId, edge.rightCellId].filter((cellId) => cellId !== null);
@@ -50,7 +50,7 @@ export function computeSeaDistances(cells) {
   return distances;
 }
 
-export function findCenterSeaCellId(cells, size) {
+function findCenterSeaCellId(cells, size) {
   let bestCellId = null;
   let bestDistance = Infinity;
 
@@ -110,22 +110,6 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size, startEntr
     coastData,
     startEntryPoint,
     minTurnAngleDegrees,
-  });
-}
-
-export function findAnySeaLandPath(cells, edges, startCellId) {
-  const edgeLookup = buildEdgeLookup(edges);
-  const coastData = buildCoastDistanceData(cells, edges);
-  return findBestShortestPath(cells, edgeLookup, startCellId, {
-    isTarget: (cell) => cell.features.land && cell.neighborCellIds.some((neighborId) => cells[neighborId]?.features.sea),
-    targetExitPoint: (cell) => {
-      const seaNeighborIds = cell.neighborCellIds.filter((neighborId) => cells[neighborId]?.features.sea);
-      const coastEdge = seaNeighborIds
-        .map((neighborId) => edgeLookup.get(edgeKey(cell.id, neighborId)))
-        .find(Boolean);
-      return coastEdge ? { x: coastEdge.midpoint.x, y: coastEdge.midpoint.y } : null;
-    },
-    coastData,
   });
 }
 

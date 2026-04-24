@@ -81,7 +81,7 @@ export function createFrame(label, map, stepIndex, stepLabel = label) {
       };
 }
 
-export function snapshotMap(map) {
+function snapshotMap(map) {
   return typeof structuredClone === "function" ? structuredClone(map) : SNAPSHOT_FALLBACK(map);
 }
 
@@ -229,72 +229,6 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
   };
 }
 
-export function buildEdgeGeometry(points) {
-  const normalized = normalizePolyline(points);
-  return {
-    from: clonePoint(normalized[0] || { x: 0, y: 0 }),
-    to: clonePoint(normalized[normalized.length - 1] || { x: 0, y: 0 }),
-    midpoint: midpointAlongPolyline(normalized, 0.5),
-    length: polylineLength(normalized),
-    path: normalized.map((point) => clonePoint(point)),
-  };
-}
-
-export function computePolygonCentroid(polygon) {
-  if (!polygon || polygon.length === 0) {
-    return { x: 0, y: 0 };
-  }
-
-  let twiceArea = 0;
-  let x = 0;
-  let y = 0;
-
-  for (let index = 0; index < polygon.length; index += 1) {
-    const current = polygon[index];
-    const next = polygon[(index + 1) % polygon.length];
-    const crossProduct = current.x * next.y - next.x * current.y;
-    twiceArea += crossProduct;
-    x += (current.x + next.x) * crossProduct;
-    y += (current.y + next.y) * crossProduct;
-  }
-
-  if (Math.abs(twiceArea) < 0.0001) {
-    const total = polygon.reduce((sum, point) => ({
-      x: sum.x + point.x,
-      y: sum.y + point.y,
-    }), { x: 0, y: 0 });
-    return {
-      x: total.x / polygon.length,
-      y: total.y / polygon.length,
-    };
-  }
-
-  return {
-    x: x / (3 * twiceArea),
-    y: y / (3 * twiceArea),
-  };
-}
-
-export function buildSummary(map) {
-  const { lots, segments } = getMapGeometry(map);
-  const seaLots = lots.filter((lot) => lot.features.sea).length;
-  const hillCount = lots.filter((lot) => lot.features.hill).length;
-  const hillsideCount = lots.filter((lot) => lot.features.hillside).length;
-
-  return {
-    pointCount: map.points?.length || 0,
-    cellCount: lots.length,
-    lotCount: lots.length,
-    edgeCount: segments.length,
-    segmentCount: segments.length,
-    seaCellCount: seaLots,
-    seaLotCount: seaLots,
-    hillCount,
-    hillsideCount,
-    riverCount: map.rivers?.length || 0,
-  };
-}
-
 export function getMapGeometry(map) {
   return {
     lots: Array.isArray(map.lots) ? map.lots : map.cells || [],
@@ -304,10 +238,6 @@ export function getMapGeometry(map) {
 
 export function getMapLots(map) {
   return getMapGeometry(map).lots;
-}
-
-export function getMapSegments(map) {
-  return getMapGeometry(map).segments;
 }
 
 function orientEdge(edge, cellById, width, height) {
@@ -425,23 +355,6 @@ function pointAlongPolyline(points, cumulativeDistances, targetDistance) {
   }
 
   return clonePoint(points[points.length - 1]);
-}
-
-function midpointAlongPolyline(points, ratio) {
-  if (points.length === 0) {
-    return { x: 0, y: 0 };
-  }
-  if (points.length === 1) {
-    return clonePoint(points[0]);
-  }
-
-  const cumulativeDistances = [0];
-  for (let index = 1; index < points.length; index += 1) {
-    cumulativeDistances[index] = cumulativeDistances[index - 1] + pointDistance(points[index - 1], points[index]);
-  }
-
-  const totalLength = cumulativeDistances[cumulativeDistances.length - 1];
-  return pointAlongPolyline(points, cumulativeDistances, totalLength * ratio);
 }
 
 function polylineLength(points) {

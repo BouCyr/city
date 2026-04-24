@@ -187,8 +187,7 @@ label {
   font-size: 0.9rem;
 }
 
-input,
-select {
+input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;

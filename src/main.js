@@ -9,7 +9,7 @@ import { createStepTracker } from "./ui/step-tracker.js";
 import { findCenterSeaLandPath } from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 import { GENERATION_STEPS } from "./generator/steps.js";
-import { getMapGeometry, getMapLots } from "./generator/map-model.js";
+import { getMapLots } from "./generator/map-model.js";
 
 const CANVAS_SIZE = 1000;
 const REPLAY_DELAY_MS = 1000;
@@ -32,7 +32,6 @@ const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
-const summary = document.querySelector("#mapSummary");
 const backgroundTaskStatus = document.querySelector("#backgroundTaskStatus");
 const replaySlider = document.querySelector("#replaySlider");
 const playReplayButton = document.querySelector("#playReplayButton");
@@ -60,7 +59,6 @@ let replayTimer = null;
 let regenerateTimer = null;
 let generationToken = 0;
 let activeWorker = null;
-let currentFrameIndex = 0;
 let currentFrame = null;
 let hoveredCellId = null;
 let isDragging = false;
@@ -155,11 +153,10 @@ form.requestSubmit();
 
 /**
  * WHAT: Draw one replay frame and synchronize the side-panel UI with it.
- * HOW: Clear or redraw the SVG, update the summary text, and select the matching generation step.
- * WHY: Replay navigation should update the viewport, summary, and step list as one consistent action.
+ * HOW: Clear or redraw the SVG, then select the matching generation step.
+ * WHY: Replay navigation should update the viewport and step list as one consistent action.
  */
 function renderReplayIndex(index) {
-  currentFrameIndex = index;
   if (!currentMap) {
     clearSvg(svg, CANVAS_SIZE);
     applyViewport();
@@ -171,9 +168,6 @@ function renderReplayIndex(index) {
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
   clearHoveredCell();
-  if (summary) {
-    summary.textContent = describeFrame(currentMap, frame);
-  }
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
 
@@ -440,32 +434,6 @@ function applyGeneratedMap(map) {
   const finalIndex = Math.max(0, map.frames.length - 1);
   syncReplayUi(map, finalIndex);
   renderReplayIndex(finalIndex);
-}
-
-function describeFrame(map, frame) {
-  if (frame.type === "blank") {
-    return "Blank map";
-  }
-
-  const frameMap = frame.map;
-  const { lots, segments } = getMapGeometry(frameMap);
-  const areaLabel = Array.isArray(frameMap.lots) ? "lots" : "cells";
-  const segmentLabel = Array.isArray(frameMap.segments) ? "segments" : "edges";
-  const seaCellCount = lots.filter((lot) => lot.features.sea).length;
-  const hillCount = lots.filter((lot) => lot.features.hill).length;
-  const hillsideCount = lots.filter((lot) => lot.features.hillside).length;
-  const riverCount = frameMap.rivers.length;
-  return [
-    frame.label,
-    `Seed ${map.init.seed}`,
-    `${frameMap.points.length} points`,
-    `${lots.length} ${areaLabel}`,
-    `${segments.length} ${segmentLabel}`,
-    `${seaCellCount} sea ${areaLabel}`,
-    `${hillCount} hills`,
-    `${hillsideCount} hillsides`,
-    `${riverCount} rivers`,
-  ].join(" | ");
 }
 
 function stepReplayBy(delta) {
