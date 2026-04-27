@@ -5,6 +5,7 @@
  */
 
 import { generateCity, generateCityThroughStep } from "./city-generator.js";
+import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
 
 const RIVER_EVALUATION_STEP_INDEX = 6;
 
@@ -156,16 +157,16 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 7:
       return {
-        segmentLength: 10,
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 8:
       return {
-        segmentLength: 10,
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 9:
       return {
-        sublotLloydPasses: options.sublotLloydPasses,
-        sublotBorderDistance: options.sublotBorderDistance,
+        sublotLloydPasses: options.sublotLloydPasses ?? 2,
+        sublotBorderDistance: options.sublotBorderDistance ?? 7,
       };
     default:
       return null;

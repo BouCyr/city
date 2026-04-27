@@ -34,8 +34,6 @@ export function createInitialMap(options) {
         tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
-        sublotLloydPasses: options.sublotLloydPasses,
-        sublotBorderDistance: options.sublotBorderDistance,
         waterSides: options.waterSides.map((side) => ({ ...side })),
         mapSize: options.mapSize,
       },
