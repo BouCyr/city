@@ -156,11 +156,8 @@ Source: `src/generator/step-relax-points.js`
 
 Business rules:
 - Exactly one Lloyd pass is applied.
-- Non-protected sites move to their current cell centroids.
-- Protected sites do not move.
-- Protected cells include:
-  - all boundary cells
-  - every cell neighboring a boundary cell
+- Boundary sites stay fixed.
+- Non-boundary sites move to their current cell centroids.
 - Relaxed points are clamped away from the border with a user-controlled padding ratio.
 - Default relax padding ratio is `0.04`.
 - Allowed relax padding ratio range is `0` to `0.15`.
@@ -389,6 +386,7 @@ Business rules:
 - The same number of fixed boundary seed points is sampled evenly around the lot border.
 - Voronoi cells are computed in the lot bounds, then clipped strictly to the lot polygon.
 - `sublotLloydPasses` controls how many Lloyd relaxation passes are applied to interior seed points, with a default of `2`.
+- `sublotBorderDistance` controls the minimum distance of interior seed points from the lot border during both throwing and Lloyd relaxation, with a default of `7`.
 - Boundary seed points remain fixed during relaxation so the lot edge stays constrained.
 - Sublot vertices are stored in a shared vertex list so future altitude can be computed per vertex.
 - The tessellation mesh is rendered as a subtle overlay and does not intercept lot or river hover events.

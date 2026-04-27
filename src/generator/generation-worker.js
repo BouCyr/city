@@ -33,35 +33,7 @@ self.addEventListener("message", async (event) => {
 });
 
 async function handleGenerateRequest({ requestId, options }) {
-  const map = await generateCity(options, {
-    reset() {
-      postMessage({
-        type: "generation-reset",
-        requestId,
-      });
-    },
-    onStepStart(payload) {
-      postMessage({
-        type: "generation-step-start",
-        requestId,
-        ...payload,
-      });
-    },
-    onStepComplete(payload) {
-      postMessage({
-        type: "generation-step-complete",
-        requestId,
-        ...payload,
-      });
-    },
-    complete(payload) {
-      postMessage({
-        type: "generation-finished-steps",
-        requestId,
-        ...payload,
-      });
-    },
-  });
+  const map = await generateCity(options, createGenerationStepTracker(requestId, options));
 
   postMessage({
     type: "generation-complete",
@@ -88,17 +60,19 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
 
   for (let index = 0; index < sampleCount; index += 1) {
     const seed = generateRandomSeed();
-    const previewMap = await generateCityThroughStep({
+    const previewOptions = {
       ...options,
       seed,
-    }, RIVER_EVALUATION_STEP_INDEX);
+    };
+    const previewMap = await generateCityThroughStep(previewOptions, RIVER_EVALUATION_STEP_INDEX, createGenerationStepTracker(requestId, previewOptions));
     const tributaryLength = previewMap.rivers?.[1]?.length || 0;
 
     if (!bestCandidate || tributaryLength > bestCandidate.tributaryLength) {
-      const map = await generateCity({
+      const candidateOptions = {
         ...options,
         seed,
-      });
+      };
+      const map = await generateCity(candidateOptions, createGenerationStepTracker(requestId, candidateOptions));
       bestCandidate = {
         seed,
         tributaryLength,
@@ -133,6 +107,106 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
     improved: bestCandidate?.improved === true,
     map: bestCandidate?.improved ? bestCandidate?.map || null : null,
   });
+}
+
+function getStepParametersForStep(stepIndex, options) {
+  switch (stepIndex) {
+    case 0:
+      return {
+        pointCount: options.pointCount,
+        scatterPaddingRatio: options.scatterPaddingRatio,
+      };
+    case 1:
+      return {
+        pointCount: options.pointCount,
+        mapSize: options.mapSize,
+      };
+    case 2:
+      return {
+        waterSides: options.waterSides.filter((side) => side.enabled).map((side) => side.name),
+        waterReachRatio: options.waterReachRatio,
+        waterExpansionBase: options.waterExpansionBase,
+        waterExpansionEdgeWeight: options.waterExpansionEdgeWeight,
+        waterPressureRangeRatio: options.waterPressureRangeRatio,
+        waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
+      };
+    case 3:
+      return {
+        relaxPaddingRatio: options.relaxPaddingRatio,
+      };
+    case 4:
+      return {
+        hillCount: options.hillCount,
+        hillSeaDistance: options.hillSeaDistance,
+        hillsideRadius: options.hillsideRadius,
+      };
+    case 5:
+      return {
+        riverTurnAngle: options.riverTurnAngle,
+        primaryRiverWidth: options.primaryRiverWidth,
+      };
+    case 6:
+      return {
+        riverTurnAngle: options.riverTurnAngle,
+        primaryRiverWidth: options.primaryRiverWidth,
+        tributarySourceRiverDistance: options.tributarySourceRiverDistance,
+        tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
+        tributaryWidthRatio: options.tributaryWidthRatio,
+        primaryMergeWidthGain: options.primaryMergeWidthGain,
+      };
+    case 7:
+      return {
+        segmentLength: 10,
+      };
+    case 8:
+      return {
+        segmentLength: 10,
+      };
+    case 9:
+      return {
+        sublotLloydPasses: options.sublotLloydPasses,
+        sublotBorderDistance: options.sublotBorderDistance,
+      };
+    default:
+      return null;
+  }
+}
+
+function createGenerationStepTracker(requestId, options) {
+  return {
+    reset() {
+      postMessage({
+        type: "generation-reset",
+        requestId,
+      });
+    },
+    onStepStart(payload) {
+      const params = {
+        seed: options.seed,
+        ...getStepParametersForStep(payload.index, options),
+      };
+      postMessage({
+        type: "generation-step-start",
+        requestId,
+        ...payload,
+        params,
+      });
+    },
+    onStepComplete(payload) {
+      postMessage({
+        type: "generation-step-complete",
+        requestId,
+        ...payload,
+      });
+    },
+    complete(payload) {
+      postMessage({
+        type: "generation-finished-steps",
+        requestId,
+        ...payload,
+      });
+    },
+  };
 }
 
 function generateRandomSeed() {

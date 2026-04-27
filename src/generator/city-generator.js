@@ -35,8 +35,8 @@ export async function generateCity(options, stepTracker) {
   return runGenerationPipeline(options, stepTracker);
 }
 
-export async function generateCityThroughStep(options, endStepIndex) {
-  return runGenerationPipeline(options, null, {
+export async function generateCityThroughStep(options, endStepIndex, stepTracker) {
+  return runGenerationPipeline(options, stepTracker, {
     endStepIndex,
   });
 }

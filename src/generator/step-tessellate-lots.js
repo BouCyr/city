@@ -31,7 +31,13 @@ export function runTessellateLotsStep(map, { rng }) {
     };
   }
 
-  const tessellation = buildLotTessellation(map.lots, map.segments || [], rng, map.init?.params?.sublotLloydPasses ?? 2);
+  const tessellation = buildLotTessellation(
+    map.lots,
+    map.segments || [],
+    rng,
+    map.init?.params?.sublotLloydPasses ?? 2,
+    map.init?.params?.sublotBorderDistance ?? 7,
+  );
   const lotSublotIds = new Map();
   tessellation.sublots.forEach((sublot) => {
     const ids = lotSublotIds.get(sublot.lotId) || [];
@@ -59,7 +65,7 @@ export function runTessellateLotsStep(map, { rng }) {
   };
 }
 
-function buildLotTessellation(lots, segments, rng, lloydPasses) {
+function buildLotTessellation(lots, segments, rng, lloydPasses, borderDistance) {
   const vertices = [];
   const vertexByKey = new Map();
   const sublots = [];
@@ -76,11 +82,11 @@ function buildLotTessellation(lots, segments, rng, lloydPasses) {
     const totalSiteCount = getTargetSiteCount(lot, boundarySiteCount);
     const sites = [
       ...boundarySites,
-      ...createInteriorSites(polygon, Math.max(0, totalSiteCount - boundarySiteCount), rng),
+      ...createInteriorSites(polygon, Math.max(0, totalSiteCount - boundarySiteCount), rng, borderDistance),
     ];
     let relaxedSites = sites;
     for (let pass = 0; pass < lloydPasses; pass += 1) {
-      relaxedSites = relaxInteriorSitesOnce(relaxedSites, polygon);
+      relaxedSites = relaxInteriorSitesOnce(relaxedSites, polygon, borderDistance);
     }
     const cells = buildClippedVoronoiCells(relaxedSites, polygon);
 
@@ -163,11 +169,11 @@ function insetBoundarySite(point, centroid) {
   };
 }
 
-function createInteriorSites(polygon, count, rng) {
+function createInteriorSites(polygon, count, rng, borderDistance) {
   const bounds = expandBounds(computeBounds(polygon), VORONOI_BOUNDS_PADDING);
   const sites = [];
   let attempts = 0;
-  const maxAttempts = count * 80;
+  const maxAttempts = Math.max(count * 200, 200);
 
   while (sites.length < count && attempts < maxAttempts) {
     attempts += 1;
@@ -175,7 +181,7 @@ function createInteriorSites(polygon, count, rng) {
       x: rng.between(bounds.minX, bounds.maxX),
       y: rng.between(bounds.minY, bounds.maxY),
     };
-    if (pointInPolygon(point, polygon)) {
+    if (pointInPolygon(point, polygon) && pointDistanceToPolygonBoundary(point, polygon) >= borderDistance) {
       sites.push({
         ...point,
         siteType: "interior",
@@ -183,18 +189,10 @@ function createInteriorSites(polygon, count, rng) {
     }
   }
 
-  while (sites.length < count) {
-    const centroid = computePolygonCentroid(polygon);
-    sites.push({
-      ...centroid,
-      siteType: "interior",
-    });
-  }
-
   return sites;
 }
 
-function relaxInteriorSitesOnce(sites, polygon) {
+function relaxInteriorSitesOnce(sites, polygon, borderDistance) {
   const cells = buildClippedVoronoiCells(sites, polygon);
   const cellsBySiteIndex = new Map();
   cells.forEach((cell) => {
@@ -218,6 +216,11 @@ function relaxInteriorSitesOnce(sites, polygon) {
     }
 
     const centroid = computeWeightedCellsCentroid(siteCells);
+    if (pointDistanceToPolygonBoundary(centroid, polygon) < borderDistance) {
+      return {
+        ...site,
+      };
+    }
     return {
       ...centroid,
       siteType: site.siteType,
@@ -454,6 +457,32 @@ function computeBounds(polygon) {
     maxX: -Infinity,
     maxY: -Infinity,
   });
+}
+
+function pointDistanceToPolygonBoundary(point, polygon) {
+  let best = Infinity;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const from = polygon[index];
+    const to = polygon[(index + 1) % polygon.length];
+    best = Math.min(best, pointDistanceToSegment(point, from, to));
+  }
+  return best;
+}
+
+function pointDistanceToSegment(point, from, to) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= EPSILON) {
+    return pointDistance(point, from);
+  }
+
+  const t = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared));
+  const projected = {
+    x: from.x + dx * t,
+    y: from.y + dy * t,
+  };
+  return pointDistance(point, projected);
 }
 
 function expandBounds(bounds, padding) {

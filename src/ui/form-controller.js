@@ -23,6 +23,7 @@ const RANGE_FIELDS = [
   "tributaryWidthRatio",
   "primaryMergeWidthGain",
   "sublotLloydPasses",
+  "sublotBorderDistance",
 ];
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
@@ -44,6 +45,7 @@ const DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 1.2;
 const DEFAULT_SUBLOT_LLOYD_PASSES = 2;
+const DEFAULT_SUBLOT_BORDER_DISTANCE = 7;
 
 /**
  * WHAT: Attach the live form behaviors that keep visible values in sync.
@@ -100,6 +102,7 @@ export function readFormState(form) {
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 4),
     sublotLloydPasses: normalizeNonNegativeCount(Number(data.get("sublotLloydPasses") || DEFAULT_SUBLOT_LLOYD_PASSES)),
+    sublotBorderDistance: normalizeDecimal(Number(data.get("sublotBorderDistance") || DEFAULT_SUBLOT_BORDER_DISTANCE), 0, 50),
     waterSides,
   };
 }

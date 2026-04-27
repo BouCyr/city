@@ -11,11 +11,10 @@ import { applyWaterClassification } from "./step-apply-water.js";
 
 export function runRelaxPointsStep(map, { rng }) {
   const padding = map.meta.size * (map.init.params.relaxPaddingRatio ?? 0.04);
-  const protectedCellIds = collectProtectedCellIds(map);
   const points = map.cells.map((cell) => ({
     id: cell.site.id ?? cell.id,
-    x: protectedCellIds.has(cell.id) ? cell.site.x : clamp(cell.centroid.x, padding, map.meta.size - padding),
-    y: protectedCellIds.has(cell.id) ? cell.site.y : clamp(cell.centroid.y, padding, map.meta.size - padding),
+    x: cell.features.boundary ? cell.site.x : clamp(cell.centroid.x, padding, map.meta.size - padding),
+    y: cell.features.boundary ? cell.site.y : clamp(cell.centroid.y, padding, map.meta.size - padding),
   }));
 
   const diagram = buildVoronoiDiagram({
@@ -42,25 +41,4 @@ export function runRelaxPointsStep(map, { rng }) {
       },
     ],
   };
-}
-
-function collectProtectedCellIds(map) {
-  const protectedCellIds = new Set();
-  const boundaryCellIds = new Set(
-    map.cells
-      .filter((cell) => cell.features.boundary)
-      .map((cell) => cell.id),
-  );
-
-  boundaryCellIds.forEach((cellId) => {
-    protectedCellIds.add(cellId);
-  });
-
-  map.cells.forEach((cell) => {
-    if (cell.neighborCellIds.some((neighborId) => boundaryCellIds.has(neighborId))) {
-      protectedCellIds.add(cell.id);
-    }
-  });
-
-  return protectedCellIds;
 }
