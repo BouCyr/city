@@ -37,7 +37,7 @@ export function runRelaxPointsStep(map, { rng }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 4 / Lloyd-smoothed map",
+        label: "Step 1.4 / Lloyd-smoothed map",
         map: nextMap,
       },
     ],

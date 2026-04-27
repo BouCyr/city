@@ -699,6 +699,7 @@ function renderHoveredCell(cell) {
     createCellDataRow("River Preview", shouldShowRiverPreview() ? describeFlowPath(previewRiverPath) : "hidden outside step 5"),
     createCellDataRow("Rivers", rivers.length ? rivers.map((river) => river.name).join(", ") : "none"),
     createCellDataRow("River Length", rivers.length ? rivers.map((river) => `${river.name}: ${river.length.toFixed(1)} px`).join(" | ") : "n/a"),
+    createCellDataRow("Sublots", cell.sublotIds?.length ? String(cell.sublotIds.length) : "n/a"),
     createCellDataRow("Boundary Sides", boundarySides),
     createCellDataRow(segmentCollectionLabel, (cell.segmentIds || cell.edgeIds || []).join(", ") || "none"),
     createCellDataRow("Neighbors", getNeighborIds(cell).join(", ") || "none"),

@@ -20,8 +20,9 @@ If generation rules change, update this file in the same change.
 1.5 Flag inland hill cells
 1.6 Trace the first river
 1.7 Trace the first tributary
-1.9 Convert to lot geometry
-1.10 Add rivers to lot geometry
+1.8 Convert to lot geometry
+1.9 Add rivers to lot geometry
+1.10 Tessellate lot geometry
 2. Human usage
 
 Notes:
@@ -52,7 +53,7 @@ Notes:
   - `river`
   - `boundary`
   - `cityCenter`
-- Lots expose, from step 1.9 onward:
+- Lots expose, from step 1.8 onward:
   - `id`
   - `site`
   - `centroid`
@@ -61,7 +62,7 @@ Notes:
   - `neighborLotIds`
   - `boundarySides`
   - `features`
-- Lot `features` preserve the same flags as cells.
+- Lot `features` preserve cell flags except temporary hill and hillside flags, which are cleared after step 1.7.
 - Segments expose:
   - `id`
   - `from`
@@ -71,7 +72,8 @@ Notes:
   - `leftLotId`
   - `rightLotId`
   - `features`
-- From step 1.10 onward, river/lot crossing points are shared between lot polygons and river-derived segments.
+- From step 1.9 onward, river/lot crossing points are shared between lot polygons and river-derived segments.
+- From step 1.10 onward, `map.tessellation` exposes shared mesh vertices and Voronoi sublots.
 - Cell and lot adjacency are derived from real clipped Voronoi shared edges, not directly from raw Delaunay neighbors.
 
 ## 1. Scatter Pseudo-Random Points
@@ -339,6 +341,7 @@ State effects:
 - Marks tributary cells with `features.river`.
 - Stores tributary stroke width separately from the primary river width.
 - Widens the primary river slightly downstream from the merge cell.
+- Hill and hillside flags still exist at the end of this step so replay can show the temporary routing terrain.
 
 ## 8. Convert To Lot Geometry
 
@@ -347,9 +350,10 @@ Source: `src/generator/step-convert-lots.js`
 Business rules:
 - The conversion runs once after the tributary is committed.
 - Every Voronoi cell becomes a lot with the same id, site, centroid, polygon, boundary flags, and feature flags.
+- `hill` and `hillside` feature flags are cleared immediately before conversion because hills are temporary river-routing constraints only.
 - Lot adjacency is preserved from the original shared-edge graph.
-- Each original edge is resampled into straight or polyline segments targeting about 5 map units each.
-- Segment count is `round(edgeLength / 5)` with a minimum of `1`.
+- Each original edge is resampled into straight or polyline segments targeting about 10 map units each.
+- Segment count is `round(edgeLength / 10)` with a minimum of `1`.
 - Segment endpoints stay fixed at the original edge endpoints.
 - Boundary edges remain marked as boundary segments with only one adjacent lot.
 - Interior segments keep both adjacent lot ids.
@@ -365,7 +369,7 @@ State effects:
 Source: `src/generator/step-add-rivers-to-lot-geometry.js`
 
 Business rules:
-- River polylines are resampled into a segment model using the same approximately `5`-unit target used for lot edges.
+- River polylines are resampled into a segment model using the same approximately `10`-unit target used for lot edges.
 - Where a river crosses a lot boundary, that crossing point becomes a shared topology point.
 - A lot crossed by one river is split into two lots, one on each side of the river.
 - A lot containing the primary/tributary merge is split into three lots that share the merge point.
@@ -374,6 +378,25 @@ Business rules:
 State effects:
 - Rewrites `lots` and `segments` so rivers are part of canonical lot topology.
 - Preserves `map.rivers` as the source river metadata.
+
+## 10. Tessellate Lot Geometry
+
+Source: `src/generator/step-tessellate-lots.js`
+
+Business rules:
+- Every final lot polygon is decomposed into clipped Voronoi sublots.
+- For each lot, the total sublot seed budget is `max(x + 4, ((x/2)^2)/3)` for land lots and `max(x, (x/6)^2)` for sea lots, where `x` is the number of canonical border segments.
+- The same number of fixed boundary seed points is sampled evenly around the lot border.
+- Voronoi cells are computed in the lot bounds, then clipped strictly to the lot polygon.
+- `sublotLloydPasses` controls how many Lloyd relaxation passes are applied to interior seed points, with a default of `2`.
+- Boundary seed points remain fixed during relaxation so the lot edge stays constrained.
+- Sublot vertices are stored in a shared vertex list so future altitude can be computed per vertex.
+- The tessellation mesh is rendered as a subtle overlay and does not intercept lot or river hover events.
+
+State effects:
+- Adds `map.tessellation.vertices`.
+- Adds `map.tessellation.sublots` with polygon vertex ids, source site, site type, centroid, area, and inherited lot features.
+- Adds `sublotIds` to each lot.
 
 ## Rendering And Replay Constraints Tied To Steps
 
@@ -389,7 +412,7 @@ State effects:
 - During `Best of 50`, the visible map updates only when a newly sampled seed produces a strictly better tributary than the current baseline and all previous sampled seeds.
 - If no better sampled map is found, the currently displayed map remains unchanged.
 - Step 5 has a hover-only river preview overlay that uses the same center-sea path helper as step 6.
-- Step 8 becomes the displayed canonical map model for replay, hover, and rendering.
+- Step 10 becomes the displayed canonical map model for replay, hover, and rendering.
 - Step timing in milliseconds is shown beside each step in the UI and is approximate.
 
 ## Maintenance Rule

@@ -17,6 +17,7 @@ const GEOGRAPHICAL_STEP_NUMBERS = [
   "1.5",
   "1.6",
   "1.7",
+  "1.8",
   "1.9",
   "1.10",
 ];

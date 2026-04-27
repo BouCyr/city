@@ -22,10 +22,11 @@ const RANGE_FIELDS = [
   "tributaryMergeSeaDistance",
   "tributaryWidthRatio",
   "primaryMergeWidthGain",
+  "sublotLloydPasses",
 ];
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
-const DEFAULT_POINT_COUNT = 1000;
+const DEFAULT_POINT_COUNT = 500;
 const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
 const DEFAULT_WATER_REACH_RATIO = 0.2;
 const DEFAULT_WATER_EXPANSION_BASE = 0.14;
@@ -33,15 +34,16 @@ const DEFAULT_WATER_EXPANSION_EDGE_WEIGHT = 0.52;
 const DEFAULT_WATER_PRESSURE_RANGE_RATIO = 0.42;
 const DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO = 0.68;
 const DEFAULT_RELAX_PADDING_RATIO = 0.04;
-const DEFAULT_HILL_COUNT = 15;
+const DEFAULT_HILL_COUNT = 9;
 const DEFAULT_HILL_SEA_DISTANCE = 4;
-const DEFAULT_HILLSIDE_RADIUS = 2;
+const DEFAULT_HILLSIDE_RADIUS = 1;
 const DEFAULT_RIVER_TURN_ANGLE = 90;
 const DEFAULT_PRIMARY_RIVER_WIDTH = 6;
 const DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE = 6;
 const DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 1.2;
+const DEFAULT_SUBLOT_LLOYD_PASSES = 2;
 
 /**
  * WHAT: Attach the live form behaviors that keep visible values in sync.
@@ -97,6 +99,7 @@ export function readFormState(form) {
     tributaryMergeSeaDistance: normalizeInteger(Number(data.get("tributaryMergeSeaDistance") || DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE), 0, 20),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 4),
+    sublotLloydPasses: normalizeNonNegativeCount(Number(data.get("sublotLloydPasses") || DEFAULT_SUBLOT_LLOYD_PASSES)),
     waterSides,
   };
 }

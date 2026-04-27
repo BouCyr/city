@@ -30,7 +30,7 @@ export function runScatterPointsStep(map, { rng }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1 / Scattered points",
+        label: "Step 1.1 / Scattered points",
         map: nextMap,
       },
     ],

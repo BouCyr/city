@@ -4,7 +4,9 @@
  * WHY: Heavy generation should not block pointer input, repaint, or form interaction in the browser.
  */
 
-import { generateCity } from "./city-generator.js";
+import { generateCity, generateCityThroughStep } from "./city-generator.js";
+
+const RIVER_EVALUATION_STEP_INDEX = 6;
 
 self.addEventListener("message", async (event) => {
   const message = event.data;
@@ -86,20 +88,17 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
 
   for (let index = 0; index < sampleCount; index += 1) {
     const seed = generateRandomSeed();
-    const map = await generateCity({
+    const previewMap = await generateCityThroughStep({
       ...options,
       seed,
-    });
-    const tributaryLength = map.rivers?.[1]?.length || 0;
-
-    postMessage({
-      type: "best-of-progress",
-      requestId,
-      completedCount: index + 1,
-      sampleCount,
-    });
+    }, RIVER_EVALUATION_STEP_INDEX);
+    const tributaryLength = previewMap.rivers?.[1]?.length || 0;
 
     if (!bestCandidate || tributaryLength > bestCandidate.tributaryLength) {
+      const map = await generateCity({
+        ...options,
+        seed,
+      });
       bestCandidate = {
         seed,
         tributaryLength,
@@ -116,6 +115,13 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
         map,
       });
     }
+
+    postMessage({
+      type: "best-of-progress",
+      requestId,
+      completedCount: index + 1,
+      sampleCount,
+    });
   }
 
   postMessage({

@@ -13,13 +13,13 @@ import {
   midpointBetween,
   normalizePolyline,
   pointDistance,
-  polylineLength,
   resamplePolyline,
 } from "./map-model.js";
 
 const EPSILON = 0.0001;
 const POINT_EPSILON = 0.05;
 const GRAPH_NODE_EPSILON = 0.05;
+const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
 
 export function runAddRiversToLotGeometryStep(map) {
   if (!Array.isArray(map.lots) || !map.lots.length || !Array.isArray(map.rivers) || !map.rivers.length) {
@@ -27,7 +27,7 @@ export function runAddRiversToLotGeometryStep(map) {
       map,
       frameEntries: [
         {
-          label: "Step 1.10 / Add rivers to lot geometry",
+          label: "Step 1.9 / Add rivers to lot geometry",
           map,
         },
       ],
@@ -41,7 +41,7 @@ export function runAddRiversToLotGeometryStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.10 / Add rivers to lot geometry",
+        label: "Step 1.9 / Add rivers to lot geometry",
         map: nextMap,
       },
     ],
@@ -133,9 +133,10 @@ function splitLotsByRiverGraph(map, riverGraph) {
     value: Math.max(-1, ...map.lots.map((lot) => lot.id)) + 1,
   };
   const splitLots = [];
+  const riverSpatialIndex = buildSegmentSpatialIndex(riverGraph.segments);
 
   map.lots.forEach((lot) => {
-    const splitPolygons = splitLotPolygon(lot, riverGraph);
+    const splitPolygons = splitLotPolygon(lot, riverSpatialIndex);
     if (splitPolygons.length <= 1) {
       splitLots.push({
         ...lot,
@@ -163,9 +164,10 @@ function splitLotsByRiverGraph(map, riverGraph) {
   };
 }
 
-function splitLotPolygon(lot, riverGraph) {
+function splitLotPolygon(lot, riverSpatialIndex) {
   const polygon = normalizePolygon(lot.polygon);
-  const clippedEdges = riverGraph.segments
+  const polygonBounds = computeBounds(polygon);
+  const clippedEdges = querySpatialIndex(riverSpatialIndex, polygonBounds)
     .map((segment) => clipRiverSegmentToConvexPolygon(segment, polygon))
     .filter(Boolean);
 
@@ -182,6 +184,73 @@ function splitLotPolygon(lot, riverGraph) {
     .filter((facePolygon, index, collection) => !collection.some((other, otherIndex) => otherIndex < index && polygonsMatch(facePolygon, other)));
 
   return polygons.length ? polygons : [polygon];
+}
+
+function buildSegmentSpatialIndex(segments) {
+  const buckets = new Map();
+  segments.forEach((segment) => {
+    const bounds = computeBounds([segment.from, segment.to]);
+    forEachBucket(bounds, (bucketKey) => {
+      const bucket = buckets.get(bucketKey) || [];
+      bucket.push(segment);
+      buckets.set(bucketKey, bucket);
+    });
+  });
+  return buckets;
+}
+
+function querySpatialIndex(index, bounds) {
+  const seen = new Set();
+  const matches = [];
+  forEachBucket(bounds, (bucketKey) => {
+    const bucket = index.get(bucketKey) || [];
+    bucket.forEach((segment) => {
+      if (seen.has(segment.id)) {
+        return;
+      }
+      seen.add(segment.id);
+      if (boundsOverlap(bounds, computeBounds([segment.from, segment.to]))) {
+        matches.push(segment);
+      }
+    });
+  });
+  return matches;
+}
+
+function buildPointSpatialIndex(points) {
+  const buckets = new Map();
+  points.forEach((point) => {
+    const bucketKey = spatialBucketKey(point.x, point.y);
+    const bucket = buckets.get(bucketKey) || [];
+    bucket.push(point);
+    buckets.set(bucketKey, bucket);
+  });
+  return buckets;
+}
+
+function queryPointSpatialIndex(index, bounds) {
+  const expandedBounds = expandBounds(bounds, POINT_EPSILON);
+  const matches = [];
+  const seen = new Set();
+  forEachBucket(expandedBounds, (bucketKey) => {
+    const bucket = index.get(bucketKey) || [];
+    bucket.forEach((point) => {
+      const key = pointKey(point);
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      if (
+        point.x >= expandedBounds.minX
+        && point.x <= expandedBounds.maxX
+        && point.y >= expandedBounds.minY
+        && point.y <= expandedBounds.maxY
+      ) {
+        matches.push(point);
+      }
+    });
+  });
+  return matches;
 }
 
 function buildLotSplitGraph(polygon, clippedEdges) {
@@ -423,13 +492,15 @@ function synchronizeLotBoundaryVertices(lots) {
     });
   });
 
+  const pointIndex = buildPointSpatialIndex(allPoints);
+
   return lots.map((lot) => ({
     ...lot,
-    polygon: insertSharedBoundaryVertices(lot.polygon, allPoints),
+    polygon: insertSharedBoundaryVertices(lot.polygon, pointIndex),
   }));
 }
 
-function insertSharedBoundaryVertices(polygon, candidatePoints) {
+function insertSharedBoundaryVertices(polygon, pointIndex) {
   const normalized = normalizePolygon(polygon);
   const expanded = [];
 
@@ -438,7 +509,7 @@ function insertSharedBoundaryVertices(polygon, candidatePoints) {
     const to = normalized[(index + 1) % normalized.length];
     expanded.push(clonePoint(from));
 
-    const insertions = candidatePoints
+    const insertions = queryPointSpatialIndex(pointIndex, computeBounds([from, to]))
       .filter((point) => !pointsMatch(point, from) && !pointsMatch(point, to))
       .filter((point) => pointLiesOnSegment(point, from, to))
       .sort((first, second) => pointDistance(from, first) - pointDistance(from, second));
@@ -717,6 +788,55 @@ function computeSignedArea(polygon) {
     area += current.x * next.y - next.x * current.y;
   }
   return area / 2;
+}
+
+function computeBounds(points) {
+  return points.reduce((bounds, point) => ({
+    minX: Math.min(bounds.minX, point.x),
+    minY: Math.min(bounds.minY, point.y),
+    maxX: Math.max(bounds.maxX, point.x),
+    maxY: Math.max(bounds.maxY, point.y),
+  }), {
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity,
+  });
+}
+
+function expandBounds(bounds, padding) {
+  return {
+    minX: bounds.minX - padding,
+    minY: bounds.minY - padding,
+    maxX: bounds.maxX + padding,
+    maxY: bounds.maxY + padding,
+  };
+}
+
+function boundsOverlap(first, second) {
+  return !(
+    first.maxX < second.minX
+    || first.minX > second.maxX
+    || first.maxY < second.minY
+    || first.minY > second.maxY
+  );
+}
+
+function forEachBucket(bounds, callback) {
+  const minBucketX = Math.floor(bounds.minX / SPATIAL_BUCKET_SIZE);
+  const maxBucketX = Math.floor(bounds.maxX / SPATIAL_BUCKET_SIZE);
+  const minBucketY = Math.floor(bounds.minY / SPATIAL_BUCKET_SIZE);
+  const maxBucketY = Math.floor(bounds.maxY / SPATIAL_BUCKET_SIZE);
+
+  for (let bucketX = minBucketX; bucketX <= maxBucketX; bucketX += 1) {
+    for (let bucketY = minBucketY; bucketY <= maxBucketY; bucketY += 1) {
+      callback(`${bucketX},${bucketY}`);
+    }
+  }
+}
+
+function spatialBucketKey(x, y) {
+  return `${Math.floor(x / SPATIAL_BUCKET_SIZE)},${Math.floor(y / SPATIAL_BUCKET_SIZE)}`;
 }
 
 function pointInConvexPolygon(point, polygon) {

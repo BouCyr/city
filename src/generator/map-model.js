@@ -7,7 +7,7 @@
 import { cross } from "./geometry.js";
 
 export const BLANK_STEP_INDEX = -1;
-export const DEFAULT_SEGMENT_LENGTH = 5;
+export const DEFAULT_SEGMENT_LENGTH = 10;
 
 const SNAPSHOT_FALLBACK = (value) => JSON.parse(JSON.stringify(value));
 
@@ -34,6 +34,7 @@ export function createInitialMap(options) {
         tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
+        sublotLloydPasses: options.sublotLloydPasses,
         waterSides: options.waterSides.map((side) => ({ ...side })),
         mapSize: options.mapSize,
       },
@@ -238,6 +239,24 @@ export function getMapGeometry(map) {
 
 export function getMapLots(map) {
   return getMapGeometry(map).lots;
+}
+
+export function clearTemporaryHillFeatures(map) {
+  if (!Array.isArray(map.cells) || !map.cells.length) {
+    return map;
+  }
+
+  return {
+    ...map,
+    cells: map.cells.map((cell) => ({
+      ...cell,
+      features: {
+        ...cell.features,
+        hill: false,
+        hillside: false,
+      },
+    })),
+  };
 }
 
 function orientEdge(edge, cellById, width, height) {

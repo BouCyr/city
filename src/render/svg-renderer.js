@@ -24,6 +24,7 @@ const COLORS = {
   seaEdge: "#1f4e72",
   riverEndpoint: "#5f97b0",
   riverHit: "rgba(0, 0, 0, 0)",
+  tessellation: "rgba(63, 47, 31, 0.22)",
 };
 
 /**
@@ -110,6 +111,7 @@ function createMapLayer(map) {
   layer.append(
     createLotsGroup(lots),
     createSegmentsGroup(segments),
+    createTessellationGroup(map.tessellation),
     createRiversGroup(map.rivers || [], map.riverSegments || []),
   );
 
@@ -202,6 +204,62 @@ function createSegmentsGroup(segments) {
   });
   group.append(lineGroup, dotGroup);
   return group;
+}
+
+function createTessellationGroup(tessellation) {
+  const group = createElement("g", {
+    fill: "none",
+    stroke: COLORS.tessellation,
+    "stroke-width": 0.45,
+    "pointer-events": "none",
+  });
+
+  if (!tessellation?.vertices?.length || !tessellation?.sublots?.length) {
+    return group;
+  }
+
+  const vertices = new Map(tessellation.vertices.map((vertex) => [vertex.id, vertex]));
+  const edges = new Map();
+  tessellation.sublots.forEach((sublot) => {
+    const points = sublot.vertexIds.map((vertexId) => vertices.get(vertexId)).filter(Boolean);
+    const sourceKey = `${sublot.lotId}:${sublot.siteIndex ?? sublot.id}`;
+    for (let index = 0; index < points.length; index += 1) {
+      const from = points[index];
+      const to = points[(index + 1) % points.length];
+      const key = tessellationEdgeKey(from, to);
+      const edge = edges.get(key) || {
+        from,
+        to,
+        sourceKeys: new Set(),
+        occurrences: 0,
+      };
+      edge.sourceKeys.add(sourceKey);
+      edge.occurrences += 1;
+      edges.set(key, edge);
+    }
+  });
+
+  edges.forEach((edge) => {
+    if (edge.occurrences > 1 && edge.sourceKeys.size === 1) {
+      return;
+    }
+    group.append(
+      createElement("line", {
+        x1: edge.from.x,
+        y1: edge.from.y,
+        x2: edge.to.x,
+        y2: edge.to.y,
+      }),
+    );
+  });
+
+  return group;
+}
+
+function tessellationEdgeKey(first, second) {
+  const firstKey = `${first.x.toFixed(4)},${first.y.toFixed(4)}`;
+  const secondKey = `${second.x.toFixed(4)},${second.y.toFixed(4)}`;
+  return firstKey < secondKey ? `${firstKey}|${secondKey}` : `${secondKey}|${firstKey}`;
 }
 
 function createPointsGroup(points) {

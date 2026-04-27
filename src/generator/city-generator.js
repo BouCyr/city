@@ -5,7 +5,7 @@
  */
 
 import { createSeededRandom } from "./random.js";
-import { BLANK_STEP_INDEX, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
+import { BLANK_STEP_INDEX, clearTemporaryHillFeatures, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
 import { runBuildVoronoiStep } from "./step-build-voronoi.js";
 import { runApplyWaterStep } from "./step-apply-water.js";
 import { runFlagHillsStep } from "./step-flag-hills.js";
@@ -13,6 +13,7 @@ import { runFirstRiverStep } from "./step-first-river.js";
 import { runFirstTributaryStep } from "./step-first-tributary.js";
 import { runConvertLotsStep } from "./step-convert-lots.js";
 import { runAddRiversToLotGeometryStep } from "./step-add-rivers-to-lot-geometry.js";
+import { runTessellateLotsStep } from "./step-tessellate-lots.js";
 import { runRelaxPointsStep } from "./step-relax-points.js";
 import { runScatterPointsStep } from "./step-scatter-points.js";
 import { GENERATION_STEPS } from "./steps.js";
@@ -25,11 +26,22 @@ const GENERATION_PIPELINE = [
   { status: "Hills", run: runFlagHillsStep },
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },
-  { status: "Lots", run: runConvertLotsStep },
+  { status: "Lots", run: (map) => runConvertLotsStep(clearTemporaryHillFeatures(map)) },
   { status: "River Lots", run: runAddRiversToLotGeometryStep },
+  { status: "Tessellation", run: runTessellateLotsStep },
 ];
 
 export async function generateCity(options, stepTracker) {
+  return runGenerationPipeline(options, stepTracker);
+}
+
+export async function generateCityThroughStep(options, endStepIndex) {
+  return runGenerationPipeline(options, null, {
+    endStepIndex,
+  });
+}
+
+async function runGenerationPipeline(options, stepTracker, { endStepIndex = GENERATION_PIPELINE.length - 1 } = {}) {
   stepTracker?.reset?.();
 
   const rng = createSeededRandom(options.seed);
@@ -37,7 +49,8 @@ export async function generateCity(options, stepTracker) {
   const frames = [createFrame("Blank map", null, BLANK_STEP_INDEX)];
   const stepDurations = [];
 
-  for (let index = 0; index < GENERATION_PIPELINE.length; index += 1) {
+  const lastStepIndex = Math.min(endStepIndex, GENERATION_PIPELINE.length - 1);
+  for (let index = 0; index <= lastStepIndex; index += 1) {
     const step = GENERATION_PIPELINE[index];
     stepTracker?.onStepStart?.({
       index,
@@ -66,11 +79,14 @@ export async function generateCity(options, stepTracker) {
     });
   }
 
-  stepTracker?.complete?.({
-    stepDurations: [...stepDurations],
-  });
+  if (lastStepIndex === GENERATION_PIPELINE.length - 1) {
+    stepTracker?.complete?.({
+      stepDurations: [...stepDurations],
+    });
+  }
 
-  const finalMap = withStepMetadata(map, GENERATION_STEPS.length - 1, GENERATION_STEPS[GENERATION_STEPS.length - 1]);
+  const finalStepIndex = Math.max(0, lastStepIndex);
+  const finalMap = withStepMetadata(map, finalStepIndex, GENERATION_STEPS[finalStepIndex]);
   return {
     ...finalMap,
     steps: GENERATION_STEPS,

@@ -27,7 +27,7 @@ export function runFirstRiverStep(map, { rng }) {
     map: nextMap,
     frameEntries: [
       {
-        label: river ? "Step 6 / First river" : "Step 6 / No river",
+        label: river ? "Step 1.6 / First river" : "Step 1.6 / No river",
         map: nextMap,
       },
     ],

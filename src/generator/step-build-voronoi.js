@@ -29,7 +29,7 @@ export function runBuildVoronoiStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 2 / Raw Voronoi diagram",
+        label: "Step 1.2 / Raw Voronoi diagram",
         map: nextMap,
       },
     ],

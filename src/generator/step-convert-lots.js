@@ -13,7 +13,7 @@ export function runConvertLotsStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.9 / Convert to lot geometry",
+        label: "Step 1.8 / Convert to lot geometry",
         map: nextMap,
       },
     ],
