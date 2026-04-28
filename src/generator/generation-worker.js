@@ -169,7 +169,7 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 10:
       return {
-        selectedLandLotRatio: 0.5,
+        selectedLotCount: 10,
         minimumSplitChildAreaRatio: 0.4,
         splitSegmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
       };

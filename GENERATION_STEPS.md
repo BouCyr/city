@@ -480,11 +480,16 @@ Function output:
 ```
 
 Rules:
-- The largest land lots create two simple sublots only when a valid split exists.
+- The 10 largest non-boundary land lots start recursive sublotting when a valid split exists.
 - Lots that are not split do not create one-piece sublots.
-- The split can start and end at any canonical lot-boundary vertex.
+- Each branch tries to split into two children using the shortest valid bisection.
+- Each bisection must keep the smaller child at least 40% of the parent branch area.
+- The split can start and end at any canonical boundary vertex of the current branch.
 - Canonical lot-boundary vertices include segment endpoints on the lot boundary, not only the coarse `lot.polygon` corners.
-- The chosen split is the shortest valid split whose smaller child keeps at least 40% of the parent area.
+- If a branch area is `(DEFAULT_SEGMENT_LENGTH ** 2) * 2` or smaller, recursion stops for that branch.
+- If no valid split exists for a branch, recursion stops for that branch.
+- A split endpoint used by an ancestor in the same branch cannot be reused by descendants of that branch.
+- Parent and intermediate sublots are removed; only final leaf sublots are emitted.
 - Sublots can be neighbours with other sublots and with unsplit lots.
 - Sublot neighbours are stored separately as `neighborSublotIds` and `neighborLotIds`.
 - Sublots reuse lot-boundary geometry; they do not go back to Voronoi cells.

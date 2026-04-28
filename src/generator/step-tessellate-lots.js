@@ -1,6 +1,6 @@
 /*
- * WHAT: Split the largest land lots into simple two-piece sublots.
- * HOW: For the largest half of land lots, choose the shortest split between canonical lot-boundary vertices
+ * WHAT: Split the ten largest land lots into recursive leaf sublots.
+ * HOW: For each selected lot, choose the shortest split between canonical lot-boundary vertices
  *      whose smaller child keeps at least 40% of the parent area.
  * WHY: Step 1.11 should create a sparse, deterministic subdivision based on the lot geometry.
  */
@@ -60,8 +60,9 @@ export function runTessellateLotsStep(map) {
 const EPSILON = 0.0001;
 const POINT_KEY_DIGITS = 4;
 const MIN_SUBLOT_AREA = 0.01;
-const SPLIT_LOT_RATIO = 0.5;
+const SELECTED_LOT_COUNT = 10;
 const MIN_SPLIT_CHILD_AREA_RATIO = 0.4;
+const MIN_RECURSIVE_SPLIT_AREA_RATIO = 2;
 const SPLIT_SEGMENT_LENGTH_RATIO = 0.5;
 
 function buildLotTessellation(map, segmentLength) {
@@ -84,20 +85,18 @@ function buildLotTessellation(map, segmentLength) {
     }
 
     const boundaryPoints = getBoundaryVertices(lot, segments);
-    const pieces = splitLotPolygon(boundaryPoints, segmentLength);
-    if (!pieces || pieces.length < 2) {
+    const pieces = splitLotPolygonRecursively(boundaryPoints, segmentLength);
+    if (pieces.length < 2) {
       return;
     }
 
-    const validPieces = [];
-    pieces.forEach((piece, pieceIndex) => {
-      const area = Math.abs(computeSignedArea(piece));
-      if (piece.length < 3 || area < MIN_SUBLOT_AREA) {
-        return;
-      }
-
-      validPieces.push({ piece, pieceIndex, area });
-    });
+    const validPieces = pieces
+      .map((piece, pieceIndex) => ({
+        piece,
+        pieceIndex,
+        area: Math.abs(computeSignedArea(piece)),
+      }))
+      .filter(({ piece, area }) => piece.length >= 3 && area >= MIN_SUBLOT_AREA);
     if (validPieces.length < 2) {
       return;
     }
@@ -127,6 +126,56 @@ function buildLotTessellation(map, segmentLength) {
     vertices,
     sublots,
   };
+}
+
+function splitLotPolygonRecursively(boundaryPoints, segmentLength) {
+  const minimumLeafArea = (segmentLength ** 2) * MIN_RECURSIVE_SPLIT_AREA_RATIO;
+  const leaves = [];
+  splitBranch({
+    polygon: normalizePolygon(boundaryPoints),
+    blockedVertexKeys: new Set(),
+    segmentLength,
+    minimumLeafArea,
+    leaves,
+  });
+  return leaves;
+}
+
+function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafArea, leaves }) {
+  const area = Math.abs(computeSignedArea(polygon));
+  if (polygon.length < 3 || area <= minimumLeafArea) {
+    leaves.push(polygon);
+    return;
+  }
+
+  const split = findShortestBalancedSplit(polygon, blockedVertexKeys);
+  if (!split) {
+    leaves.push(polygon);
+    return;
+  }
+
+  const splitSegmentLength = segmentLength * SPLIT_SEGMENT_LENGTH_RATIO;
+  const pieces = splitBetweenBoundaryPoints(polygon, split.firstIndex, split.secondIndex, splitSegmentLength);
+  const nextBlockedVertexKeys = new Set(blockedVertexKeys);
+  nextBlockedVertexKeys.add(pointKey(polygon[split.firstIndex]));
+  nextBlockedVertexKeys.add(pointKey(polygon[split.secondIndex]));
+  const childPolygons = pieces
+    .map((piece) => normalizePolygon(piece))
+    .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
+  if (childPolygons.length < 2) {
+    leaves.push(polygon);
+    return;
+  }
+
+  childPolygons.forEach((normalizedPiece) => {
+    splitBranch({
+      polygon: normalizedPiece,
+      blockedVertexKeys: nextBlockedVertexKeys,
+      segmentLength,
+      minimumLeafArea,
+      leaves,
+    });
+  });
 }
 
 function populateSublotNeighbors(sublots, lots, segments, splitLotIds, vertices) {
@@ -204,8 +253,9 @@ function selectLargestLandLotIds(lots) {
       id: lot.id,
       area: Math.abs(computeSignedArea(normalizePolygon(lot.polygon || []))),
       isLand: lot.features?.land !== false && !lot.features?.sea,
+      isBoundary: lot.features?.boundary || (lot.boundarySides?.length || 0) > 0,
     }))
-    .filter((lot) => lot.isLand && lot.area > EPSILON)
+    .filter((lot) => lot.isLand && !lot.isBoundary && lot.area > EPSILON)
     .sort((first, second) => {
       if (Math.abs(second.area - first.area) > EPSILON) {
         return second.area - first.area;
@@ -213,18 +263,7 @@ function selectLargestLandLotIds(lots) {
       return first.id - second.id;
     });
 
-  const selectedCount = Math.ceil(landLots.length * SPLIT_LOT_RATIO);
-  return new Set(landLots.slice(0, selectedCount).map((lot) => lot.id));
-}
-
-function splitLotPolygon(boundaryPoints, segmentLength) {
-  const split = findShortestBalancedSplit(boundaryPoints);
-  if (!split) {
-    return null;
-  }
-
-  const splitSegmentLength = segmentLength * SPLIT_SEGMENT_LENGTH_RATIO;
-  return splitBetweenBoundaryPoints(boundaryPoints, split.firstIndex, split.secondIndex, splitSegmentLength);
+  return new Set(landLots.slice(0, SELECTED_LOT_COUNT).map((lot) => lot.id));
 }
 
 function getBoundaryVertices(lot, segments) {
@@ -268,13 +307,20 @@ function collectSegmentBoundaryPoints(lot, segments) {
   return Array.from(pointsByKey.values());
 }
 
-function findShortestBalancedSplit(boundaryPoints) {
+function findShortestBalancedSplit(boundaryPoints, blockedVertexKeys = new Set()) {
   const totalArea = Math.abs(computeSignedArea(boundaryPoints));
   const minimumChildArea = totalArea * MIN_SPLIT_CHILD_AREA_RATIO;
   let best = null;
 
   for (let firstIndex = 0; firstIndex < boundaryPoints.length; firstIndex += 1) {
+    if (blockedVertexKeys.has(pointKey(boundaryPoints[firstIndex]))) {
+      continue;
+    }
+
     for (let secondIndex = firstIndex + 1; secondIndex < boundaryPoints.length; secondIndex += 1) {
+      if (blockedVertexKeys.has(pointKey(boundaryPoints[secondIndex]))) {
+        continue;
+      }
       if (areAdjacentIndices(firstIndex, secondIndex, boundaryPoints.length)) {
         continue;
       }
