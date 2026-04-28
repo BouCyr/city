@@ -51,7 +51,7 @@ function collapseShortEdges(map, minimumLength) {
       continue;
     }
 
-    vertexPoints.set(candidate.fromVertexId, midpointBetween(candidate.from, candidate.to));
+    vertexPoints.set(candidate.fromVertexId, mergeVertexPoints(candidate.from, candidate.to, map.meta.size));
     vertexPoints.delete(candidate.toVertexId);
     cells = mergedCells;
   }
@@ -333,6 +333,55 @@ function pointSide(from, to, point) {
       y: point.y - from.y,
     },
   );
+}
+
+function mergeVertexPoints(first, second, size) {
+  const merged = midpointBetween(first, second);
+  const firstBoundarySides = boundarySidesForPoint(first, size);
+  const secondBoundarySides = boundarySidesForPoint(second, size);
+  const boundarySides = [...new Set([...firstBoundarySides, ...secondBoundarySides])];
+  if (!boundarySides.length) {
+    return merged;
+  }
+
+  if (boundarySides.includes("west")) {
+    merged.x = 0;
+  } else if (boundarySides.includes("east")) {
+    merged.x = size;
+  } else {
+    merged.x = clampToMap(merged.x, size);
+  }
+
+  if (boundarySides.includes("north")) {
+    merged.y = 0;
+  } else if (boundarySides.includes("south")) {
+    merged.y = size;
+  } else {
+    merged.y = clampToMap(merged.y, size);
+  }
+
+  return merged;
+}
+
+function boundarySidesForPoint(point, size, epsilon = 0.75) {
+  const sides = [];
+  if (Math.abs(point.x) <= epsilon) {
+    sides.push("west");
+  }
+  if (Math.abs(point.x - size) <= epsilon) {
+    sides.push("east");
+  }
+  if (Math.abs(point.y) <= epsilon) {
+    sides.push("north");
+  }
+  if (Math.abs(point.y - size) <= epsilon) {
+    sides.push("south");
+  }
+  return sides;
+}
+
+function clampToMap(value, size) {
+  return Math.min(size, Math.max(0, value));
 }
 
 function liesOnCanvasBoundary(from, to, size, epsilon = 0.75) {

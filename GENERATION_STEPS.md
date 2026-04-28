@@ -264,7 +264,10 @@ Function output:
 Rules:
 - Sort candidate cell edges by geometric length.
 - Take the shortest candidate edge.
-- If its length is lower than `DEFAULT_SEGMENT_LENGTH`, delete that edge by merging its two vertices at their midpoint.
+- If its length is lower than `DEFAULT_SEGMENT_LENGTH`, delete that edge by merging its two vertices.
+- Interior vertices merge at their midpoint.
+- If either merged vertex is on the square map boundary, the merged vertex must also be on the same boundary side.
+- If the merged vertices include a corner constraint, the merged vertex stays on that corner so the map remains a perfect square.
 - Repeat until no remaining edge is lower than `DEFAULT_SEGMENT_LENGTH`.
 - Rebuild cell polygons, edges, edge ownership, vertex edge lists, and cell neighbors from the simplified vertex rings.
 - Merged vertices may legally be part of three or more edges.
