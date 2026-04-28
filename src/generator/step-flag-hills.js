@@ -28,7 +28,7 @@ export function runFlagHillsStep(map, { rng }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.5 / Inland hill cells",
+        label: "Step 1.6 / Inland hill cells",
         map: nextMap,
       },
     ],

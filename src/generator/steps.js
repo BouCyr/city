@@ -9,6 +9,7 @@ export const GENERATION_STEPS = [
   "Compute Voronoi cells and edges",
   "Select and paint sea areas",
   "Apply one Lloyd relaxation pass",
+  "Collapse short edges",
   "Flag inland hill cells",
   "Trace the first river",
   "Trace the first tributary",

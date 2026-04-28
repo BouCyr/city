@@ -7,7 +7,7 @@
 import { generateCity, generateCityThroughStep } from "./city-generator.js";
 import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
 
-const RIVER_EVALUATION_STEP_INDEX = 6;
+const RIVER_EVALUATION_STEP_INDEX = 7;
 
 self.addEventListener("message", async (event) => {
   const message = event.data;
@@ -137,16 +137,20 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 4:
       return {
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
+      };
+    case 5:
+      return {
         hillCount: options.hillCount,
         hillSeaDistance: options.hillSeaDistance,
         hillsideRadius: options.hillsideRadius,
       };
-    case 5:
+    case 6:
       return {
         riverTurnAngle: options.riverTurnAngle,
         primaryRiverWidth: options.primaryRiverWidth,
       };
-    case 6:
+    case 7:
       return {
         riverTurnAngle: options.riverTurnAngle,
         primaryRiverWidth: options.primaryRiverWidth,
@@ -155,15 +159,15 @@ function getStepParametersForStep(stepIndex, options) {
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
       };
-    case 7:
-      return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
-      };
     case 8:
       return {
         segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 9:
+      return {
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
+      };
+    case 10:
       return {
         selectedLandLotRatio: 0.5,
         minimumSplitChildAreaRatio: 0.4,

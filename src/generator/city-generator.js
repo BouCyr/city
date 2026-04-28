@@ -16,6 +16,7 @@ import { runAddRiversToLotGeometryStep } from "./step-add-rivers-to-lot-geometry
 import { runTessellateLotsStep } from "./step-tessellate-lots.js";
 import { runRelaxPointsStep } from "./step-relax-points.js";
 import { runScatterPointsStep } from "./step-scatter-points.js";
+import { runCollapseShortEdgesStep } from "./step-collapse-short-edges.js";
 import { GENERATION_STEPS } from "./steps.js";
 
 const GENERATION_PIPELINE = [
@@ -23,6 +24,7 @@ const GENERATION_PIPELINE = [
   { status: "Voronoi", run: runBuildVoronoiStep },
   { status: "Water", run: runApplyWaterStep },
   { status: "Lloyd", run: runRelaxPointsStep },
+  { status: "Simplify", run: runCollapseShortEdgesStep },
   { status: "Hills", run: runFlagHillsStep },
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },

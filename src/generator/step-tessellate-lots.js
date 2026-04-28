@@ -2,7 +2,7 @@
  * WHAT: Split the largest land lots into simple two-piece sublots.
  * HOW: For the largest half of land lots, choose the shortest split between
  *      existing lot-boundary vertices whose smaller child keeps at least 40% of the parent area.
- * WHY: Step 1.10 should create a sparse, deterministic subdivision based on the lot geometry.
+ * WHY: Step 1.11 should create a sparse, deterministic subdivision based on the lot geometry.
  */
 
 import {
@@ -17,7 +17,7 @@ export function runTessellateLotsStep(map) {
       map,
       frameEntries: [
         {
-          label: "Step 1.10 / Tessellate lot geometry",
+          label: "Step 1.11 / Tessellate lot geometry",
           map,
         },
       ],
@@ -50,7 +50,7 @@ export function runTessellateLotsStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.10 / Tessellate lot geometry",
+        label: "Step 1.11 / Tessellate lot geometry",
         map: nextMap,
       },
     ],

@@ -11,19 +11,20 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.2 Compute Voronoi cells and edges
 1.3 Select and paint sea areas
 1.4 Apply one Lloyd relaxation pass
-1.5 Flag inland hill cells
-1.6 Trace the first river
-1.7 Trace the first tributary
-1.8 Convert to lot geometry
-1.9 Add rivers to lot geometry
-1.10 Tessellate lot geometry
+1.5 Collapse short edges
+1.6 Flag inland hill cells
+1.7 Trace the first river
+1.8 Trace the first tributary
+1.9 Convert to lot geometry
+1.10 Add rivers to lot geometry
+1.11 Tessellate lot geometry
 2. Human usage
 
 `Human usage` is reserved and has no implemented child steps yet.
 
 ## Geometry Rules
 
-Through step 1.7 the map is cell geometry:
+Through step 1.8 the map is cell geometry:
 
 ```js
 {
@@ -55,7 +56,7 @@ Through step 1.7 the map is cell geometry:
 }
 ```
 
-From step 1.8 onward the map is lot geometry. Previous `cells`, `edges`, and cell `vertices` are not part of the output:
+From step 1.9 onward the map is lot geometry. Previous `cells`, `edges`, and cell `vertices` are not part of the output:
 
 ```js
 {
@@ -234,7 +235,41 @@ Rules:
 - Non-boundary sites move to their cell centroids and are clamped by `relaxPaddingRatio`.
 - Voronoi geometry is rebuilt and sea classification is recomputed.
 
-## 1.5 Flag Inland Hill Cells
+## 1.5 Collapse Short Edges
+
+Source: `src/generator/step-collapse-short-edges.js`
+
+Function input:
+
+```js
+{
+  vertices: [{ id: 0, x: 100, y: 200, edgeIds: ["..."] }, ...],
+  edges: [{ id: "...", fromVertexId: 0, toVertexId: 1, from: { x: 100, y: 200 }, to: { x: 104, y: 203 }, ... }, ...],
+  cells: [{ id: 0, vertexIds: [0, 1, 2, ...], edgeIds: ["..."], neighborCellIds: [...] }, ...]
+}
+```
+
+Function output:
+
+```js
+{
+  vertices: [{ id: 0, x: 102, y: 201.5, edgeIds: ["collapsed:0", "collapsed:9", "collapsed:12"] }, ...],
+  edges: [{ id: "collapsed:0", fromVertexId: 0, toVertexId: 4, leftCellId: 0, rightCellId: 1, features: { boundary: false, sea: false, river: false } }, ...],
+  cells: [{ id: 0, vertexIds: [0, 4, 8, ...], edgeIds: ["collapsed:0", ...], neighborCellIds: [1, ...] }, ...],
+  river: { primary: null, secondary: null },
+  rivers: []
+}
+```
+
+Rules:
+- Sort candidate cell edges by geometric length.
+- Take the shortest candidate edge.
+- If its length is lower than `DEFAULT_SEGMENT_LENGTH`, delete that edge by merging its two vertices at their midpoint.
+- Repeat until no remaining edge is lower than `DEFAULT_SEGMENT_LENGTH`.
+- Rebuild cell polygons, edges, edge ownership, vertex edge lists, and cell neighbors from the simplified vertex rings.
+- Merged vertices may legally be part of three or more edges.
+
+## 1.6 Flag Inland Hill Cells
 
 Source: `src/generator/step-flag-hills.js`
 
@@ -261,7 +296,7 @@ Rules:
 - The first hill is random; later hills maximize distance from selected hills.
 - Hillside cells are land cells within `hillsideRadius` steps of a hill.
 
-## 1.6 Trace The First River
+## 1.7 Trace The First River
 
 Source: `src/generator/step-first-river.js`
 
@@ -304,7 +339,7 @@ Rules:
 - The path alternates boundary vertex or edge midpoint, cell centroid, shared edge midpoint, next cell centroid, and outlet point.
 - Candidate paths are ranked by cell count, then segmented geometric length, then source cell id.
 
-## 1.7 Trace The First Tributary
+## 1.8 Trace The First Tributary
 
 Source: `src/generator/step-first-tributary.js`
 
@@ -344,7 +379,7 @@ Rules:
 - It must merge into a valid primary river cell.
 - The primary river width is increased downstream of the merge cell.
 
-## 1.8 Convert To Lot Geometry
+## 1.9 Convert To Lot Geometry
 
 Source: `src/generator/step-convert-lots.js`
 
@@ -377,7 +412,7 @@ Rules:
 - Segment and vertex features are limited to lot-stage surface data such as `coast`, `land`, `sea`, and later `riverside`.
 - Cell geometry is removed from the output; later work uses lots only.
 
-## 1.9 Add Rivers To Lot Geometry
+## 1.10 Add Rivers To Lot Geometry
 
 Source: `src/generator/step-add-rivers-to-lot-geometry.js`
 
@@ -410,7 +445,7 @@ Rules:
 - River segments are canonical `segments`; they are not stored again in a river-specific output field.
 - Lot adjacency and segment ownership are rebuilt from the new polygons.
 
-## 1.10 Tessellate Lot Geometry
+## 1.11 Tessellate Lot Geometry
 
 Source: `src/generator/step-tessellate-lots.js`
 
