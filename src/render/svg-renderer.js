@@ -112,7 +112,7 @@ function createMapLayer(map) {
     createLotsGroup(lots),
     createSegmentsGroup(segments),
     createTessellationGroup(map.tessellation),
-    createRiversGroup(map.rivers || [], map.riverSegments || []),
+    createRiversGroup(map.rivers || [], segments),
   );
 
   if (!lots.length) {
@@ -301,7 +301,7 @@ function createPointsGroup(points) {
   return group;
 }
 
-function createRiversGroup(rivers, riverSegments) {
+function createRiversGroup(rivers, segments) {
   const group = createElement("g", {
     fill: "none",
   });
@@ -316,7 +316,7 @@ function createRiversGroup(rivers, riverSegments) {
     );
   });
 
-  const endpointGroup = createRiverEndpointGroup(riverSegments);
+  const endpointGroup = createRiverEndpointGroup(segments);
   if (endpointGroup) {
     group.append(endpointGroup);
   }
@@ -382,8 +382,11 @@ function createRiverHitStroke(riverId, points, width) {
   });
 }
 
-function createRiverEndpointGroup(riverSegments) {
-  if (!Array.isArray(riverSegments) || !riverSegments.length) {
+function createRiverEndpointGroup(segments) {
+  const canonicalRiverSegments = Array.isArray(segments)
+    ? segments.filter((segment) => segment.features?.river)
+    : [];
+  if (!canonicalRiverSegments.length) {
     return null;
   }
 
@@ -392,7 +395,7 @@ function createRiverEndpointGroup(riverSegments) {
   });
   const seen = new Set();
 
-  riverSegments.forEach((segment) => {
+  canonicalRiverSegments.forEach((segment) => {
     [segment.from, segment.to].forEach((point) => {
       const key = `${point.x.toFixed(3)},${point.y.toFixed(3)}`;
       if (seen.has(key)) {

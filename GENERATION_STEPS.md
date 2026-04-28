@@ -399,8 +399,7 @@ Function output:
 {
   lots: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], vertexIds: [...], segmentIds: [...], neighborLotIds: [...] }, ...],
   vertices: [{ id: 22, x: 150, y: 300, segmentIds: ["segment:88"], features: { riverside: true, coast: false, land: true, sea: false } }, ...],
-  segments: [{ id: "segment:88", fromVertexId: 22, toVertexId: 23, features: { river: true, riverside: true, land: true, coast: false, sea: false } }, ...],
-  riverSegments: [{ id: "river:0:0", riverId: 0, branchType: "primary", from: { ... }, to: { ... } }, ...]
+  segments: [{ id: "segment:88", fromVertexId: 22, toVertexId: 23, features: { river: true, riverside: true, land: true, coast: false, sea: false } }, ...]
 }
 ```
 
@@ -408,6 +407,7 @@ Rules:
 - River paths are sampled into segment geometry.
 - Lots crossed by rivers are split.
 - River-derived segments and their vertices receive `features.riverside`.
+- River segments are canonical `segments`; they are not stored again in a river-specific output field.
 - Lot adjacency and segment ownership are rebuilt from the new polygons.
 
 ## 1.10 Tessellate Lot Geometry

@@ -156,12 +156,6 @@ function splitLotsByRiverGraph(map, riverGraph) {
     vertices: rebuilt.vertices,
     lots: rebuilt.lots,
     segments: rebuilt.segments,
-    riverSegments: riverGraph.segments.map((segment) => ({
-      ...segment,
-      from: clonePoint(segment.from),
-      to: clonePoint(segment.to),
-      midpoint: clonePoint(segment.midpoint),
-    })),
   };
 }
 
