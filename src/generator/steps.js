@@ -7,9 +7,9 @@
 export const GENERATION_STEPS = [
   "Scatter pseudo-random points",
   "Compute Voronoi cells and edges",
-  "Select and paint sea areas",
   "Apply one Lloyd relaxation pass",
   "Collapse short edges",
+  "Select and paint sea areas",
   "Flag inland hill cells",
   "Trace the first river",
   "Trace the first tributary",

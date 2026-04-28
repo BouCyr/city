@@ -14,7 +14,7 @@ export function runCollapseShortEdgesStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.5 / Collapse short edges",
+        label: "Step 1.4 / Collapse short edges",
         map: nextMap,
       },
     ],

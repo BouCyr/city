@@ -22,9 +22,9 @@ import { GENERATION_STEPS } from "./steps.js";
 const GENERATION_PIPELINE = [
   { status: "Points", run: runScatterPointsStep },
   { status: "Voronoi", run: runBuildVoronoiStep },
-  { status: "Water", run: runApplyWaterStep },
   { status: "Lloyd", run: runRelaxPointsStep },
   { status: "Simplify", run: runCollapseShortEdgesStep },
+  { status: "Water", run: runApplyWaterStep },
   { status: "Hills", run: runFlagHillsStep },
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },

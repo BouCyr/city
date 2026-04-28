@@ -1,15 +1,14 @@
 /*
- * WHAT: Apply one Lloyd relaxation pass, rebuild the Voronoi geometry, and reclassify water.
- * HOW: Move non-protected sites to their cell centroids, rebuild canonical cells/edges, then rerun the water step.
- * WHY: Smoothed geometry is still a core generation step, but it must preserve the current coast-building rules.
+ * WHAT: Apply one Lloyd relaxation pass and rebuild the Voronoi geometry.
+ * HOW: Move non-protected sites to their cell centroids, then rebuild canonical cells and edges.
+ * WHY: Smoothing geometry should happen before coastline classification so later simplification works on land-neutral cells.
  */
 
 import { buildVoronoiDiagram } from "../lib/voronoi-client.js";
 import { clamp } from "./geometry.js";
 import { buildCanonicalGeometry } from "./map-model.js";
-import { applyWaterClassification } from "./step-apply-water.js";
 
-export function runRelaxPointsStep(map, { rng }) {
+export function runRelaxPointsStep(map) {
   const padding = map.meta.size * (map.init.params.relaxPaddingRatio ?? 0.04);
   const points = map.cells.map((cell) => ({
     id: cell.site.id ?? cell.id,
@@ -23,7 +22,7 @@ export function runRelaxPointsStep(map, { rng }) {
     height: map.meta.size,
   });
   const geometry = buildCanonicalGeometry(diagram);
-  const rebuiltMap = {
+  const nextMap = {
     ...map,
     points,
     ...geometry,
@@ -34,13 +33,12 @@ export function runRelaxPointsStep(map, { rng }) {
     },
     cityCenterCellId: null,
   };
-  const nextMap = applyWaterClassification(rebuiltMap, rng);
 
   return {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.4 / Lloyd-smoothed map",
+        label: "Step 1.3 / Lloyd-smoothed map",
         map: nextMap,
       },
     ],

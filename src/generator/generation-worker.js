@@ -124,20 +124,20 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 2:
       return {
+        relaxPaddingRatio: options.relaxPaddingRatio,
+      };
+    case 3:
+      return {
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
+      };
+    case 4:
+      return {
         waterSides: options.waterSides.filter((side) => side.enabled).map((side) => side.name),
         waterReachRatio: options.waterReachRatio,
         waterExpansionBase: options.waterExpansionBase,
         waterExpansionEdgeWeight: options.waterExpansionEdgeWeight,
         waterPressureRangeRatio: options.waterPressureRangeRatio,
         waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
-      };
-    case 3:
-      return {
-        relaxPaddingRatio: options.relaxPaddingRatio,
-      };
-    case 4:
-      return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 5:
       return {
