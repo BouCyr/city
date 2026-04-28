@@ -31,7 +31,6 @@ const FLOW_STROKE_WIDTH = 4;
 const RIVER_HOVER_STROKE = "#1e56c5";
 const RIVER_HOVER_GLOW = "rgba(255, 255, 255, 0.82)";
 const HILLS_STEP_INDEX = 5;
-const TESSELLATION_STEP_INDEX = 10;
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
@@ -152,7 +151,6 @@ mapViewport.addEventListener("pointercancel", handlePointerUp);
 mapViewport.addEventListener("pointerleave", handlePointerUp);
 svg.addEventListener("pointermove", handleMapHover);
 svg.addEventListener("pointerleave", clearHoverState);
-svg.addEventListener("click", handleMapClick);
 
 form.requestSubmit();
 
@@ -553,21 +551,6 @@ function clearHoverState() {
   hoveredCellData.textContent = "Hover a lot or river to inspect its data.";
 }
 
-function handleMapClick(event) {
-  const river = getRiverFromEvent(event);
-  if (river) {
-    focusRiver(river, currentFrame?.map?.meta.size || currentMap?.meta.size || CANVAS_SIZE);
-    return;
-  }
-
-  const hoverTarget = getHoverTargetFromEvent(event);
-  if (!hoverTarget) {
-    return;
-  }
-
-  focusCell(hoverTarget.item, currentFrame?.map?.meta.size || currentMap?.meta.size || CANVAS_SIZE);
-}
-
 /**
  * WHAT: Zoom the SVG viewBox around a focus point while keeping the viewport inside map bounds.
  * HOW: Convert the desired zoom factor into a new viewBox rectangle anchored at the pointer or viewport center.
@@ -654,18 +637,7 @@ function getHoverTargetFromEvent(event) {
     return null;
   }
 
-  const target = event.target instanceof Element ? event.target.closest("[data-sublot-id], [data-lot-id], [data-cell-id]") : null;
-  if (target?.hasAttribute("data-sublot-id") && currentFrame.stepIndex === TESSELLATION_STEP_INDEX) {
-    const sublotId = Number(target.getAttribute("data-sublot-id"));
-    const sublot = getSublots(currentFrame.map).find((candidate) => candidate.id === sublotId);
-    if (sublot) {
-      return {
-        kind: "Sublot",
-        item: hydrateSublotGeometry(sublot, currentFrame.map),
-      };
-    }
-  }
-
+  const target = event.target instanceof Element ? event.target.closest("[data-lot-id], [data-cell-id]") : null;
   const cellId = target
     ? Number(target.getAttribute("data-lot-id") || target.getAttribute("data-cell-id"))
     : Number.NaN;
@@ -715,6 +687,7 @@ function renderHoveredGeometry(hoverTarget) {
     createCellDataRow("Id", formatGeometryId(item, kind)),
     createCellDataRow("Features", formatFeatures(item.features)),
     createCellDataRow("Area", `${getGeometryArea(item).toFixed(1)} px2`),
+    createCellDataRow("Lots", formatContainedLotCount(item, kind)),
     createCellDataRow("Neighbours", formatNeighborList(item, kind)),
   ].join("");
   drawFlowOverlay(previewRiverPath);
@@ -752,66 +725,6 @@ function createCellDataRow(label, value) {
       <span>${value}</span>
     </div>
   `;
-}
-
-function focusCell(cell, size) {
-  const bounds = getCellBounds(cell);
-  const padding = 18;
-  const cellWidth = bounds.maxX - bounds.minX;
-  const cellHeight = bounds.maxY - bounds.minY;
-  const targetSpan = clamp(Math.max(cellWidth, cellHeight) + padding * 2, size / MAX_ZOOM, size);
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-
-  viewportState.width = targetSpan;
-  viewportState.height = targetSpan;
-  viewportState.zoom = size / targetSpan;
-  viewportState.x = centerX - targetSpan / 2;
-  viewportState.y = centerY - targetSpan / 2;
-  clampViewport(size);
-  applyViewport();
-}
-
-function focusRiver(river, size) {
-  const bounds = river.points.reduce((accumulator, point) => ({
-    minX: Math.min(accumulator.minX, point.x),
-    minY: Math.min(accumulator.minY, point.y),
-    maxX: Math.max(accumulator.maxX, point.x),
-    maxY: Math.max(accumulator.maxY, point.y),
-  }), {
-    minX: Infinity,
-    minY: Infinity,
-    maxX: -Infinity,
-    maxY: -Infinity,
-  });
-  const padding = 20;
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
-  const targetSpan = clamp(Math.max(width, height) + padding * 2, size / MAX_ZOOM, size);
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-
-  viewportState.width = targetSpan;
-  viewportState.height = targetSpan;
-  viewportState.zoom = size / targetSpan;
-  viewportState.x = centerX - targetSpan / 2;
-  viewportState.y = centerY - targetSpan / 2;
-  clampViewport(size);
-  applyViewport();
-}
-
-function getCellBounds(cell) {
-  return cell.polygon.reduce((bounds, point) => ({
-    minX: Math.min(bounds.minX, point.x),
-    minY: Math.min(bounds.minY, point.y),
-    maxX: Math.max(bounds.maxX, point.x),
-    maxY: Math.max(bounds.maxY, point.y),
-  }), {
-    minX: Infinity,
-    minY: Infinity,
-    maxX: -Infinity,
-    maxY: -Infinity,
-  });
 }
 
 function computeCenterSeaFlowPath(startCellId) {
@@ -865,17 +778,14 @@ function drawNeighborOverlay(cell, kind = null) {
     return;
   }
 
-  const map = currentFrame?.map || {};
-  const sublots = getSublots(map).map((sublot) => hydrateSublotGeometry(sublot, map));
-  const lots = getMapLots(map);
+  const lots = getMapLots(currentFrame?.map || {});
   const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
   overlay.setAttribute("id", HOVER_NEIGHBOR_OVERLAY_ID);
   overlay.setAttribute("pointer-events", "none");
 
   const origin = cell.centroid;
   neighbors.forEach((neighborRef) => {
-    const collection = neighborRef.type === "sublot" ? sublots : lots;
-    const neighbor = collection.find((lot) => lot.id === neighborRef.id);
+    const neighbor = lots.find((lot) => lot.id === neighborRef.id);
     if (!neighbor) {
       return;
     }
@@ -943,7 +853,7 @@ function getNeighborIds(cell) {
     return [];
   }
 
-  return cell.neighborSublotIds || cell.neighborLotIds || cell.neighborCellIds || [];
+  return cell.neighborLotIds || cell.neighborCellIds || [];
 }
 
 function getNeighborRefs(item, kind) {
@@ -951,42 +861,27 @@ function getNeighborRefs(item, kind) {
     return [];
   }
 
-  if (kind === "Sublot") {
-    return [
-      ...(item.neighborSublotIds || []).map((id) => ({ type: "sublot", id })),
-      ...(item.neighborLotIds || []).map((id) => ({ type: "lot", id })),
-    ];
-  }
-
   const type = kind === "Cell" ? "cell" : "lot";
   return getNeighborIds(item).map((id) => ({ type, id }));
 }
 
 function formatGeometryId(item, kind) {
-  if (kind === "Sublot") {
-    return `Sublot ${item.id} (lot ${item.lotId})`;
-  }
   return `${kind} ${item.id}`;
+}
+
+function formatContainedLotCount(item, kind) {
+  if (kind !== "Lot") {
+    return "n/a";
+  }
+
+  const sublotCount = getSublots(currentFrame?.map || {}).filter((sublot) => sublot.lotId === item.id).length;
+  return String(sublotCount || 1);
 }
 
 function formatNeighborList(item, kind) {
   const neighborRefs = getNeighborRefs(item, kind);
   if (!neighborRefs.length) {
     return "none";
-  }
-
-  if (kind === "Sublot") {
-    const sublots = getSublots(currentFrame?.map || {});
-    return neighborRefs
-      .map((neighborRef) => {
-        if (neighborRef.type === "lot") {
-          return `Lot ${neighborRef.id}`;
-        }
-
-        const sublot = sublots.find((candidate) => candidate.id === neighborRef.id);
-        return sublot ? `Sublot ${neighborRef.id} (lot ${sublot.lotId})` : `Sublot ${neighborRef.id}`;
-      })
-      .join(", ");
   }
 
   return neighborRefs
@@ -996,14 +891,6 @@ function formatNeighborList(item, kind) {
 
 function getSublots(map) {
   return map?.tessellation?.sublots || [];
-}
-
-function hydrateSublotGeometry(sublot, map) {
-  const vertices = new Map((map?.tessellation?.vertices || []).map((vertex) => [vertex.id, vertex]));
-  return {
-    ...sublot,
-    polygon: sublot.vertexIds.map((vertexId) => vertices.get(vertexId)).filter(Boolean),
-  };
 }
 
 function formatFeatures(features = {}) {

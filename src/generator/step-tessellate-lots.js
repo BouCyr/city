@@ -1,8 +1,8 @@
 /*
- * WHAT: Split the ten largest land lots into recursive leaf sublots.
- * HOW: For each selected lot, choose the shortest split between canonical lot-boundary vertices
+ * WHAT: Split land lots into recursive leaf sublots.
+ * HOW: For each land lot, choose the shortest split between canonical lot-boundary vertices
  *      whose smaller child keeps at least 40% of the parent area.
- * WHY: Step 1.11 should create a sparse, deterministic subdivision based on the lot geometry.
+ * WHY: Step 1.11 should create deterministic subdivision based on the lot geometry.
  */
 
 import {
@@ -60,7 +60,6 @@ export function runTessellateLotsStep(map) {
 const EPSILON = 0.0001;
 const POINT_KEY_DIGITS = 4;
 const MIN_SUBLOT_AREA = 0.01;
-const SELECTED_LOT_COUNT = 10;
 const MIN_SPLIT_CHILD_AREA_RATIO = 0.4;
 const MIN_RECURSIVE_SPLIT_AREA_RATIO = 2;
 const SPLIT_SEGMENT_LENGTH_RATIO = 0.5;
@@ -72,7 +71,6 @@ function buildLotTessellation(map, segmentLength) {
   const vertexByKey = new Map();
   const sublots = [];
   const splitLotIds = new Set();
-  const selectedLotIds = selectLargestLandLotIds(lots);
 
   lots.forEach((lot) => {
     const polygon = normalizePolygon(lot.polygon || []);
@@ -80,7 +78,7 @@ function buildLotTessellation(map, segmentLength) {
       return;
     }
 
-    if (!selectedLotIds.has(lot.id)) {
+    if (!isLandLot(lot)) {
       return;
     }
 
@@ -247,23 +245,8 @@ function populateSublotNeighbors(sublots, lots, segments, splitLotIds, vertices)
   });
 }
 
-function selectLargestLandLotIds(lots) {
-  const landLots = lots
-    .map((lot) => ({
-      id: lot.id,
-      area: Math.abs(computeSignedArea(normalizePolygon(lot.polygon || []))),
-      isLand: lot.features?.land !== false && !lot.features?.sea,
-      isBoundary: lot.features?.boundary || (lot.boundarySides?.length || 0) > 0,
-    }))
-    .filter((lot) => lot.isLand && !lot.isBoundary && lot.area > EPSILON)
-    .sort((first, second) => {
-      if (Math.abs(second.area - first.area) > EPSILON) {
-        return second.area - first.area;
-      }
-      return first.id - second.id;
-    });
-
-  return new Set(landLots.slice(0, SELECTED_LOT_COUNT).map((lot) => lot.id));
+function isLandLot(lot) {
+  return lot.features?.land !== false && !lot.features?.sea;
 }
 
 function getBoundaryVertices(lot, segments) {

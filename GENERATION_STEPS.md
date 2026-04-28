@@ -480,7 +480,7 @@ Function output:
 ```
 
 Rules:
-- The 10 largest non-boundary land lots start recursive sublotting when a valid split exists.
+- Every land lot starts recursive sublotting when a valid split exists.
 - Lots that are not split do not create one-piece sublots.
 - Each branch tries to split into two children using the shortest valid bisection.
 - Each bisection must keep the smaller child at least 40% of the parent branch area.
