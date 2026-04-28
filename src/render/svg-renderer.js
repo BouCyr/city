@@ -207,12 +207,7 @@ function createSegmentsGroup(segments) {
 }
 
 function createTessellationGroup(tessellation) {
-  const group = createElement("g", {
-    fill: "none",
-    stroke: COLORS.tessellation,
-    "stroke-width": 0.45,
-    "pointer-events": "none",
-  });
+  const group = createElement("g");
 
   if (!tessellation?.vertices?.length || !tessellation?.sublots?.length) {
     return group;
@@ -220,8 +215,30 @@ function createTessellationGroup(tessellation) {
 
   const vertices = new Map(tessellation.vertices.map((vertex) => [vertex.id, vertex]));
   const edges = new Map();
+  const hitGroup = createElement("g", {
+    fill: "rgba(0, 0, 0, 0)",
+    stroke: "none",
+    "pointer-events": "all",
+  });
+  const lineGroup = createElement("g", {
+    fill: "none",
+    stroke: COLORS.tessellation,
+    "stroke-width": 0.45,
+    "pointer-events": "none",
+  });
+
   tessellation.sublots.forEach((sublot) => {
     const points = sublot.vertexIds.map((vertexId) => vertices.get(vertexId)).filter(Boolean);
+    if (points.length >= 3) {
+      hitGroup.append(
+        createElement("polygon", {
+          points: toSvgPoints(points),
+          "data-sublot-id": sublot.id,
+          "data-lot-id": sublot.lotId,
+        }),
+      );
+    }
+
     const sourceKey = `${sublot.lotId}:${sublot.siteIndex ?? sublot.id}`;
     for (let index = 0; index < points.length; index += 1) {
       const from = points[index];
@@ -243,7 +260,7 @@ function createTessellationGroup(tessellation) {
     if (edge.occurrences > 1 && edge.sourceKeys.size === 1) {
       return;
     }
-    group.append(
+    lineGroup.append(
       createElement("line", {
         x1: edge.from.x,
         y1: edge.from.y,
@@ -252,7 +269,7 @@ function createTessellationGroup(tessellation) {
       }),
     );
   });
-  group.append(createTessellationVerticesGroup(tessellation.vertices));
+  group.append(hitGroup, lineGroup, createTessellationVerticesGroup(tessellation.vertices));
 
   return group;
 }

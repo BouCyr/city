@@ -469,17 +469,23 @@ Function output:
   lots: [{
     id: 0,
     sublotIds: [0, 1],
-    sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], features: { land: true, sea: false } }, ...],
+    sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], neighborSublotIds: [1], neighborLotIds: [4], features: { land: true, sea: false } }, ...],
     ...
   }, ...],
   tessellation: {
     vertices: [{ id: 0, x: 10, y: 20 }, ...],
-    sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], centroid: { x: 20, y: 30 }, area: 100, features: { land: true, sea: false } }, ...]
+    sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], centroid: { x: 20, y: 30 }, area: 100, neighborSublotIds: [1], neighborLotIds: [4], features: { land: true, sea: false } }, ...]
   }
 }
 ```
 
 Rules:
-- The largest land lots are split into two simple sublots.
+- The largest land lots create two simple sublots only when a valid split exists.
+- Lots that are not split do not create one-piece sublots.
+- The split can start and end at any canonical lot-boundary vertex.
+- Canonical lot-boundary vertices include segment endpoints on the lot boundary, not only the coarse `lot.polygon` corners.
+- The chosen split is the shortest valid split whose smaller child keeps at least 40% of the parent area.
+- Sublots can be neighbours with other sublots and with unsplit lots.
+- Sublot neighbours are stored separately as `neighborSublotIds` and `neighborLotIds`.
 - Sublots reuse lot-boundary geometry; they do not go back to Voronoi cells.
-- Each lot receives `sublotIds` and an inline `sublots` list.
+- Split lots receive `sublotIds` and an inline `sublots` list; unsplit lots keep both lists empty.

@@ -31,6 +31,7 @@ const FLOW_STROKE_WIDTH = 4;
 const RIVER_HOVER_STROKE = "#1e56c5";
 const RIVER_HOVER_GLOW = "rgba(255, 255, 255, 0.82)";
 const HILLS_STEP_INDEX = 5;
+const TESSELLATION_STEP_INDEX = 10;
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
@@ -529,13 +530,13 @@ function handleMapHover(event) {
     return;
   }
 
-  const cell = getCellFromEvent(event);
-  if (!cell) {
+  const hoverTarget = getHoverTargetFromEvent(event);
+  if (!hoverTarget) {
     clearHoverState();
     return;
   }
 
-  renderHoveredCell(cell);
+  renderHoveredGeometry(hoverTarget);
 }
 
 function clearHoverState() {
@@ -559,12 +560,12 @@ function handleMapClick(event) {
     return;
   }
 
-  const cell = getCellFromEvent(event);
-  if (!cell) {
+  const hoverTarget = getHoverTargetFromEvent(event);
+  if (!hoverTarget) {
     return;
   }
 
-  focusCell(cell, currentFrame?.map?.meta.size || currentMap?.meta.size || CANVAS_SIZE);
+  focusCell(hoverTarget.item, currentFrame?.map?.meta.size || currentMap?.meta.size || CANVAS_SIZE);
 }
 
 /**
@@ -648,12 +649,23 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function getCellFromEvent(event) {
+function getHoverTargetFromEvent(event) {
   if (!currentFrame || currentFrame.type !== "map") {
     return null;
   }
 
-  const target = event.target instanceof Element ? event.target.closest("[data-lot-id], [data-cell-id]") : null;
+  const target = event.target instanceof Element ? event.target.closest("[data-sublot-id], [data-lot-id], [data-cell-id]") : null;
+  if (target?.hasAttribute("data-sublot-id") && currentFrame.stepIndex === TESSELLATION_STEP_INDEX) {
+    const sublotId = Number(target.getAttribute("data-sublot-id"));
+    const sublot = getSublots(currentFrame.map).find((candidate) => candidate.id === sublotId);
+    if (sublot) {
+      return {
+        kind: "Sublot",
+        item: hydrateSublotGeometry(sublot, currentFrame.map),
+      };
+    }
+  }
+
   const cellId = target
     ? Number(target.getAttribute("data-lot-id") || target.getAttribute("data-cell-id"))
     : Number.NaN;
@@ -661,7 +673,15 @@ function getCellFromEvent(event) {
     return null;
   }
 
-  return getMapLots(currentFrame.map).find((cell) => cell.id === cellId) || null;
+  const item = getMapLots(currentFrame.map).find((cell) => cell.id === cellId) || null;
+  if (!item) {
+    return null;
+  }
+
+  return {
+    kind: Array.isArray(currentFrame.map.lots) ? "Lot" : "Cell",
+    item,
+  };
 }
 
 function getRiverFromEvent(event) {
@@ -678,40 +698,24 @@ function getRiverFromEvent(event) {
   return currentFrame.map.rivers?.find((river) => river.id === riverId) || null;
 }
 
-function renderHoveredCell(cell) {
+function renderHoveredGeometry(hoverTarget) {
   if (!(hoveredCellData instanceof HTMLElement)) {
     return;
   }
 
-  hoveredCellId = cell.id;
+  const { item, kind } = hoverTarget;
+  hoveredCellId = item.id;
   hoveredRiverId = null;
   clearRiverOverlay();
-  drawNeighborOverlay(cell);
-  const isLotGeometry = Array.isArray(currentFrame?.map?.lots);
-  const areaLabel = isLotGeometry ? "Lot" : "Cell";
-  const segmentCollectionLabel = isLotGeometry ? "Segments" : "Edges";
-  const features = Object.entries(cell.features)
-    .filter(([, enabled]) => enabled)
-    .map(([name]) => name)
-    .join(", ") || "none";
-  const boundarySides = cell.boundarySides.length ? cell.boundarySides.join(", ") : "none";
-  const previewRiverPath = shouldShowRiverPreview() ? computeCenterSeaFlowPath(cell.id) : null;
-  const rivers = currentFrame?.type === "map" ? currentFrame.map.rivers.filter((candidate) => candidate.cellIds.includes(cell.id)) : [];
+  drawNeighborOverlay(item, kind);
+  const previewRiverPath = kind === "Cell" && shouldShowRiverPreview() ? computeCenterSeaFlowPath(item.id) : null;
 
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
-    createCellDataRow(areaLabel, String(cell.id)),
-    createCellDataRow("Centroid", `${cell.centroid.x.toFixed(1)}, ${cell.centroid.y.toFixed(1)}`),
-    createCellDataRow("Features", features),
-    createCellDataRow("Hill", cell.features.hill ? "yes" : "no"),
-    createCellDataRow("Hillside", cell.features.hillside ? "yes" : "no"),
-    createCellDataRow("River Preview", shouldShowRiverPreview() ? describeFlowPath(previewRiverPath) : "hidden outside step 5"),
-    createCellDataRow("Rivers", rivers.length ? rivers.map((river) => river.name).join(", ") : "none"),
-    createCellDataRow("River Length", rivers.length ? rivers.map((river) => `${river.name}: ${river.length.toFixed(1)} px`).join(" | ") : "n/a"),
-    createCellDataRow("Sublots", cell.sublotIds?.length ? String(cell.sublotIds.length) : "n/a"),
-    createCellDataRow("Boundary Sides", boundarySides),
-    createCellDataRow(segmentCollectionLabel, (cell.segmentIds || cell.edgeIds || []).join(", ") || "none"),
-    createCellDataRow("Neighbors", getNeighborIds(cell).join(", ") || "none"),
+    createCellDataRow("Id", formatGeometryId(item, kind)),
+    createCellDataRow("Features", formatFeatures(item.features)),
+    createCellDataRow("Area", `${getGeometryArea(item).toFixed(1)} px2`),
+    createCellDataRow("Neighbours", formatNeighborList(item, kind)),
   ].join("");
   drawFlowOverlay(previewRiverPath);
 }
@@ -854,21 +858,24 @@ function clearFlowOverlay() {
   svg.querySelector(`#${FLOW_OVERLAY_ID}`)?.remove();
 }
 
-function drawNeighborOverlay(cell) {
+function drawNeighborOverlay(cell, kind = null) {
   clearNeighborOverlay();
-  const neighbors = getNeighborIds(cell);
+  const neighbors = getNeighborRefs(cell, kind);
   if (!neighbors.length) {
     return;
   }
 
-  const lots = getMapLots(currentFrame?.map || {});
+  const map = currentFrame?.map || {};
+  const sublots = getSublots(map).map((sublot) => hydrateSublotGeometry(sublot, map));
+  const lots = getMapLots(map);
   const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
   overlay.setAttribute("id", HOVER_NEIGHBOR_OVERLAY_ID);
   overlay.setAttribute("pointer-events", "none");
 
   const origin = cell.centroid;
-  neighbors.forEach((neighborId) => {
-    const neighbor = lots.find((lot) => lot.id === neighborId);
+  neighbors.forEach((neighborRef) => {
+    const collection = neighborRef.type === "sublot" ? sublots : lots;
+    const neighbor = collection.find((lot) => lot.id === neighborRef.id);
     if (!neighbor) {
       return;
     }
@@ -936,7 +943,91 @@ function getNeighborIds(cell) {
     return [];
   }
 
-  return cell.neighborLotIds || cell.neighborCellIds || [];
+  return cell.neighborSublotIds || cell.neighborLotIds || cell.neighborCellIds || [];
+}
+
+function getNeighborRefs(item, kind) {
+  if (!item) {
+    return [];
+  }
+
+  if (kind === "Sublot") {
+    return [
+      ...(item.neighborSublotIds || []).map((id) => ({ type: "sublot", id })),
+      ...(item.neighborLotIds || []).map((id) => ({ type: "lot", id })),
+    ];
+  }
+
+  const type = kind === "Cell" ? "cell" : "lot";
+  return getNeighborIds(item).map((id) => ({ type, id }));
+}
+
+function formatGeometryId(item, kind) {
+  if (kind === "Sublot") {
+    return `Sublot ${item.id} (lot ${item.lotId})`;
+  }
+  return `${kind} ${item.id}`;
+}
+
+function formatNeighborList(item, kind) {
+  const neighborRefs = getNeighborRefs(item, kind);
+  if (!neighborRefs.length) {
+    return "none";
+  }
+
+  if (kind === "Sublot") {
+    const sublots = getSublots(currentFrame?.map || {});
+    return neighborRefs
+      .map((neighborRef) => {
+        if (neighborRef.type === "lot") {
+          return `Lot ${neighborRef.id}`;
+        }
+
+        const sublot = sublots.find((candidate) => candidate.id === neighborRef.id);
+        return sublot ? `Sublot ${neighborRef.id} (lot ${sublot.lotId})` : `Sublot ${neighborRef.id}`;
+      })
+      .join(", ");
+  }
+
+  return neighborRefs
+    .map((neighborRef) => `${kind} ${neighborRef.id}`)
+    .join(", ");
+}
+
+function getSublots(map) {
+  return map?.tessellation?.sublots || [];
+}
+
+function hydrateSublotGeometry(sublot, map) {
+  const vertices = new Map((map?.tessellation?.vertices || []).map((vertex) => [vertex.id, vertex]));
+  return {
+    ...sublot,
+    polygon: sublot.vertexIds.map((vertexId) => vertices.get(vertexId)).filter(Boolean),
+  };
+}
+
+function formatFeatures(features = {}) {
+  return Object.entries(features)
+    .filter(([, enabled]) => enabled)
+    .map(([name]) => name)
+    .join(", ") || "none";
+}
+
+function getGeometryArea(geometry) {
+  if (Number.isFinite(geometry.area)) {
+    return geometry.area;
+  }
+  return computePolygonArea(geometry.polygon || []);
+}
+
+function computePolygonArea(polygon) {
+  let area = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+  return Math.abs(area / 2);
 }
 
 function toSvgPoints(points) {

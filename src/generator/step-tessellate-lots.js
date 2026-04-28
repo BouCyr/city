@@ -1,7 +1,7 @@
 /*
  * WHAT: Split the largest land lots into simple two-piece sublots.
- * HOW: For the largest half of land lots, choose the shortest split between
- *      existing lot-boundary vertices whose smaller child keeps at least 40% of the parent area.
+ * HOW: For the largest half of land lots, choose the shortest split between canonical lot-boundary vertices
+ *      whose smaller child keeps at least 40% of the parent area.
  * WHY: Step 1.11 should create a sparse, deterministic subdivision based on the lot geometry.
  */
 
@@ -24,7 +24,7 @@ export function runTessellateLotsStep(map) {
     };
   }
 
-  const tessellation = buildLotTessellation(map.lots, DEFAULT_SEGMENT_LENGTH);
+  const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH);
   const lotSublotIds = new Map();
   const sublotsByLotId = new Map();
   tessellation.sublots.forEach((sublot) => {
@@ -64,10 +64,13 @@ const SPLIT_LOT_RATIO = 0.5;
 const MIN_SPLIT_CHILD_AREA_RATIO = 0.4;
 const SPLIT_SEGMENT_LENGTH_RATIO = 0.5;
 
-function buildLotTessellation(lots, segmentLength) {
+function buildLotTessellation(map, segmentLength) {
+  const lots = map.lots || [];
+  const segments = map.segments || [];
   const vertices = [];
   const vertexByKey = new Map();
   const sublots = [];
+  const splitLotIds = new Set();
   const selectedLotIds = selectLargestLandLotIds(lots);
 
   lots.forEach((lot) => {
@@ -76,16 +79,31 @@ function buildLotTessellation(lots, segmentLength) {
       return;
     }
 
-    const pieces = selectedLotIds.has(lot.id)
-      ? splitLotPolygon(polygon, segmentLength) || [polygon]
-      : [polygon];
+    if (!selectedLotIds.has(lot.id)) {
+      return;
+    }
 
+    const boundaryPoints = getBoundaryVertices(lot, segments);
+    const pieces = splitLotPolygon(boundaryPoints, segmentLength);
+    if (!pieces || pieces.length < 2) {
+      return;
+    }
+
+    const validPieces = [];
     pieces.forEach((piece, pieceIndex) => {
       const area = Math.abs(computeSignedArea(piece));
       if (piece.length < 3 || area < MIN_SUBLOT_AREA) {
         return;
       }
 
+      validPieces.push({ piece, pieceIndex, area });
+    });
+    if (validPieces.length < 2) {
+      return;
+    }
+
+    splitLotIds.add(lot.id);
+    validPieces.forEach(({ piece, pieceIndex, area }) => {
       const vertexIds = piece.map((point) => getOrCreateVertex(vertices, vertexByKey, point));
       sublots.push({
         id: sublots.length,
@@ -94,6 +112,8 @@ function buildLotTessellation(lots, segmentLength) {
         vertexIds,
         centroid: computePolygonCentroid(piece),
         area,
+        neighborSublotIds: [],
+        neighborLotIds: [],
         features: {
           ...(lot.features || {}),
         },
@@ -101,10 +121,81 @@ function buildLotTessellation(lots, segmentLength) {
     });
   });
 
+  populateSublotNeighbors(sublots, lots, segments, splitLotIds, vertices);
+
   return {
     vertices,
     sublots,
   };
+}
+
+function populateSublotNeighbors(sublots, lots, segments, splitLotIds, vertices) {
+  const edgeOwners = new Map();
+  sublots.forEach((sublot) => {
+    for (let index = 0; index < sublot.vertexIds.length; index += 1) {
+      const fromId = sublot.vertexIds[index];
+      const toId = sublot.vertexIds[(index + 1) % sublot.vertexIds.length];
+      const key = geometryEdgeKey(vertices[fromId], vertices[toId]);
+      const owners = edgeOwners.get(key) || [];
+      owners.push(sublot.id);
+      edgeOwners.set(key, owners);
+    }
+  });
+  lots.forEach((lot) => {
+    if (splitLotIds.has(lot.id)) {
+      return;
+    }
+
+    const polygon = getBoundaryVertices(lot, segments);
+    for (let index = 0; index < polygon.length; index += 1) {
+      const from = polygon[index];
+      const to = polygon[(index + 1) % polygon.length];
+      const key = geometryEdgeKey(from, to);
+      const owners = edgeOwners.get(key) || [];
+      owners.push(`lot:${lot.id}`);
+      edgeOwners.set(key, owners);
+    }
+  });
+
+  const sublotById = new Map(sublots.map((sublot) => [sublot.id, sublot]));
+  edgeOwners.forEach((owners) => {
+    if (owners.length < 2) {
+      return;
+    }
+
+    owners.forEach((ownerKey) => {
+      if (typeof ownerKey !== "number") {
+        return;
+      }
+
+      const owner = sublotById.get(ownerKey);
+      if (!owner) {
+        return;
+      }
+      owners.forEach((neighborKey) => {
+        if (neighborKey === ownerKey) {
+          return;
+        }
+
+        if (typeof neighborKey === "number" && !owner.neighborSublotIds.includes(neighborKey)) {
+          owner.neighborSublotIds.push(neighborKey);
+          return;
+        }
+
+        if (typeof neighborKey === "string") {
+          const lotId = Number(neighborKey.slice(4));
+          if (Number.isFinite(lotId) && !owner.neighborLotIds.includes(lotId)) {
+            owner.neighborLotIds.push(lotId);
+          }
+        }
+      });
+    });
+  });
+
+  sublots.forEach((sublot) => {
+    sublot.neighborSublotIds.sort((first, second) => first - second);
+    sublot.neighborLotIds.sort((first, second) => first - second);
+  });
 }
 
 function selectLargestLandLotIds(lots) {
@@ -126,8 +217,7 @@ function selectLargestLandLotIds(lots) {
   return new Set(landLots.slice(0, selectedCount).map((lot) => lot.id));
 }
 
-function splitLotPolygon(polygon, segmentLength) {
-  const boundaryPoints = getBoundaryVertices(polygon);
+function splitLotPolygon(boundaryPoints, segmentLength) {
   const split = findShortestBalancedSplit(boundaryPoints);
   if (!split) {
     return null;
@@ -137,8 +227,45 @@ function splitLotPolygon(polygon, segmentLength) {
   return splitBetweenBoundaryPoints(boundaryPoints, split.firstIndex, split.secondIndex, splitSegmentLength);
 }
 
-function getBoundaryVertices(polygon) {
-  return normalizePolygon(polygon || []);
+function getBoundaryVertices(lot, segments) {
+  const polygon = normalizePolygon(lot.polygon || []);
+  const boundaryPoints = collectSegmentBoundaryPoints(lot, segments);
+  if (!boundaryPoints.length) {
+    return polygon;
+  }
+
+  const expanded = [];
+  for (let index = 0; index < polygon.length; index += 1) {
+    const from = polygon[index];
+    const to = polygon[(index + 1) % polygon.length];
+    expanded.push(clonePoint(from));
+
+    boundaryPoints
+      .filter((point) => !pointsMatch(point, from) && !pointsMatch(point, to))
+      .filter((point) => pointLiesOnSegment(point, from, to))
+      .sort((first, second) => pointDistance(from, first) - pointDistance(from, second))
+      .forEach((point) => {
+        const previous = expanded[expanded.length - 1];
+        if (!previous || !pointsMatch(previous, point)) {
+          expanded.push(clonePoint(point));
+        }
+      });
+  }
+
+  return normalizePolygon(expanded);
+}
+
+function collectSegmentBoundaryPoints(lot, segments) {
+  const pointsByKey = new Map();
+  segments.forEach((segment) => {
+    if (segment.leftLotId !== lot.id && segment.rightLotId !== lot.id) {
+      return;
+    }
+
+    pointsByKey.set(pointKey(segment.from), clonePoint(segment.from));
+    pointsByKey.set(pointKey(segment.to), clonePoint(segment.to));
+  });
+  return Array.from(pointsByKey.values());
 }
 
 function findShortestBalancedSplit(boundaryPoints) {
@@ -236,6 +363,25 @@ function resampleSegment(from, to, targetLength) {
   return points;
 }
 
+function pointLiesOnSegment(point, from, to) {
+  const segmentLength = pointDistance(from, to);
+  if (segmentLength <= EPSILON) {
+    return false;
+  }
+
+  const offset = Math.abs((to.x - from.x) * (point.y - from.y) - (to.y - from.y) * (point.x - from.x));
+  if (offset > EPSILON * Math.max(1, segmentLength)) {
+    return false;
+  }
+
+  const along = ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / (segmentLength ** 2);
+  return along > EPSILON && along < 1 - EPSILON;
+}
+
+function pointsMatch(first, second) {
+  return pointDistance(first, second) <= EPSILON;
+}
+
 function normalizePolygon(points) {
   const normalized = [];
   points.forEach((point) => {
@@ -313,6 +459,12 @@ function getOrCreateVertex(vertices, vertexByKey, point) {
   });
   vertexByKey.set(key, id);
   return id;
+}
+
+function geometryEdgeKey(from, to) {
+  const fromKey = pointKey(from);
+  const toKey = pointKey(to);
+  return fromKey < toKey ? `${fromKey}|${toKey}` : `${toKey}|${fromKey}`;
 }
 
 function pointKey(point) {
