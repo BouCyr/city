@@ -44,9 +44,14 @@ export function createInitialMap(options) {
       stepLabel: "Blank map",
     },
     points: [],
+    vertices: [],
     cells: [],
     edges: [],
     rivers: [],
+    river: {
+      primary: null,
+      secondary: null,
+    },
     water: {
       sides: [],
       seaCellIds: [],
@@ -86,10 +91,13 @@ function snapshotMap(map) {
 }
 
 export function buildCanonicalGeometry(diagram) {
+  const vertices = [];
+  const vertexByKey = new Map();
   const cells = diagram.cells.map((cell) => {
     const boundarySides = Object.entries(cell.touches)
       .filter(([, touched]) => touched)
       .map(([side]) => side);
+    const vertexIds = cell.polygon.map((point) => getOrCreateGeometryVertex(vertices, vertexByKey, point));
 
     return {
       id: cell.id,
@@ -103,6 +111,7 @@ export function buildCanonicalGeometry(diagram) {
         y: cell.centroid.y,
       },
       polygon: cell.polygon.map((point) => ({ x: point.x, y: point.y })),
+      vertexIds,
       edgeIds: [],
       neighborCellIds: [],
       boundarySides,
@@ -121,6 +130,12 @@ export function buildCanonicalGeometry(diagram) {
   const cellById = new Map(cells.map((cell) => [cell.id, cell]));
   const edges = diagram.edges.map((edge) => {
     const oriented = orientEdge(edge, cellById, diagram.width, diagram.height);
+    const fromVertexId = getOrCreateGeometryVertex(vertices, vertexByKey, oriented.from);
+    const toVertexId = getOrCreateGeometryVertex(vertices, vertexByKey, oriented.to);
+    oriented.fromVertexId = fromVertexId;
+    oriented.toVertexId = toVertexId;
+    vertices[fromVertexId].edgeIds.push(oriented.id);
+    vertices[toVertexId].edgeIds.push(oriented.id);
     if (oriented.leftCellId !== null) {
       cellById.get(oriented.leftCellId)?.edgeIds.push(oriented.id);
     }
@@ -145,7 +160,7 @@ export function buildCanonicalGeometry(diagram) {
     }
   });
 
-  return { cells, edges };
+  return { vertices, cells, edges };
 }
 
 export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
@@ -155,17 +170,18 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
 
   const cells = map.cells || [];
   const edges = map.edges || [];
+  const vertices = [];
+  const vertexByKey = new Map();
   const lots = cells.map((cell) => ({
     id: cell.id,
     site: clonePoint(cell.site),
     centroid: clonePoint(cell.centroid),
     polygon: cell.polygon.map((point) => clonePoint(point)),
+    vertexIds: cell.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point)),
     segmentIds: [],
     neighborLotIds: [],
     boundarySides: [...(cell.boundarySides || [])],
-    features: {
-      ...cell.features,
-    },
+    features: lotFeaturesFromCell(cell),
   }));
   const lotById = new Map(lots.map((lot) => [lot.id, lot]));
   const segments = [];
@@ -181,22 +197,25 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
     for (let index = 0; index < resolvedSegmentCount; index += 1) {
       const from = sampledPoints[index];
       const to = sampledPoints[index + 1];
+      const fromVertexId = getOrCreateLotVertex(vertices, vertexByKey, from);
+      const toVertexId = getOrCreateLotVertex(vertices, vertexByKey, to);
+      const features = buildLotBoundaryFeatures(edge, lotById);
       const segment = {
         id: `${edge.id}:${index}`,
         edgeId: edge.id,
+        fromVertexId,
+        toVertexId,
         from: clonePoint(from),
         to: clonePoint(to),
         midpoint: midpointBetween(from, to),
         length: pointDistance(from, to),
         leftLotId,
         rightLotId,
-        features: {
-          boundary: Boolean(edge.features?.boundary),
-          sea: Boolean(edge.features?.sea),
-          river: Boolean(edge.features?.river),
-        },
+        features,
       };
       segments.push(segment);
+      vertices[fromVertexId].segmentIds.push(segment.id);
+      vertices[toVertexId].segmentIds.push(segment.id);
       if (leftLotId !== null) {
         lotById.get(leftLotId)?.segmentIds.push(segment.id);
       }
@@ -220,10 +239,12 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
   lots.forEach((lot) => {
     lot.neighborLotIds.sort((first, second) => first - second);
   });
+  applyVertexFeaturesFromSegments(vertices, segments);
 
-  const { cells: _cells, edges: _edges, ...rest } = map;
+  const { cells: _cells, edges: _edges, vertices: _cellVertices, ...rest } = map;
   return {
     ...rest,
+    vertices,
     lots,
     segments,
   };
@@ -238,24 +259,6 @@ export function getMapGeometry(map) {
 
 export function getMapLots(map) {
   return getMapGeometry(map).lots;
-}
-
-export function clearTemporaryHillFeatures(map) {
-  if (!Array.isArray(map.cells) || !map.cells.length) {
-    return map;
-  }
-
-  return {
-    ...map,
-    cells: map.cells.map((cell) => ({
-      ...cell,
-      features: {
-        ...cell.features,
-        hill: false,
-        hillside: false,
-      },
-    })),
-  };
 }
 
 function orientEdge(edge, cellById, width, height) {
@@ -301,6 +304,89 @@ function orientEdge(edge, cellById, width, height) {
       river: false,
     },
   };
+}
+
+function getOrCreateGeometryVertex(vertices, vertexByKey, point) {
+  const key = pointKey(point);
+  const existingId = vertexByKey.get(key);
+  if (existingId !== undefined) {
+    return existingId;
+  }
+
+  const id = vertices.length;
+  vertices.push({
+    id,
+    x: point.x,
+    y: point.y,
+    edgeIds: [],
+  });
+  vertexByKey.set(key, id);
+  return id;
+}
+
+function getOrCreateLotVertex(vertices, vertexByKey, point) {
+  const key = pointKey(point);
+  const existingId = vertexByKey.get(key);
+  if (existingId !== undefined) {
+    return existingId;
+  }
+
+  const id = vertices.length;
+  vertices.push({
+    id,
+    x: point.x,
+    y: point.y,
+    segmentIds: [],
+    features: {
+      coast: false,
+      land: false,
+      sea: false,
+      riverside: false,
+    },
+  });
+  vertexByKey.set(key, id);
+  return id;
+}
+
+function buildLotBoundaryFeatures(edge, lotById) {
+  const leftLot = edge.leftCellId === null ? null : lotById.get(edge.leftCellId);
+  const rightLot = edge.rightCellId === null ? null : lotById.get(edge.rightCellId);
+  const leftSea = Boolean(leftLot?.features.sea);
+  const rightSea = Boolean(rightLot?.features.sea);
+  const hasLand = Boolean(leftLot?.features.land || rightLot?.features.land);
+  const hasSea = Boolean(leftSea || rightSea);
+  const coast = Boolean(hasLand && hasSea && leftSea !== rightSea);
+
+  return {
+    boundary: Boolean(edge.features?.boundary),
+    coast,
+    land: hasLand && !coast,
+    sea: Boolean(edge.features?.sea),
+    river: Boolean(edge.features?.river),
+    riverside: false,
+  };
+}
+
+function lotFeaturesFromCell(cell) {
+  const { hill: _hill, hillside: _hillside, ...features } = cell.features || {};
+  return features;
+}
+
+function applyVertexFeaturesFromSegments(vertices, segments) {
+  const segmentById = new Map(segments.map((segment) => [segment.id, segment]));
+  vertices.forEach((vertex) => {
+    const featureList = vertex.segmentIds.map((segmentId) => segmentById.get(segmentId)?.features).filter(Boolean);
+    vertex.features = {
+      coast: featureList.some((features) => features.coast),
+      land: featureList.some((features) => features.land || features.coast),
+      sea: featureList.some((features) => features.sea),
+      riverside: featureList.some((features) => features.riverside),
+    };
+  });
+}
+
+function pointKey(point) {
+  return `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
 }
 
 export function normalizePolyline(points) {

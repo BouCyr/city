@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a small static web app. The entry page is [`index.html`](/mnt/c/dev/city/index.html), shared styling lives in [`styles.css`](/mnt/c/dev/city/styles.css), and application logic is split under [`src/`](/mnt/c/dev/city/src). Use `src/ui/` for form and status interactions, `src/generator/` for deterministic map logic, `src/render/` for canvas drawing, and `src/lib/` for thin wrappers around third-party libraries. Keep the implemented step list aligned between [`src/generator/steps.js`](/mnt/c/dev/city/src/generator/steps.js) and [`GENERATION_STEPS.md`](/mnt/c/dev/city/GENERATION_STEPS.md).
+This repository is a small static web app. The entry page is [`index.html`](/mnt/c/dev/city/index.html), shared styling lives in [`styles.css`](/mnt/c/dev/city/styles.css), and application logic is split under [`src/`](/mnt/c/dev/city/src). Use `src/ui/` for form and status interactions, `src/generator/` for deterministic map logic, `src/render/` for canvas drawing, and `src/lib/` for thin wrappers around third-party libraries. Keep the implemented step list aligned between [`src/generator/steps.js`](/mnt/c/dev/city/src/generator/steps.js) and [`GENERATION_STEPS.md`](/mnt/c/dev/city/GENERATION_STEPS.md). Each generation step belongs in its own `src/generator/step-*.js` file, with the exported step function as the first function in that file. Shared behavior used by multiple steps belongs in helper files grouped by usage, for example graph traversal, river modeling, geometry, or map-model conversion helpers.
 
 ## Build, Test, and Development Commands
 No build step is required. Run a simple local server for module-safe development:
@@ -13,7 +13,7 @@ python -m http.server 8000
 Then visit `http://localhost:8000`. There is no automated test runner yet, so validate changes by generating multiple maps, reusing the same seed to confirm deterministic output, and checking that Voronoi cells, sea fills, and step updates stay in sync.
 
 ## Coding Style & Naming Conventions
-Use modern ES modules and keep code ASCII unless a file already requires otherwise. Prefer `const` and `let`, small pure functions, and descriptive camelCase names such as `generateCity` or `buildVoronoiDiagram`. Keep DOM wiring in `src/ui/`, rendering logic in `src/render/`, generator math in `src/generator/`, and third-party calls inside dedicated wrappers under `src/lib/`. Match the existing two-space indentation in HTML and CSS and consistent semicolon-free JavaScript style.
+Use modern ES modules and keep code ASCII unless a file already requires otherwise. Prefer `const` and `let`, small pure functions, and descriptive camelCase names such as `generateCity` or `buildVoronoiDiagram`. Treat each generator step as a simple geometry function: step 1.1 starts from the seeded RNG, and each later step takes the exact output of the previous step. Through step 1.7, operate on point, vertex, edge, and cell geometry; from step 1.8 onward, operate only on lot, vertex, and segment geometry. Keep DOM wiring in `src/ui/`, rendering logic in `src/render/`, generator math in `src/generator/`, and third-party calls inside dedicated wrappers under `src/lib/`. Match the existing two-space indentation in HTML and CSS and consistent semicolon-free JavaScript style.
 
 ## Testing Guidelines
 Manual verification is currently the project standard. Before submitting, check:

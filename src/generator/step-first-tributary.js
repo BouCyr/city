@@ -5,25 +5,17 @@
  * WHY: Tributaries should read as distinct feeders rather than overlapping the main stem or merging too close to the sea.
  */
 
+import { computeCellDistances } from "./cell-graph.js";
 import { computeSeaDistances, findLandPathToTargets } from "./river-path.js";
-
-const RIVER_NAMES = [
-  "Valdombra",
-  "Fiume Serrano",
-  "Torrente Belloro",
-  "Rio Castellano",
-  "Fiumara Lucente",
-  "Torrente Virelli",
-  "Rio Montesco",
-  "Fiume Caldoro",
-  "Torrente Azzurri",
-  "Rio Ventoro",
-];
+import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "./river-model.js";
 
 export function runFirstTributaryStep(map, { rng }) {
   const tributary = chooseFirstTributary(map, rng);
   const rivers = tributary ? applyRiverWidths(map, map.rivers, tributary) : map.rivers;
-  const nextMap = attachRiverData(map, rivers);
+  const nextMap = attachRiverData(map, {
+    primary: rivers[0] ?? null,
+    secondary: rivers[1] ?? null,
+  });
 
   return {
     map: nextMap,
@@ -46,7 +38,7 @@ function chooseFirstTributary(map, rng) {
   const tributaryWidthRatio = map.init.params.tributaryWidthRatio ?? 0.72;
   const minSourceRiverDistance = map.init.params.tributarySourceRiverDistance ?? 6;
   const minMergeSeaDistance = map.init.params.tributaryMergeSeaDistance ?? 5;
-  const riverDistances = computeDistancesFromSources(map, primaryRiver.cellIds);
+  const riverDistances = computeCellDistances(map.cells, primaryRiver.cellIds);
 
   const mergeTargets = buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance, minTurnAngleDegrees);
   if (!mergeTargets.size) {
@@ -182,71 +174,6 @@ function mergeRank(primaryRiver, mergeCellId) {
   return primaryRiver.cellIds.length - index;
 }
 
-function attachRiverData(map, rivers) {
-  const riverCellIds = new Set(rivers.flatMap((river) => river.cellIds));
-  const cells = map.cells.map((cell) => ({
-    ...cell,
-    features: {
-      ...cell.features,
-      river: riverCellIds.has(cell.id),
-    },
-  }));
-
-  return {
-    ...map,
-    cells,
-    rivers,
-  };
-}
-
-function findSourceBoundaryMidpoint(map, cell) {
-  const boundaryEdges = map.edges.filter((edge) =>
-    cell.edgeIds.includes(edge.id)
-    && edge.features.boundary
-    && [edge.leftCellId, edge.rightCellId].filter((cellId) => cellId === cell.id).length === 1,
-  );
-
-  if (!boundaryEdges.length) {
-    return null;
-  }
-
-  const side = cell.boundarySides[0];
-  const matchingEdge = boundaryEdges.find((edge) => edgeOnSide(edge, map.meta.size, side)) || boundaryEdges[0];
-  return matchingEdge ? { x: matchingEdge.midpoint.x, y: matchingEdge.midpoint.y } : null;
-}
-
-function edgeOnSide(edge, mapSize, side, epsilon = 0.75) {
-  if (side === "north") {
-    return Math.abs(edge.from.y) <= epsilon && Math.abs(edge.to.y) <= epsilon;
-  }
-  if (side === "south") {
-    return Math.abs(edge.from.y - mapSize) <= epsilon && Math.abs(edge.to.y - mapSize) <= epsilon;
-  }
-  if (side === "west") {
-    return Math.abs(edge.from.x) <= epsilon && Math.abs(edge.to.x) <= epsilon;
-  }
-  if (side === "east") {
-    return Math.abs(edge.from.x - mapSize) <= epsilon && Math.abs(edge.to.x - mapSize) <= epsilon;
-  }
-  return false;
-}
-
-function buildRiverLength(sourcePoint, points) {
-  let length = 0;
-  let previousPoint = sourcePoint;
-  points.forEach((point) => {
-    length += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
-    previousPoint = point;
-  });
-  return length;
-}
-
-function chooseRiverName(rng, existingRivers) {
-  const usedNames = new Set(existingRivers.map((river) => river.name));
-  const availableNames = RIVER_NAMES.filter((name) => !usedNames.has(name));
-  return rng.pick(availableNames.length ? availableNames : RIVER_NAMES);
-}
-
 function applyRiverWidths(map, rivers, tributary) {
   const primaryMergeWidthGain = map.init.params.primaryMergeWidthGain ?? 1.2;
   const updatedPrimary = rivers.map((river) => {
@@ -312,31 +239,3 @@ function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
   return Math.acos(clampedCosine) * (180 / Math.PI);
 }
 
-function computeDistancesFromSources(map, sourceCellIds) {
-  const distances = Array.from({ length: map.cells.length }, () => Infinity);
-  const queue = [];
-
-  sourceCellIds.forEach((cellId) => {
-    distances[cellId] = 0;
-    queue.push(cellId);
-  });
-
-  for (let index = 0; index < queue.length; index += 1) {
-    const cellId = queue[index];
-    const cell = map.cells[cellId];
-    if (!cell) {
-      continue;
-    }
-
-    cell.neighborCellIds.forEach((neighborId) => {
-      if (distances[cellId] + 1 >= distances[neighborId]) {
-        return;
-      }
-
-      distances[neighborId] = distances[cellId] + 1;
-      queue.push(neighborId);
-    });
-  }
-
-  return distances;
-}

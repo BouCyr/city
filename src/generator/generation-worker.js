@@ -165,8 +165,9 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 9:
       return {
-        sublotLloydPasses: options.sublotLloydPasses ?? 2,
-        sublotBorderDistance: options.sublotBorderDistance ?? 7,
+        selectedLandLotRatio: 0.5,
+        minimumSplitChildAreaRatio: 0.4,
+        splitSegmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
       };
     default:
       return null;

@@ -5,7 +5,7 @@
  */
 
 import { createSeededRandom } from "./random.js";
-import { BLANK_STEP_INDEX, clearTemporaryHillFeatures, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
+import { BLANK_STEP_INDEX, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
 import { runBuildVoronoiStep } from "./step-build-voronoi.js";
 import { runApplyWaterStep } from "./step-apply-water.js";
 import { runFlagHillsStep } from "./step-flag-hills.js";
@@ -26,7 +26,7 @@ const GENERATION_PIPELINE = [
   { status: "Hills", run: runFlagHillsStep },
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },
-  { status: "Lots", run: (map) => runConvertLotsStep(clearTemporaryHillFeatures(map)) },
+  { status: "Lots", run: runConvertLotsStep },
   { status: "River Lots", run: runAddRiversToLotGeometryStep },
   { status: "Tessellation", run: runTessellateLotsStep },
 ];

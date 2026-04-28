@@ -5,6 +5,8 @@
  * WHY: Hills should form a distinct inland belt, and the surrounding slopes should read as a secondary terrain zone.
  */
 
+import { computeCellDistances } from "./cell-graph.js";
+
 export function runFlagHillsStep(map, { rng }) {
   const hillCellIds = chooseHillCells(map, rng, map.init.params.hillCount ?? 0);
   const hillIds = new Set(hillCellIds);
@@ -39,7 +41,7 @@ function chooseHillCells(map, rng, targetCount) {
     return [];
   }
 
-  const seaDistances = computeCellDistances(map, map.cells.filter((cell) => cell.features.sea).map((cell) => cell.id));
+  const seaDistances = computeCellDistances(map.cells, map.cells.filter((cell) => cell.features.sea).map((cell) => cell.id));
   const hillSeaDistance = map.init.params.hillSeaDistance ?? 4;
   const candidates = map.cells.filter((cell) => cell.features.land && seaDistances[cell.id] >= hillSeaDistance);
   if (!candidates.length) {
@@ -50,7 +52,7 @@ function chooseHillCells(map, rng, targetCount) {
 
   while (selectedIds.length < normalizedTarget && selectedIds.length < candidates.length) {
     const selectedSet = new Set(selectedIds);
-    const hillDistances = computeCellDistances(map, selectedIds);
+    const hillDistances = computeCellDistances(map.cells, selectedIds);
     const remainingCandidates = candidates.filter((cell) => !selectedSet.has(cell.id));
     if (!remainingCandidates.length) {
       break;
@@ -93,40 +95,10 @@ function collectHillsides(map, hillCellIds) {
   }
 
   const hillsideRadius = map.init.params.hillsideRadius ?? 2;
-  const hillDistances = computeCellDistances(map, hillCellIds);
+  const hillDistances = computeCellDistances(map.cells, hillCellIds);
   return new Set(
     map.cells
       .filter((cell) => cell.features.land && hillDistances[cell.id] > 0 && hillDistances[cell.id] <= hillsideRadius)
       .map((cell) => cell.id),
   );
-}
-
-function computeCellDistances(map, sourceCellIds) {
-  const distances = Array.from({ length: map.cells.length }, () => Infinity);
-  const queue = [];
-
-  sourceCellIds.forEach((cellId) => {
-    distances[cellId] = 0;
-    queue.push(cellId);
-  });
-
-  for (let index = 0; index < queue.length; index += 1) {
-    const cellId = queue[index];
-    const distance = distances[cellId];
-    const cell = map.cells[cellId];
-    if (!cell) {
-      continue;
-    }
-
-    cell.neighborCellIds.forEach((neighborId) => {
-      if (distance + 1 >= distances[neighborId]) {
-        return;
-      }
-
-      distances[neighborId] = distance + 1;
-      queue.push(neighborId);
-    });
-  }
-
-  return distances;
 }

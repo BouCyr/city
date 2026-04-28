@@ -16,11 +16,6 @@ import {
   resamplePolyline,
 } from "./map-model.js";
 
-const EPSILON = 0.0001;
-const POINT_EPSILON = 0.05;
-const GRAPH_NODE_EPSILON = 0.05;
-const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
-
 export function runAddRiversToLotGeometryStep(map) {
   if (!Array.isArray(map.lots) || !map.lots.length || !Array.isArray(map.rivers) || !map.rivers.length) {
     return {
@@ -47,6 +42,11 @@ export function runAddRiversToLotGeometryStep(map) {
     ],
   };
 }
+
+const EPSILON = 0.0001;
+const POINT_EPSILON = 0.05;
+const GRAPH_NODE_EPSILON = 0.05;
+const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
 
 function buildRiverSegmentModel(rivers) {
   const nodes = [];
@@ -153,6 +153,7 @@ function splitLotsByRiverGraph(map, riverGraph) {
   const rebuilt = rebuildSegmentsFromLots(splitLots, riverGraph);
   return {
     ...map,
+    vertices: rebuilt.vertices,
     lots: rebuilt.lots,
     segments: rebuilt.segments,
     riverSegments: riverGraph.segments.map((segment) => ({
@@ -414,8 +415,11 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
             rightLotId: side < 0 ? lot.id : null,
             features: {
               boundary: false,
+              coast: false,
+              land: false,
               sea: false,
               river: riverEdgeKeys.has(edgeKey(sampleFrom, sampleTo)),
+              riverside: riverEdgeKeys.has(edgeKey(sampleFrom, sampleTo)),
             },
           });
           continue;
@@ -437,10 +441,7 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     features: {
       ...segment.features,
       boundary: segment.leftLotId === null || segment.rightLotId === null,
-      sea: Boolean(
-        (segment.leftLotId !== null && lotById.get(segment.leftLotId)?.features.sea)
-        && (segment.rightLotId !== null && lotById.get(segment.rightLotId)?.features.sea)
-      ),
+      ...buildSegmentSurfaceFeatures(segment, lotById),
     },
   }));
 
@@ -471,10 +472,82 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     lot.neighborLotIds.sort((first, second) => first - second);
   });
 
+  const vertices = rebuildLotVertices(normalizedLots, segments);
+
   return {
+    vertices,
     lots: normalizedLots,
     segments,
   };
+}
+
+function buildSegmentSurfaceFeatures(segment, lotById) {
+  const leftLot = segment.leftLotId === null ? null : lotById.get(segment.leftLotId);
+  const rightLot = segment.rightLotId === null ? null : lotById.get(segment.rightLotId);
+  const leftSea = Boolean(leftLot?.features.sea);
+  const rightSea = Boolean(rightLot?.features.sea);
+  const hasSea = Boolean(leftSea || rightSea);
+  const hasLand = Boolean(leftLot?.features.land || rightLot?.features.land);
+  const coast = Boolean(hasSea && hasLand && leftSea !== rightSea);
+
+  return {
+    coast,
+    land: hasLand && !coast,
+    sea: Boolean(leftSea && rightSea),
+    riverside: Boolean(segment.features.river),
+  };
+}
+
+function rebuildLotVertices(lots, segments) {
+  const vertices = [];
+  const vertexByKey = new Map();
+  lots.forEach((lot) => {
+    lot.vertexIds = lot.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point));
+  });
+
+  segments.forEach((segment) => {
+    segment.fromVertexId = getOrCreateLotVertex(vertices, vertexByKey, segment.from);
+    segment.toVertexId = getOrCreateLotVertex(vertices, vertexByKey, segment.to);
+    vertices[segment.fromVertexId].segmentIds.push(segment.id);
+    vertices[segment.toVertexId].segmentIds.push(segment.id);
+  });
+
+  const segmentById = new Map(segments.map((segment) => [segment.id, segment]));
+  vertices.forEach((vertex) => {
+    const featureList = vertex.segmentIds.map((segmentId) => segmentById.get(segmentId)?.features).filter(Boolean);
+    vertex.features = {
+      coast: featureList.some((features) => features.coast),
+      land: featureList.some((features) => features.land || features.coast),
+      sea: featureList.some((features) => features.sea),
+      riverside: featureList.some((features) => features.riverside),
+    };
+  });
+
+  return vertices;
+}
+
+function getOrCreateLotVertex(vertices, vertexByKey, point) {
+  const key = pointKey(point);
+  const existingId = vertexByKey.get(key);
+  if (existingId !== undefined) {
+    return existingId;
+  }
+
+  const id = vertices.length;
+  vertices.push({
+    id,
+    x: point.x,
+    y: point.y,
+    segmentIds: [],
+    features: {
+      coast: false,
+      land: false,
+      sea: false,
+      riverside: false,
+    },
+  });
+  vertexByKey.set(key, id);
+  return id;
 }
 
 function synchronizeLotBoundaryVertices(lots) {

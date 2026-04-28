@@ -1,14 +1,8 @@
 # Generation Steps
 
-This file is the human-readable spec for the implemented generation pipeline.
+This file is the implemented geometry contract for the deterministic generation pipeline. Keep it aligned with `src/generator/steps.js`, `src/generator/city-generator.js`, and the step files under `src/generator/`.
 
-It must stay aligned with:
-- `src/generator/steps.js`
-- `src/generator/city-generator.js`
-- the step modules under `src/generator/`
-- shared river-path constraints in `src/generator/river-path.js`
-
-If generation rules change, update this file in the same change.
+Each step is a simple function. Its input is exactly the previous step output, except step 1.1, which takes the seeded RNG and initial parameters. Each step owns one file, and any helper used by more than one step belongs in a helper module such as `cell-graph.js`, `geometry.js`, `map-model.js`, `river-model.js`, or `river-path.js`.
 
 ## Canonical Order
 
@@ -25,403 +19,429 @@ If generation rules change, update this file in the same change.
 1.10 Tessellate lot geometry
 2. Human usage
 
-Notes:
-- The current implemented generation pipeline only executes the `Geographical feature` branch.
-- `Human usage` is a reserved root step in the UI tree and is currently empty.
+`Human usage` is reserved and has no implemented child steps yet.
 
-## Shared Data Rules
+## Geometry Rules
 
-- The generator operates on one canonical `map` object.
-- User-facing generation controls are grouped in collapsible UI sections:
-  - one root group for `Geographical Feature Controls`
-  - one root group for `Human Usage Controls`
-  - nested subgroups per implemented generation step
-- Cells expose, through step 1.7:
-  - `id`
-  - `site`
-  - `centroid`
-  - `polygon`
-  - `edgeIds`
-  - `neighborCellIds`
-  - `boundarySides`
-  - `features`
-- Cell `features` currently include:
-  - `land`
-  - `sea`
-  - `hill`
-  - `hillside`
-  - `river`
-  - `boundary`
-  - `cityCenter`
-- Lots expose, from step 1.8 onward:
-  - `id`
-  - `site`
-  - `centroid`
-  - `polygon`
-  - `segmentIds`
-  - `neighborLotIds`
-  - `boundarySides`
-  - `features`
-- Lot `features` preserve cell flags except temporary hill and hillside flags, which are cleared after step 1.7.
-- Segments expose:
-  - `id`
-  - `from`
-  - `to`
-  - `midpoint`
-  - `length`
-  - `leftLotId`
-  - `rightLotId`
-  - `features`
-- From step 1.9 onward, river/lot crossing points are shared between lot polygons and river-derived segments.
-- From step 1.10 onward, `map.tessellation` exposes shared mesh vertices and Voronoi sublots.
-- Cell and lot adjacency are derived from real clipped Voronoi shared edges, not directly from raw Delaunay neighbors.
+Through step 1.7 the map is cell geometry:
 
-## 1. Scatter Pseudo-Random Points
+```js
+{
+  meta: { size: 1000, stepIndex: 6, stepLabel: "Trace the first river" },
+  points: [{ id: 0, x: 120, y: 240 }, ...],
+  vertices: [{ id: 0, x: 10, y: 20, edgeIds: ["0-1-..."] }, ...],
+  edges: [{
+    id: "0-1-...",
+    fromVertexId: 0,
+    toVertexId: 1,
+    from: { x: 10, y: 20 },
+    to: { x: 30, y: 40 },
+    leftCellId: 0,
+    rightCellId: 1,
+    features: { boundary: false, sea: false, river: false }
+  }, ...],
+  cells: [{
+    id: 0,
+    site: { id: 0, x: 120, y: 240 },
+    centroid: { x: 125, y: 236 },
+    vertexIds: [0, 1, 2, ...],
+    edgeIds: ["0-1-...", ...],
+    neighborCellIds: [1, 8, ...],
+    boundarySides: [],
+    features: { land: true, sea: false, hill: false, hillside: false, river: false, boundary: false, cityCenter: false }
+  }, ...],
+  river: { primary: null, secondary: null },
+  rivers: []
+}
+```
+
+From step 1.8 onward the map is lot geometry. Previous `cells`, `edges`, and cell `vertices` are not part of the output:
+
+```js
+{
+  lots: [{
+    id: 0,
+    centroid: { x: 125, y: 236 },
+    polygon: [{ x: 10, y: 20 }, ...],
+    vertexIds: [0, 1, 2, ...],
+    segmentIds: ["boundary-0:0", ...],
+    neighborLotIds: [1, 8, ...],
+    features: { land: true, sea: false, river: false, boundary: false, cityCenter: false }
+  }, ...],
+  vertices: [{
+    id: 0,
+    x: 10,
+    y: 20,
+    segmentIds: ["boundary-0:0", ...],
+    features: { coast: false, land: true, sea: false, riverside: false }
+  }, ...],
+  segments: [{
+    id: "boundary-0:0",
+    fromVertexId: 0,
+    toVertexId: 1,
+    from: { x: 10, y: 20 },
+    to: { x: 18, y: 26 },
+    leftLotId: 0,
+    rightLotId: 1,
+    features: { boundary: false, coast: false, land: true, sea: false, river: false, riverside: false }
+  }, ...],
+  river: { primary: { ... }, secondary: { ... } },
+  rivers: [{ ... }, { ... }]
+}
+```
+
+The `rivers` array is kept for renderer compatibility. The canonical named fields are `river.primary` and `river.secondary`.
+
+## 1.1 Scatter Pseudo-Random Points
 
 Source: `src/generator/step-scatter-points.js`
 
-Business rules:
-- The seeded RNG is the only source of randomness for point placement.
-- `pointCount` points are created.
-- Points are not allowed to lie directly on the map border.
-- The scatter padding ratio is user-controlled.
-- Default scatter padding ratio is `0.01`.
-- Allowed scatter padding ratio range is `0` to `0.1`.
+Function input:
+
+```js
+{
+  rng,
+  map: {
+    meta: { size: 1000 },
+    init: { params: { pointCount: 500, scatterPaddingRatio: 0.01, ... } }
+  }
+}
+```
+
+Function output:
+
+```js
+{
+  points: [{ id: 0, x: 123.4, y: 456.7 }, ...],
+  vertices: [],
+  cells: [],
+  edges: [],
+  river: { primary: null, secondary: null },
+  rivers: []
+}
+```
+
+Rules:
+- The seeded RNG is the only source of randomness.
 - Point ids are sequential and stable from `0` to `pointCount - 1`.
+- Points are sampled inside the map bounds with `scatterPaddingRatio`.
 
-State effects:
-- Replaces `map.points`.
-- Clears previous `cells`, `edges`, `rivers`, `water`, and city-center state.
+## 1.2 Compute Voronoi Cells And Edges
 
-## 2. Compute Voronoi Cells And Edges
+Source: `src/generator/step-build-voronoi.js`
 
-Source:
-- `src/generator/step-build-voronoi.js`
-- `src/lib/voronoi-client.js`
-- `src/generator/map-model.js`
+Function input:
 
-Business rules:
+```js
+{
+  points: [{ id: 0, x: 123.4, y: 456.7 }, ...],
+  meta: { size: 1000 }
+}
+```
+
+Function output:
+
+```js
+{
+  points: [{ id: 0, x: 123.4, y: 456.7 }, ...],
+  vertices: [{ id: 0, x: 100, y: 200, edgeIds: ["0-1-..."] }, ...],
+  edges: [{
+    id: "0-1-...",
+    fromVertexId: 0,
+    toVertexId: 1,
+    leftCellId: 0,
+    rightCellId: 1,
+    features: { boundary: false, sea: false, river: false }
+  }, ...],
+  cells: [{
+    id: 0,
+    vertexIds: [0, 1, 2, ...],
+    edgeIds: ["0-1-...", ...],
+    neighborCellIds: [1, 7, ...],
+    features: { land: true, sea: false, hill: false, hillside: false, river: false, boundary: false, cityCenter: false }
+  }, ...]
+}
+```
+
+Rules:
 - The Voronoi diagram is clipped to the rectangular map bounds.
-- Cell polygons are sanitized and deduplicated.
-- Cell centroids are computed from polygon area when possible.
-- Boundary touch detection is geometric and uses the clipped polygon.
-- Edge boundary classification is geometric and tied to the canvas border.
-- Canonical adjacency only exists when two cells share a real in-bounds edge.
-- Boundary edges have one real adjacent cell and one outside side.
+- Vertices know the edge ids that use them.
+- Edges know their two vertices and their two neighboring cells; one neighboring cell may be `null` on the map boundary.
+- Cells know their vertices, edges, and neighboring cells.
+- Adjacency is derived from shared clipped Voronoi edges.
 
-State effects:
-- Builds canonical `cells` and `edges`.
-- Resets `rivers`.
-- Resets `water`.
-
-## 3. Select And Paint Sea Areas
+## 1.3 Select And Paint Sea Areas
 
 Source: `src/generator/step-apply-water.js`
 
-Business rules:
-- Only user-enabled outer sides may seed water.
-- Water behavior is user-configurable through:
-  - water reach ratio
-  - water expansion base
-  - water edge weight
-  - water pressure range ratio
-  - water center-bias radius ratio
-- Water seeding starts from cells touching enabled sides.
-- A cell is seed-eligible only if it lies within the configured water reach ratio of map size from at least one enabled water side.
-- Water then expands by graph flood through cell neighbors.
-- Expansion is probabilistic, not purely deterministic by distance.
-- Expansion probability is influenced by:
-  - the configured water expansion base
-  - stronger pressure near enabled water sides scaled by the configured water edge weight
-  - resistance toward the center of the map scaled by the configured center-bias radius
-- If no water sides are enabled, no sea is created.
-- An edge is marked `sea` only when both adjacent cells are sea.
+Function input:
 
-Default values:
-- water reach ratio: `0.2`
-- water expansion base: `0.14`
-- water edge weight: `0.52`
-- water pressure range ratio: `0.42`
-- water center-bias radius ratio: `0.68`
+```js
+{
+  vertices: [{ id: 0, edgeIds: [...] }, ...],
+  edges: [{ id: "0-1-...", leftCellId: 0, rightCellId: 1, features: { sea: false, ... } }, ...],
+  cells: [{ id: 0, neighborCellIds: [1, ...], features: { land: true, sea: false, ... } }, ...],
+  init: { params: { waterSides: [{ name: "west", enabled: true }, ...], waterReachRatio: 0.2, ... } }
+}
+```
 
-State effects:
-- Sets cell `features.sea` and `features.land`.
-- Sets edge `features.sea`.
-- Stores `water.sides`.
-- Stores `water.seaCellIds`.
+Function output:
 
-## 4. Apply One Lloyd Relaxation Pass
+```js
+{
+  cells: [{ id: 0, features: { land: false, sea: true, ... } }, ...],
+  edges: [{ id: "0-1-...", features: { sea: true, ... } }, ...],
+  water: { sides: ["west"], seaCellIds: [0, 4, ...] }
+}
+```
+
+Rules:
+- Enabled outer sides seed water.
+- Water expands through cell neighbors using the seeded RNG.
+- Cell `features.land` is the inverse of `features.sea`.
+- Edge `features.sea` is true only when both neighboring cells are sea.
+
+## 1.4 Apply One Lloyd Relaxation Pass
 
 Source: `src/generator/step-relax-points.js`
 
-Business rules:
+Function input:
+
+```js
+{
+  points: [{ id: 0, x: 123.4, y: 456.7 }, ...],
+  cells: [{ id: 0, site: { id: 0, ... }, centroid: { x: 130, y: 450 }, features: { boundary: false, ... } }, ...],
+  edges: [...]
+}
+```
+
+Function output:
+
+```js
+{
+  points: [{ id: 0, x: 130, y: 450 }, ...],
+  vertices: [{ id: 0, edgeIds: [...] }, ...],
+  cells: [{ id: 0, vertexIds: [...], edgeIds: [...], neighborCellIds: [...], features: { land: true, sea: false, ... } }, ...],
+  edges: [{ id: "...", fromVertexId: 0, toVertexId: 1, ... }, ...],
+  river: { primary: null, secondary: null },
+  rivers: []
+}
+```
+
+Rules:
 - Exactly one Lloyd pass is applied.
 - Boundary sites stay fixed.
-- Non-boundary sites move to their current cell centroids.
-- Relaxed points are clamped away from the border with a user-controlled padding ratio.
-- Default relax padding ratio is `0.04`.
-- Allowed relax padding ratio range is `0` to `0.15`.
-- After rebuilding the geometry, sea classification is recomputed from scratch.
+- Non-boundary sites move to their cell centroids and are clamped by `relaxPaddingRatio`.
+- Voronoi geometry is rebuilt and sea classification is recomputed.
 
-State effects:
-- Replaces `points`, `cells`, and `edges`.
-- Clears `rivers`.
-- Reapplies water.
-
-## 5. Flag Inland Hill Cells
+## 1.5 Flag Inland Hill Cells
 
 Source: `src/generator/step-flag-hills.js`
 
-Business rules:
-- Hill placement uses graph distance in cells, not Euclidean distance.
-- Hill behavior is user-configurable through:
-  - hill count
-  - hill sea distance
-  - hillside radius
-- A hill candidate must:
-  - be `land`
-  - be at least the configured hill sea distance away from the sea
-- The first hill is chosen pseudo-randomly from the valid candidate set.
-- Each later hill is chosen greedily to maximize graph distance from already selected hills.
-- Tie-breaks for later hills are:
-  - larger distance from existing hills
-  - then larger sea distance
-  - then lower cell id
-- If there are no valid hill candidates, no hills are placed.
-- `hillCount` is an upper bound, not a guarantee.
-- `hillside` cells are all land cells within graph distance `1` up to the configured hillside radius from any hill.
-- Hillsides exclude the hill cells themselves.
+Function input:
 
-Default values:
-- hill count: `15`
-- hill sea distance: `4`
-- hillside radius: `2`
+```js
+{
+  cells: [{ id: 0, neighborCellIds: [1, ...], features: { land: true, sea: false, hill: false, hillside: false } }, ...],
+  init: { params: { hillCount: 9, hillSeaDistance: 4, hillsideRadius: 1 } }
+}
+```
 
-State effects:
-- Sets cell `features.hill`.
-- Sets cell `features.hillside`.
+Function output:
 
-## 6. Trace The First River
+```js
+{
+  cells: [{ id: 0, features: { land: true, sea: false, hill: true, hillside: false, ... } }, ...]
+}
+```
 
-Source:
-- `src/generator/step-first-river.js`
-- `src/generator/river-path.js`
+Rules:
+- Hill placement uses graph distance through cells.
+- A hill candidate must be land and at least `hillSeaDistance` steps from sea.
+- The first hill is random; later hills maximize distance from selected hills.
+- Hillside cells are land cells within `hillsideRadius` steps of a hill.
 
-Source-cell rules:
-- The river source cell must:
-  - be `land`
-  - not be `hill`
-  - not be `hillside`
-  - touch exactly one map side
-- Corner cells are excluded because they touch more than one side.
-- The source point is the midpoint of a boundary edge on that source side.
+## 1.6 Trace The First River
 
-Path target rules:
-- Normal case:
-  - target the sea cell whose centroid is closest to the geometric center of the map
-  - the actual river end point is the midpoint of the coast edge between the last land cell and that sea cell
-- No-sea fallback:
-  - target the west-boundary edge midpoint closest to the geometric middle of the west side
-  - the outlet cell must be land, not hill, and not hillside
+Source: `src/generator/step-first-river.js`
 
-Path traversal rules:
-- Rivers move only through land cells.
-- Rivers cannot traverse hills or hillsides.
-- River routing uses a user-controlled minimum turn angle parameter.
-- The allowed range is `0` to `120` degrees.
-- The default minimum turn angle is `90` degrees.
-- Path geometry is segmented:
-  - source boundary midpoint
-  - source cell centroid
-  - shared edge midpoint
-  - next cell centroid
-  - ...
-  - outlet midpoint
-- Rivers must avoid turns sharper than the configured minimum turn angle.
-- At any cell where a path turns from one edge midpoint to another edge midpoint through the cell centroid, the angle must be at least the configured minimum.
-- The same minimum-angle rule also applies to the first turn leaving the boundary source cell.
-- Shortest path means shortest in cell-step count first.
-- If several candidate paths have the same cell-step count, the longest segmented geometric path wins.
-- When the map contains sea:
-  - a river cannot pass through a land cell neighboring the sea unless that cell is the target cell
-  - every step must strictly reduce geometric distance to the nearest coastline midpoint
-  - coastline distance is measured to edge midpoints where one adjacent cell is sea and the other is land
+Function input:
 
-Selection among boundary sources:
-- Every eligible one-side boundary source cell is evaluated.
-- The chosen river is the longest valid result among those sources.
-- Ranking is:
-  - more cells in path
-  - then longer segmented geometric length
-  - then lower cell id
+```js
+{
+  cells: [{ id: 0, centroid: { ... }, neighborCellIds: [...], features: { land: true, hill: false, hillside: false } }, ...],
+  edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
+  river: { primary: null, secondary: null },
+  rivers: []
+}
+```
 
-Naming rules:
-- The first river name is chosen from:
-  - `Valdombra`
-  - `Fiume Serrano`
-  - `Torrente Belloro`
-  - `Rio Castellano`
-  - `Fiumara Lucente`
-  - `Torrente Virelli`
-  - `Rio Montesco`
-  - `Fiume Caldoro`
-  - `Torrente Azzurri`
-  - `Rio Ventoro`
+Function output:
 
-State effects:
-- Adds one river object to `map.rivers` when successful.
-- Marks cells on that river with `features.river`.
+```js
+{
+  cells: [{ id: 12, features: { river: true, ... } }, ...],
+  river: {
+    primary: {
+      id: 0,
+      name: "Valdombra",
+      sourceCellId: 12,
+      targetSeaCellId: 44,
+      cellIds: [12, 18, 27, ...],
+      points: [{ x: 0, y: 220 }, { x: 32, y: 230 }, { x: 48, y: 242 }, ...],
+      length: 340.5,
+      strokeWidth: 6
+    },
+    secondary: null
+  },
+  rivers: [{ id: 0, ... }]
+}
+```
 
-## 7. Trace The First Tributary
+Rules:
+- The source is a one-side boundary land cell.
+- Hills and hillsides cannot be traversed.
+- The path alternates boundary vertex or edge midpoint, cell centroid, shared edge midpoint, next cell centroid, and outlet point.
+- Candidate paths are ranked by cell count, then segmented geometric length, then source cell id.
 
-Source:
-- `src/generator/step-first-tributary.js`
-- `src/generator/river-path.js`
+## 1.7 Trace The First Tributary
 
-Preconditions:
-- A primary river from step 6 must exist.
+Source: `src/generator/step-first-tributary.js`
 
-Merge target rules:
-- Tributaries may merge only into the primary river.
-- Merge must happen well upstream from the outlet.
-- When sea exists:
-  - merge cell must be at least the configured tributary merge distance in graph steps from the sea
-- When no sea exists:
-  - merge cell must be at least the configured tributary merge distance away from the river outlet along the primary river ordering
-- Tributary routing targets a land neighbor of the chosen merge cell.
-- The tributary geometry then extends to the centroid of the actual merge cell.
+Function input:
 
-Default values:
-- tributary source distance from main river: `6`
-- allowed tributary source distance range: `0` to `20`
-- tributary merge distance: `5`
-- allowed tributary merge distance range: `0` to `20`
-- tributary width ratio: `0.72`
-- allowed tributary width ratio range: `0.3` to `1`
-- primary merge width gain: `1.2`
-- allowed primary merge width gain range: `0` to `4`
+```js
+{
+  cells: [{ id: 0, features: { land: true, river: false, hill: false, hillside: false }, ... }, ...],
+  edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
+  river: { primary: { id: 0, cellIds: [12, 18, 27, ...], ... }, secondary: null },
+  rivers: [{ id: 0, ... }]
+}
+```
 
-Source-cell rules:
-- Tributary source cell must:
-  - be `land`
-  - not be `hill`
-  - not be `hillside`
-  - not already belong to a river
-  - be at least the configured tributary source distance away from the main river in graph cells
-  - touch exactly one map side
+Function output:
 
-Traversal rules:
-- Tributaries use the same segmented land-path search as the first river.
-- Tributaries cannot traverse:
-  - sea
-  - hill
-  - hillside
-  - any existing river cell
-- Tributaries must obey the same configured minimum turn-angle rule as the first river.
-- The merge angle between tributary entry and the downstream direction of the primary river must also satisfy the configured minimum turn angle.
-- When sea exists, the same monotonic sea-seeking constraints apply during pathfinding because the shared river-path helper is used.
+```js
+{
+  cells: [{ id: 31, features: { river: true, ... } }, ...],
+  river: {
+    primary: { id: 0, widthMergeCellId: 27, strokeWidthBeforeMerge: 6, strokeWidthAfterMerge: 7.2, ... },
+    secondary: {
+      id: 1,
+      mergedIntoRiverId: 0,
+      mergeCellId: 27,
+      cellIds: [31, 30, 24, ...],
+      points: [{ x: 1000, y: 120 }, { x: 970, y: 130 }, ...]
+    }
+  },
+  rivers: [{ id: 0, ... }, { id: 1, ... }]
+}
+```
 
-Selection rules:
-- All eligible one-side boundary sources are evaluated.
-- The chosen tributary is the longest valid result.
-- Ranking is:
-  - more cells in path
-  - then longer segmented geometric length
-  - then lower cell id
+Rules:
+- The tributary source is a one-side boundary land cell.
+- It cannot cross hills, hillsides, or existing river cells.
+- It must merge into a valid primary river cell.
+- The primary river width is increased downstream of the merge cell.
 
-Naming rules:
-- Tributary names come from the same fixed river-name list.
-- Already used river names are skipped when possible.
-
-State effects:
-- Appends one river object to `map.rivers` when successful.
-- Marks tributary cells with `features.river`.
-- Stores tributary stroke width separately from the primary river width.
-- Widens the primary river slightly downstream from the merge cell.
-- Hill and hillside flags still exist at the end of this step so replay can show the temporary routing terrain.
-
-## 8. Convert To Lot Geometry
+## 1.8 Convert To Lot Geometry
 
 Source: `src/generator/step-convert-lots.js`
 
-Business rules:
-- The conversion runs once after the tributary is committed.
-- Every Voronoi cell becomes a lot with the same id, site, centroid, polygon, boundary flags, and feature flags.
-- `hill` and `hillside` feature flags are cleared immediately before conversion because hills are temporary river-routing constraints only.
-- Lot adjacency is preserved from the original shared-edge graph.
-- Each original edge is resampled into straight or polyline segments targeting about 10 map units each.
-- Segment count is `round(edgeLength / 10)` with a minimum of `1`.
-- Segment endpoints stay fixed at the original edge endpoints.
-- Boundary edges remain marked as boundary segments with only one adjacent lot.
-- Interior segments keep both adjacent lot ids.
-- Sea, river, and boundary classification is copied onto the new segment records.
-- The old `cells` and `edges` arrays are no longer the canonical geometry after conversion.
+Function input:
 
-State effects:
-- Replaces `cells` and `edges` with `lots` and `segments`.
-- Preserves rivers, water, and city-center metadata.
+```js
+{
+  cells: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], edgeIds: [...], features: { land: true, hill: false, hillside: false, ... } }, ...],
+  edges: [{ id: "...", fromVertexId: 0, toVertexId: 1, leftCellId: 0, rightCellId: 1, features: { sea: false } }, ...],
+  river: { primary: { ... }, secondary: { ... } }
+}
+```
 
-## 9. Add Rivers To Lot Geometry
+Function output:
+
+```js
+{
+  lots: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], vertexIds: [0, 1, ...], segmentIds: ["..."], features: { land: true, sea: false, river: true } }, ...],
+  vertices: [{ id: 0, x: 10, y: 20, segmentIds: ["..."], features: { coast: false, land: true, sea: false, riverside: false } }, ...],
+  segments: [{ id: "...", fromVertexId: 0, toVertexId: 1, leftLotId: 0, rightLotId: 1, features: { coast: false, land: true, sea: false, river: false, riverside: false } }, ...],
+  river: { primary: { ... }, secondary: { ... } },
+  rivers: [{ ... }, { ... }]
+}
+```
+
+Rules:
+- Cells become lots.
+- Edges become sampled segments.
+- Lots inherit source cell features, except temporary hill and hillside features are cleared before this step.
+- Segment and vertex features are limited to lot-stage surface data such as `coast`, `land`, `sea`, and later `riverside`.
+- Cell geometry is removed from the output; later work uses lots only.
+
+## 1.9 Add Rivers To Lot Geometry
 
 Source: `src/generator/step-add-rivers-to-lot-geometry.js`
 
-Business rules:
-- River polylines are resampled into a segment model using the same approximately `10`-unit target used for lot edges.
-- Where a river crosses a lot boundary, that crossing point becomes a shared topology point.
-- A lot crossed by one river is split into two lots, one on each side of the river.
-- A lot containing the primary/tributary merge is split into three lots that share the merge point.
-- The merge point is shared by the upstream primary branch, downstream primary branch, and tributary branch.
+Function input:
 
-State effects:
-- Rewrites `lots` and `segments` so rivers are part of canonical lot topology.
-- Preserves `map.rivers` as the source river metadata.
+```js
+{
+  lots: [{ id: 0, polygon: [...], segmentIds: [...], features: { land: true, river: true } }, ...],
+  vertices: [{ id: 0, features: { riverside: false, ... } }, ...],
+  segments: [{ id: "...", features: { riverside: false, river: false, ... } }, ...],
+  river: { primary: { points: [...] }, secondary: { points: [...] } },
+  rivers: [{ points: [...] }, ...]
+}
+```
 
-## 10. Tessellate Lot Geometry
+Function output:
+
+```js
+{
+  lots: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], vertexIds: [...], segmentIds: [...], neighborLotIds: [...] }, ...],
+  vertices: [{ id: 22, x: 150, y: 300, segmentIds: ["segment:88"], features: { riverside: true, coast: false, land: true, sea: false } }, ...],
+  segments: [{ id: "segment:88", fromVertexId: 22, toVertexId: 23, features: { river: true, riverside: true, land: true, coast: false, sea: false } }, ...],
+  riverSegments: [{ id: "river:0:0", riverId: 0, branchType: "primary", from: { ... }, to: { ... } }, ...]
+}
+```
+
+Rules:
+- River paths are sampled into segment geometry.
+- Lots crossed by rivers are split.
+- River-derived segments and their vertices receive `features.riverside`.
+- Lot adjacency and segment ownership are rebuilt from the new polygons.
+
+## 1.10 Tessellate Lot Geometry
 
 Source: `src/generator/step-tessellate-lots.js`
 
-Business rules:
-- Every final lot polygon is decomposed into clipped Voronoi sublots.
-- For each lot, the total sublot seed budget is `max(x + 4, ((x/2)^2)/3)` for land lots and `max(x, (x/6)^2)` for sea lots, where `x` is the number of canonical border segments.
-- The same number of fixed boundary seed points is sampled evenly around the lot border.
-- Voronoi cells are computed in the lot bounds, then clipped strictly to the lot polygon.
-- `sublotLloydPasses` controls how many Lloyd relaxation passes are applied to interior seed points, with a default of `2`.
-- `sublotBorderDistance` controls the minimum distance of interior seed points from the lot border during both throwing and Lloyd relaxation, with a default of `7`.
-- Boundary seed points remain fixed during relaxation so the lot edge stays constrained.
-- Sublot vertices are stored in a shared vertex list so future altitude can be computed per vertex.
-- The tessellation mesh is rendered as a subtle overlay and does not intercept lot or river hover events.
+Function input:
 
-State effects:
-- Adds `map.tessellation.vertices`.
-- Adds `map.tessellation.sublots` with polygon vertex ids, source site, site type, centroid, area, and inherited lot features.
-- Adds `sublotIds` to each lot.
+```js
+{
+  lots: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], features: { land: true, sea: false } }, ...],
+  vertices: [{ id: 0, x: 10, y: 20, ... }, ...],
+  segments: [{ id: "segment:0", ... }, ...]
+}
+```
 
-## Rendering And Replay Constraints Tied To Steps
+Function output:
 
-- Generation runs in a background web worker so the UI remains responsive during map creation and seed search.
-- Single-map generation streams progress back to the UI after every top-level step.
-- During single-map generation, the visible map updates to the newest completed step frame as soon as that step finishes.
-- Generation returns a replay frame for every top-level step.
-- The UI initially shows the final frame after generation.
-- Replay is manual only.
-- `Best of 50` also runs in the background worker.
-- `Best of 50` uses the currently displayed map as its baseline candidate.
-- During `Best of 50`, the UI shows a small progress counter for completed samples.
-- During `Best of 50`, the visible map updates only when a newly sampled seed produces a strictly better tributary than the current baseline and all previous sampled seeds.
-- If no better sampled map is found, the currently displayed map remains unchanged.
-- Step 5 has a hover-only river preview overlay that uses the same center-sea path helper as step 6.
-- Step 10 becomes the displayed canonical map model for replay, hover, and rendering.
-- Step timing in milliseconds is shown beside each step in the UI and is approximate.
+```js
+{
+  lots: [{
+    id: 0,
+    sublotIds: [0, 1],
+    sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], features: { land: true, sea: false } }, ...],
+    ...
+  }, ...],
+  tessellation: {
+    vertices: [{ id: 0, x: 10, y: 20 }, ...],
+    sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], centroid: { x: 20, y: 30 }, area: 100, features: { land: true, sea: false } }, ...]
+  }
+}
+```
 
-## Maintenance Rule
-
-Any change to:
-- path constraints
-- hill rules
-- sea rules
-- source eligibility
-- target selection
-- tie-break logic
-- replay-visible generation behavior
-
-must update this file in the same commit.
+Rules:
+- The largest land lots are split into two simple sublots.
+- Sublots reuse lot-boundary geometry; they do not go back to Voronoi cells.
+- Each lot receives `sublotIds` and an inline `sublots` list.

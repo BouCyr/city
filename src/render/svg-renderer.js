@@ -24,7 +24,7 @@ const COLORS = {
   seaEdge: "#1f4e72",
   riverEndpoint: "#5f97b0",
   riverHit: "rgba(0, 0, 0, 0)",
-  tessellation: "rgba(63, 47, 31, 0.22)",
+  tessellation: "rgba(42, 30, 20, 0.36)",
 };
 
 /**
@@ -249,6 +249,26 @@ function createTessellationGroup(tessellation) {
         y1: edge.from.y,
         x2: edge.to.x,
         y2: edge.to.y,
+      }),
+    );
+  });
+  group.append(createTessellationVerticesGroup(tessellation.vertices));
+
+  return group;
+}
+
+function createTessellationVerticesGroup(vertices) {
+  const group = createElement("g", {
+    "pointer-events": "none",
+  });
+
+  vertices.forEach((vertex) => {
+    group.append(
+      createElement("circle", {
+        cx: vertex.x,
+        cy: vertex.y,
+        r: 0.75,
+        fill: COLORS.tessellation,
       }),
     );
   });

@@ -16,9 +16,14 @@ export function runScatterPointsStep(map, { rng }) {
   const nextMap = {
     ...map,
     points,
+    vertices: [],
     cells: [],
     edges: [],
     rivers: [],
+    river: {
+      primary: null,
+      secondary: null,
+    },
     water: {
       sides: [],
       seaCellIds: [],

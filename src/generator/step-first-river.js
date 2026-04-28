@@ -5,23 +5,14 @@
  */
 
 import { findCenterSeaLandPath } from "./river-path.js";
-
-const RIVER_NAMES = [
-  "Valdombra",
-  "Fiume Serrano",
-  "Torrente Belloro",
-  "Rio Castellano",
-  "Fiumara Lucente",
-  "Torrente Virelli",
-  "Rio Montesco",
-  "Fiume Caldoro",
-  "Torrente Azzurri",
-  "Rio Ventoro",
-];
+import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "./river-model.js";
 
 export function runFirstRiverStep(map, { rng }) {
   const river = chooseFirstRiver(map, rng);
-  const nextMap = attachRiverData(map, river ? [river] : []);
+  const nextMap = attachRiverData(map, {
+    primary: river,
+    secondary: null,
+  });
 
   return {
     map: nextMap,
@@ -81,7 +72,7 @@ function chooseFirstRiver(map, rng) {
   }
 
   const selected = candidates[0];
-  const riverName = rng.pick(RIVER_NAMES);
+  const riverName = chooseRiverName(rng);
   const points = [selected.sourcePoint, ...selected.path.points];
   return {
     id: 0,
@@ -106,63 +97,4 @@ function inferTargetSeaCellId(cells, path) {
   }
 
   return endCell.neighborCellIds.find((neighborId) => cells[neighborId]?.features.sea) ?? null;
-}
-
-function attachRiverData(map, rivers) {
-  const riverCellIds = new Set(rivers.flatMap((river) => river.cellIds));
-  const cells = map.cells.map((cell) => ({
-    ...cell,
-    features: {
-      ...cell.features,
-      river: riverCellIds.has(cell.id),
-    },
-  }));
-
-  return {
-    ...map,
-    cells,
-    rivers,
-  };
-}
-
-function findSourceBoundaryMidpoint(map, cell) {
-  const boundaryEdges = map.edges.filter((edge) =>
-    cell.edgeIds.includes(edge.id)
-    && edge.features.boundary
-    && [edge.leftCellId, edge.rightCellId].filter((cellId) => cellId === cell.id).length === 1,
-  );
-
-  if (!boundaryEdges.length) {
-    return null;
-  }
-
-  const side = cell.boundarySides[0];
-  const matchingEdge = boundaryEdges.find((edge) => edgeOnSide(edge, map.meta.size, side)) || boundaryEdges[0];
-  return matchingEdge ? { x: matchingEdge.midpoint.x, y: matchingEdge.midpoint.y } : null;
-}
-
-function edgeOnSide(edge, mapSize, side, epsilon = 0.75) {
-  if (side === "north") {
-    return Math.abs(edge.from.y) <= epsilon && Math.abs(edge.to.y) <= epsilon;
-  }
-  if (side === "south") {
-    return Math.abs(edge.from.y - mapSize) <= epsilon && Math.abs(edge.to.y - mapSize) <= epsilon;
-  }
-  if (side === "west") {
-    return Math.abs(edge.from.x) <= epsilon && Math.abs(edge.to.x) <= epsilon;
-  }
-  if (side === "east") {
-    return Math.abs(edge.from.x - mapSize) <= epsilon && Math.abs(edge.to.x - mapSize) <= epsilon;
-  }
-  return false;
-}
-
-function buildRiverLength(sourcePoint, points) {
-  let length = 0;
-  let previousPoint = sourcePoint;
-  points.forEach((point) => {
-    length += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
-    previousPoint = point;
-  });
-  return length;
 }

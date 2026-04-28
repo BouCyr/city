@@ -18,6 +18,10 @@ export function runBuildVoronoiStep(map) {
     ...map,
     ...geometry,
     rivers: [],
+    river: {
+      primary: null,
+      secondary: null,
+    },
     water: {
       sides: [],
       seaCellIds: [],
