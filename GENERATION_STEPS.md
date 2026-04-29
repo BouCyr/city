@@ -480,17 +480,15 @@ Function output:
 ```
 
 Rules:
-- Every land lot starts recursive sublotting when a valid split exists.
-- Lots that are not split do not create one-piece sublots.
-- Each branch tries to split into two children using the shortest valid bisection.
-- Each bisection must keep the smaller child at least 40% of the parent branch area.
-- The split can start and end at any canonical boundary vertex of the current branch.
+- The step output shape is identical regardless of the selected tessellation algorithm.
+- `recursive_split` starts recursive sublotting for each land lot when a valid split exists.
+- In `recursive_split`, each branch tries the shortest valid bisection and the smaller child must keep at least 40% of the parent branch area.
+- In `poisson_voronoi`, seed points are Poisson-sampled inside the lot and a lot-local Voronoi tessellation is clipped to the lot boundary.
+- In `poisson_voronoi`, the target seed count is derived from the recursive algorithm's estimated leaf count for the same lot so the sublot count stays roughly comparable.
+- Lots that do not produce at least two valid pieces do not create one-piece sublots.
 - Canonical lot-boundary vertices include segment endpoints on the lot boundary, not only the coarse `lot.polygon` corners.
-- If a branch area is `(DEFAULT_SEGMENT_LENGTH ** 2) * 2` or smaller, recursion stops for that branch.
-- If no valid split exists for a branch, recursion stops for that branch.
-- A split endpoint used by an ancestor in the same branch cannot be reused by descendants of that branch.
 - Parent and intermediate sublots are removed; only final leaf sublots are emitted.
-- Sublots can be neighbours with other sublots and with unsplit lots.
+- Sublots can be neighbours with other sublots and with neighboring lots.
 - Sublot neighbours are stored separately as `neighborSublotIds` and `neighborLotIds`.
 - Sublots reuse lot-boundary geometry; they do not go back to Voronoi cells.
 - Split lots receive `sublotIds` and an inline `sublots` list; unsplit lots keep both lists empty.

@@ -33,6 +33,7 @@ const MIN_POINT_COUNT = 50;
 const MAX_POINT_COUNT = 1200;
 const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
 const DEFAULT_SCATTER_ALGORITHM = "random_scattering";
+const DEFAULT_TESSELLATE_ALGORITHM = "recursive_split";
 const DEFAULT_POISSON_SPACING_RATIO = 1.15;
 const DEFAULT_POISSON_MAX_ATTEMPTS = 30;
 const DEFAULT_POISSON_PADDING_RATIO = 0.01;
@@ -122,6 +123,7 @@ export function readFormState(form) {
     seed: String(data.get("seed") || DEFAULT_SEED),
     stepAlgorithms: {
       scatterPoints: scatterAlgorithm,
+      tessellateLots: normalizeTessellateAlgorithm(String(data.get("tessellateAlgorithm") || DEFAULT_TESSELLATE_ALGORITHM)),
     },
     pointCount: normalizePointCountForScatterAlgorithm(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), scatterAlgorithm, MIN_POINT_COUNT, MAX_POINT_COUNT),
     scatterPaddingRatio: normalizeDecimal(Number(data.get("scatterPaddingRatio") || DEFAULT_SCATTER_PADDING_RATIO), 0, 0.1),
@@ -152,6 +154,13 @@ function normalizeScatterAlgorithm(value) {
     return value;
   }
   return "random_scattering";
+}
+
+function normalizeTessellateAlgorithm(value) {
+  if (value === "poisson_voronoi") {
+    return value;
+  }
+  return "recursive_split";
 }
 
 function getSelectedScatterAlgorithm(form) {

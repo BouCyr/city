@@ -173,8 +173,9 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 10:
       return {
-        selectedLotCount: 10,
+        tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "recursive_split",
         minimumSplitChildAreaRatio: 0.4,
+        poissonVoronoiTargetSource: "estimated recursive sublot count",
         splitSegmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
       };
     default:
