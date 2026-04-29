@@ -33,7 +33,7 @@ const MIN_POINT_COUNT = 50;
 const MAX_POINT_COUNT = 1200;
 const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
 const DEFAULT_SCATTER_ALGORITHM = "random_scattering";
-const DEFAULT_TESSELLATE_ALGORITHM = "recursive_split";
+const DEFAULT_TESSELLATE_ALGORITHM = "straight_bisection";
 const DEFAULT_POISSON_SPACING_RATIO = 1.15;
 const DEFAULT_POISSON_MAX_ATTEMPTS = 30;
 const DEFAULT_POISSON_PADDING_RATIO = 0.01;
@@ -157,10 +157,10 @@ function normalizeScatterAlgorithm(value) {
 }
 
 function normalizeTessellateAlgorithm(value) {
-  if (value === "poisson_voronoi") {
+  if (value === "poisson_voronoi" || value === "curved_bisection" || value === "straight_bisection") {
     return value;
   }
-  return "recursive_split";
+  return "straight_bisection";
 }
 
 function getSelectedScatterAlgorithm(form) {

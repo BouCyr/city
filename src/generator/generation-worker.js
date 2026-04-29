@@ -173,9 +173,10 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 10:
       return {
-        tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "recursive_split",
+        tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "straight_bisection",
         minimumSplitChildAreaRatio: 0.4,
-        poissonVoronoiTargetSource: "estimated recursive sublot count",
+        curvedSplitCurve: "cubic Hermite from boundary-vertex bisectors",
+        poissonVoronoiTargetSource: "estimated straight-bisection sublot count",
         splitSegmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
       };
     default:

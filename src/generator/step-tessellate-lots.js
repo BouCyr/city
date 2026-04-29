@@ -25,7 +25,7 @@ export function runTessellateLotsStep(map, { rng }) {
     };
   }
 
-  const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "recursive_split";
+  const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "straight_bisection";
   const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH, rng, algorithm);
   const lotSublotIds = new Map();
   const sublotsByLotId = new Map();
@@ -65,6 +65,8 @@ const MIN_SUBLOT_AREA = 0.01;
 const MIN_SPLIT_CHILD_AREA_RATIO = 0.4;
 const MIN_RECURSIVE_SPLIT_AREA_RATIO = 2;
 const SPLIT_SEGMENT_LENGTH_RATIO = 0.5;
+const CURVE_TENSION_RATIO = 0.35;
+const CURVE_SAMPLING_STEPS = 24;
 const POISSON_SPACING_RATIO = 0.95;
 const POISSON_MAX_ATTEMPTS = 30;
 const POISSON_BBOX_PADDING = 0.001;
@@ -88,7 +90,7 @@ function buildLotTessellation(map, segmentLength, rng, algorithm) {
     const boundaryPoints = getBoundaryVertices(lot, segments);
     const pieces = algorithm === "poisson_voronoi"
       ? createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng)
-      : splitLotPolygonRecursively(boundaryPoints, segmentLength);
+      : splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm);
     if (pieces.length < 2) {
       return;
     }
@@ -131,7 +133,7 @@ function buildLotTessellation(map, segmentLength, rng, algorithm) {
 }
 
 function createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng) {
-  const estimatedPieces = splitLotPolygonRecursively(boundaryPoints, segmentLength)
+  const estimatedPieces = splitLotPolygonRecursively(boundaryPoints, segmentLength, "straight_bisection")
     .map((piece) => normalizePolygon(piece))
     .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
   if (estimatedPieces.length < 2) {
@@ -395,12 +397,42 @@ function computeBoundingBox(polygon) {
   });
 }
 
-function splitLotPolygonRecursively(boundaryPoints, segmentLength) {
+function normalizeVector(vector) {
+  const length = vectorLength(vector);
+  if (length <= EPSILON) {
+    return { x: 0, y: 0 };
+  }
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+  };
+}
+
+function vectorLength(vector) {
+  return Math.hypot(vector.x, vector.y);
+}
+
+function scalePoint(point, scalar) {
+  return {
+    x: point.x * scalar,
+    y: point.y * scalar,
+  };
+}
+
+function leftNormal(vector) {
+  return {
+    x: -vector.y,
+    y: vector.x,
+  };
+}
+
+function splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm = "straight_bisection") {
   const minimumLeafArea = (segmentLength ** 2) * MIN_RECURSIVE_SPLIT_AREA_RATIO;
   const leaves = [];
   splitBranch({
     polygon: normalizePolygon(boundaryPoints),
     blockedVertexKeys: new Set(),
+    algorithm,
     segmentLength,
     minimumLeafArea,
     leaves,
@@ -408,7 +440,7 @@ function splitLotPolygonRecursively(boundaryPoints, segmentLength) {
   return leaves;
 }
 
-function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafArea, leaves }) {
+function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafArea, leaves, algorithm }) {
   const area = Math.abs(computeSignedArea(polygon));
   if (polygon.length < 3 || area <= minimumLeafArea) {
     leaves.push(polygon);
@@ -422,7 +454,7 @@ function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafAre
   }
 
   const splitSegmentLength = segmentLength * SPLIT_SEGMENT_LENGTH_RATIO;
-  const pieces = splitBetweenBoundaryPoints(polygon, split.firstIndex, split.secondIndex, splitSegmentLength);
+  const pieces = splitBetweenBoundaryPoints(polygon, split.firstIndex, split.secondIndex, splitSegmentLength, algorithm);
   const nextBlockedVertexKeys = new Set(blockedVertexKeys);
   nextBlockedVertexKeys.add(pointKey(polygon[split.firstIndex]));
   nextBlockedVertexKeys.add(pointKey(polygon[split.secondIndex]));
@@ -438,6 +470,7 @@ function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafAre
     splitBranch({
       polygon: normalizedPiece,
       blockedVertexKeys: nextBlockedVertexKeys,
+      algorithm,
       segmentLength,
       minimumLeafArea,
       leaves,
@@ -630,12 +663,14 @@ function chooseBetterSplitCandidate(current, candidate) {
   return current;
 }
 
-function splitBetweenBoundaryPoints(points, firstIndex, secondIndex, splitSegmentLength) {
+function splitBetweenBoundaryPoints(points, firstIndex, secondIndex, splitSegmentLength, algorithm = "straight_bisection") {
   const forwardPath = takePathBetweenIndices(points, firstIndex, secondIndex);
   const backwardPath = takePathBetweenIndices(points, secondIndex, firstIndex);
-  const chordPoints = splitSegmentLength
-    ? resampleSegment(points[firstIndex], points[secondIndex], splitSegmentLength)
-    : [points[firstIndex], points[secondIndex]];
+  const chordPoints = algorithm === "curved_bisection"
+    ? buildCurvedSplitPath(points, firstIndex, secondIndex, splitSegmentLength)
+    : splitSegmentLength
+      ? resampleSegment(points[firstIndex], points[secondIndex], splitSegmentLength)
+      : [points[firstIndex], points[secondIndex]];
   const chordForwardInterior = chordPoints.slice(1, -1);
   const chordBackwardInterior = [...chordForwardInterior].reverse();
 
@@ -649,6 +684,137 @@ function splitBetweenBoundaryPoints(points, firstIndex, secondIndex, splitSegmen
       ...chordForwardInterior,
     ]),
   ];
+}
+
+function buildCurvedSplitPath(points, firstIndex, secondIndex, targetLength) {
+  const start = points[firstIndex];
+  const end = points[secondIndex];
+  const startTangent = scalePoint(
+    computeInteriorBisectorDirection(points, firstIndex),
+    pointDistance(start, end) * CURVE_TENSION_RATIO,
+  );
+  const endTangent = scalePoint(
+    computeInteriorBisectorDirection(points, secondIndex),
+    -pointDistance(start, end) * CURVE_TENSION_RATIO,
+  );
+
+  const sampled = [];
+  for (let index = 0; index <= CURVE_SAMPLING_STEPS; index += 1) {
+    const t = index / CURVE_SAMPLING_STEPS;
+    sampled.push(evaluateCubicHermite(start, end, startTangent, endTangent, t));
+  }
+
+  const curveLength = polylineLength(sampled);
+  const segmentCount = Math.max(1, Math.round(curveLength / Math.max(EPSILON, targetLength)));
+  return resamplePolyline(sampled, segmentCount);
+}
+
+function computeInteriorBisectorDirection(points, index) {
+  const current = points[index];
+  const previous = points[(index - 1 + points.length) % points.length];
+  const next = points[(index + 1) % points.length];
+  const toPrevious = normalizeVector({
+    x: previous.x - current.x,
+    y: previous.y - current.y,
+  });
+  const toNext = normalizeVector({
+    x: next.x - current.x,
+    y: next.y - current.y,
+  });
+  const bisector = normalizeVector({
+    x: toPrevious.x + toNext.x,
+    y: toPrevious.y + toNext.y,
+  });
+  if (vectorLength(bisector) > EPSILON) {
+    return bisector;
+  }
+
+  const previousNormal = normalizeVector(leftNormal({
+    x: current.x - previous.x,
+    y: current.y - previous.y,
+  }));
+  const nextNormal = normalizeVector(leftNormal({
+    x: next.x - current.x,
+    y: next.y - current.y,
+  }));
+  const normalBisector = normalizeVector({
+    x: previousNormal.x + nextNormal.x,
+    y: previousNormal.y + nextNormal.y,
+  });
+  return vectorLength(normalBisector) > EPSILON ? normalBisector : { x: 0, y: -1 };
+}
+
+function evaluateCubicHermite(start, end, startTangent, endTangent, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const h00 = (2 * t3) - (3 * t2) + 1;
+  const h10 = t3 - (2 * t2) + t;
+  const h01 = (-2 * t3) + (3 * t2);
+  const h11 = t3 - t2;
+  return {
+    x: (h00 * start.x) + (h10 * startTangent.x) + (h01 * end.x) + (h11 * endTangent.x),
+    y: (h00 * start.y) + (h10 * startTangent.y) + (h01 * end.y) + (h11 * endTangent.y),
+  };
+}
+
+function resamplePolyline(points, segmentCount) {
+  if (points.length <= 2) {
+    return points.map((point) => clonePoint(point));
+  }
+
+  const cumulativeDistances = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    cumulativeDistances[index] = cumulativeDistances[index - 1] + pointDistance(points[index - 1], points[index]);
+  }
+
+  const totalLength = cumulativeDistances[cumulativeDistances.length - 1];
+  if (totalLength <= EPSILON) {
+    return [clonePoint(points[0]), clonePoint(points[points.length - 1])];
+  }
+
+  const resampled = [];
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const targetDistance = (totalLength * index) / segmentCount;
+    resampled.push(sampleAlongPolyline(points, cumulativeDistances, targetDistance));
+  }
+  return resampled;
+}
+
+function sampleAlongPolyline(points, cumulativeDistances, targetDistance) {
+  if (targetDistance <= 0) {
+    return clonePoint(points[0]);
+  }
+  const totalLength = cumulativeDistances[cumulativeDistances.length - 1];
+  if (targetDistance >= totalLength) {
+    return clonePoint(points[points.length - 1]);
+  }
+
+  for (let index = 1; index < cumulativeDistances.length; index += 1) {
+    if (targetDistance > cumulativeDistances[index] + EPSILON) {
+      continue;
+    }
+
+    const segmentLength = cumulativeDistances[index] - cumulativeDistances[index - 1];
+    if (segmentLength <= EPSILON) {
+      return clonePoint(points[index]);
+    }
+
+    const localT = (targetDistance - cumulativeDistances[index - 1]) / segmentLength;
+    return {
+      x: points[index - 1].x + ((points[index].x - points[index - 1].x) * localT),
+      y: points[index - 1].y + ((points[index].y - points[index - 1].y) * localT),
+    };
+  }
+
+  return clonePoint(points[points.length - 1]);
+}
+
+function polylineLength(points) {
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    total += pointDistance(points[index - 1], points[index]);
+  }
+  return total;
 }
 
 function takePathBetweenIndices(points, startIndex, endIndex) {

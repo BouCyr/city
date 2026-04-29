@@ -90,7 +90,7 @@ const CONTROL_HELP_TEXT = {
   tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
   primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
-  tessellateAlgorithm: "Choose how step 1.11 creates sublots. Recursive bisection uses shortest balanced splits; Poisson Voronoi scatters lot-local seed points and clips Voronoi cells to the lot boundary.",
+  tessellateAlgorithm: "Choose how step 1.11 creates sublots. Straight bisection uses straight split chords, Curved bisection bends the split with cubic Hermite curves, and Poisson Voronoi scatters lot-local seed points and clips Voronoi cells to the lot boundary.",
 };
 
 bindFormInteractions(form);

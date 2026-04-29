@@ -481,10 +481,12 @@ Function output:
 
 Rules:
 - The step output shape is identical regardless of the selected tessellation algorithm.
-- `recursive_split` starts recursive sublotting for each land lot when a valid split exists.
-- In `recursive_split`, each branch tries the shortest valid bisection and the smaller child must keep at least 40% of the parent branch area.
+- `straight_bisection` starts recursive sublotting for each land lot when a valid split exists.
+- In `straight_bisection`, each branch tries the shortest valid straight bisection and the smaller child must keep at least 40% of the parent branch area.
+- In `curved_bisection`, the same recursive split selection is used, but the inserted split edge is a cubic Hermite curve instead of a straight chord.
+- In `curved_bisection`, each curve starts at the chosen boundary vertices and uses endpoint tangent directions derived from the inward half-angle bisectors of those vertices.
 - In `poisson_voronoi`, seed points are Poisson-sampled inside the lot and a lot-local Voronoi tessellation is clipped to the lot boundary.
-- In `poisson_voronoi`, the target seed count is derived from the recursive algorithm's estimated leaf count for the same lot so the sublot count stays roughly comparable.
+- In `poisson_voronoi`, the target seed count is derived from the straight-bisection algorithm's estimated leaf count for the same lot so the sublot count stays roughly comparable.
 - Lots that do not produce at least two valid pieces do not create one-piece sublots.
 - Canonical lot-boundary vertices include segment endpoints on the lot boundary, not only the coarse `lot.polygon` corners.
 - Parent and intermediate sublots are removed; only final leaf sublots are emitted.
