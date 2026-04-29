@@ -1,6 +1,6 @@
 /*
  * WHAT: Orchestrate the browser app by wiring form input, step selection, generation, and SVG viewport state.
- * HOW: Read normalized form options, generate deterministic frames, and redraw the selected frame while tracking zoom/pan.
+ * HOW: Read normalized form options, generate deterministic frames, and redraw the selected frame while tracking mouse zoom/pan.
  * WHY: The entrypoint keeps DOM-specific behavior in one place so the generator and renderer stay data-focused.
  */
 
@@ -32,9 +32,16 @@ const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
 const backgroundTaskStatus = document.querySelector("#backgroundTaskStatus");
-const zoomInButton = document.querySelector("#zoomInButton");
-const zoomOutButton = document.querySelector("#zoomOutButton");
-const resetViewButton = document.querySelector("#resetViewButton");
+const mapSummary = document.querySelector(".map-summary");
+const seaCellCount = document.querySelector("#seaCellCount");
+const landCellCount = document.querySelector("#landCellCount");
+const generationTimeValue = document.querySelector("#generationTimeValue");
+const primaryRiverSummary = document.querySelector("#primaryRiverSummary");
+const primaryRiverLabel = document.querySelector("#primaryRiverLabel");
+const primaryRiverLength = document.querySelector("#primaryRiverLength");
+const tributaryRiverSummary = document.querySelector("#tributaryRiverSummary");
+const tributaryRiverLabel = document.querySelector("#tributaryRiverLabel");
+const tributaryRiverLength = document.querySelector("#tributaryRiverLength");
 const hoveredCellData = document.querySelector("#hoveredCellData");
 const randomSeedButton = document.querySelector("#randomSeedButton");
 const bestSeedButton = document.querySelector("#bestSeedButton");
@@ -61,10 +68,10 @@ let dragPointerId = null;
 let dragStart = null;
 const viewportState = createViewportState(CANVAS_SIZE);
 const CONTROL_HELP_TEXT = {
-  pointCount: "How many seed points are scattered before Voronoi generation. Higher values create denser and smaller cells.",
+  pointCount: "How many seed points are scattered before Voronoi generation. Higher values create denser and smaller cells. Square grid mode snaps this to the nearest perfect square.",
   scatterPaddingRatio: "Margin ratio that keeps scattered points away from map borders. Higher values create a wider border buffer.",
   scatterAlgorithm: "Select the scatter algorithm for step 1.1. Different algorithms produce different point distributions and downstream map geometry.",
-  poissonMinDistance: "Minimum spacing target between Poisson points. Larger values produce more even and sparser distributions.",
+  poissonSpacingRatio: "Scales Poisson spacing relative to the requested point count. Higher ratio yields fewer, more separated accepted Poisson points before fallback fill.",
   poissonMaxAttempts: "Candidate attempts per active Poisson sample before it is retired. Higher values improve fill quality at higher CPU cost.",
   poissonPaddingRatio: "Poisson-specific edge padding ratio. Higher values keep Poisson points farther from map borders.",
   waterSides: "Select borders that can flood inward. More active sides usually increases sea coverage.",
@@ -98,12 +105,6 @@ for (const field of form.elements) {
   field.addEventListener(eventName, scheduleRegeneration);
 }
 
-zoomInButton.addEventListener("click", () => zoomBy(ZOOM_STEP));
-zoomOutButton.addEventListener("click", () => zoomBy(1 / ZOOM_STEP));
-resetViewButton.addEventListener("click", () => {
-  resetViewport();
-});
-
 randomSeedButton?.addEventListener("click", () => {
   if (!(seedInput instanceof HTMLInputElement)) {
     return;
@@ -136,6 +137,8 @@ mapViewport.addEventListener("pointercancel", handlePointerUp);
 mapViewport.addEventListener("pointerleave", handlePointerUp);
 svg.addEventListener("pointermove", handleMapHover);
 svg.addEventListener("pointerleave", clearHoverState);
+mapSummary?.addEventListener("pointerover", handleSummaryPointerOver);
+mapSummary?.addEventListener("pointerout", handleSummaryPointerOut);
 document.querySelectorAll(".control-help-trigger").forEach((button) => {
   button.addEventListener("click", () => {
     const key = button.getAttribute("data-help-key");
@@ -199,6 +202,7 @@ function renderStepIndex(stepIndex) {
   if (!currentMap) {
     clearSvg(svg, CANVAS_SIZE);
     applyViewport();
+    updateMapSummary();
     return;
   }
 
@@ -210,6 +214,7 @@ function renderStepIndex(stepIndex) {
   currentFrame = frame;
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
+  updateMapSummary(frame.map, currentMap);
   clearHoverState();
   stepTracker.setSelectedStep(frame.stepIndex ?? stepIndex);
 }
@@ -227,6 +232,7 @@ function runSingleGeneration(options) {
   setAsyncControlsDisabled(true);
   resetViewport(CANVAS_SIZE);
   clearHoverState();
+  updateMapSummary(null, null);
 
   activeWorker = createGenerationWorker(requestId, (message) => {
     if (message.requestId !== requestId) {
@@ -416,6 +422,7 @@ function renderInterimFrame(frame) {
   hoveredRiverId = null;
   drawReplayFrame(svg, frame, CANVAS_SIZE);
   applyViewport();
+  updateMapSummary(frame.map, null);
   clearHoverState();
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
@@ -534,6 +541,7 @@ function clearHoverState() {
   clearFlowOverlay();
   clearNeighborOverlay();
   clearRiverOverlay();
+  syncActiveRiverSummaryState();
   hoveredCellData.className = "cell-data empty";
   hoveredCellData.textContent = "Hover a lot or river to inspect its data.";
 }
@@ -580,11 +588,98 @@ function resetViewport(size = currentMap?.meta.size || CANVAS_SIZE) {
 
 function applyViewport() {
   svg.setAttribute("viewBox", `${viewportState.x} ${viewportState.y} ${viewportState.width} ${viewportState.height}`);
-  const isZoomed = viewportState.zoom > MIN_ZOOM;
-  zoomOutButton.disabled = !currentMap || viewportState.zoom <= MIN_ZOOM;
-  zoomInButton.disabled = !currentMap || viewportState.zoom >= MAX_ZOOM;
-  resetViewButton.disabled = !currentMap || !isZoomed;
   mapViewport.classList.toggle("is-dragging", isDragging);
+}
+
+function updateMapSummary(frameMap = currentFrame?.map || null, completedMap = currentMap) {
+  const geometries = frameMap ? getMapLots(frameMap) : [];
+  const seaCount = geometries.filter((item) => item.features?.sea).length;
+  const landCount = geometries.filter((item) => item.features?.land).length;
+  const primaryRiver = frameMap?.rivers?.[0] || null;
+  const tributaryRiver = frameMap?.rivers?.[1] || null;
+
+  if (seaCellCount instanceof HTMLElement) {
+    seaCellCount.textContent = String(seaCount);
+  }
+  if (landCellCount instanceof HTMLElement) {
+    landCellCount.textContent = String(landCount);
+  }
+  if (generationTimeValue instanceof HTMLElement) {
+    generationTimeValue.textContent = formatTotalGenerationTime(completedMap?.stepDurations || null);
+  }
+
+  syncRiverSummaryCard(primaryRiverSummary, primaryRiverLabel, primaryRiverLength, {
+    label: primaryRiver?.name || "Primary river",
+    length: primaryRiver?.length ?? null,
+    riverId: primaryRiver?.id ?? null,
+  });
+  syncRiverSummaryCard(tributaryRiverSummary, tributaryRiverLabel, tributaryRiverLength, {
+    label: tributaryRiver ? `${tributaryRiver.name || "Tributary"} -> ${primaryRiver?.name || "main"}` : "Tributary",
+    length: tributaryRiver?.length ?? null,
+    riverId: tributaryRiver?.id ?? null,
+  });
+  syncActiveRiverSummaryState();
+}
+
+function formatTotalGenerationTime(stepDurations) {
+  if (!Array.isArray(stepDurations) || !stepDurations.length) {
+    return "--";
+  }
+
+  const totalMs = stepDurations.reduce((sum, duration) => sum + (Number.isFinite(duration) ? duration : 0), 0);
+  if (totalMs >= 1000) {
+    return `${(totalMs / 1000).toFixed(2)} s`;
+  }
+  return `${Math.round(totalMs)} ms`;
+}
+
+function syncRiverSummaryCard(card, labelElement, valueElement, { label, length, riverId }) {
+  if (!(card instanceof HTMLElement) || !(labelElement instanceof HTMLElement) || !(valueElement instanceof HTMLElement)) {
+    return;
+  }
+
+  labelElement.textContent = label;
+  valueElement.textContent = length === null || length === undefined ? "--" : `${length.toFixed(1)} px`;
+  if (riverId === null || riverId === undefined) {
+    card.removeAttribute("data-summary-river-id");
+  } else {
+    card.setAttribute("data-summary-river-id", String(riverId));
+  }
+}
+
+function syncActiveRiverSummaryState() {
+  [primaryRiverSummary, tributaryRiverSummary].forEach((card) => {
+    if (!(card instanceof HTMLElement)) {
+      return;
+    }
+
+    const riverId = Number(card.getAttribute("data-summary-river-id"));
+    const isActive = Number.isFinite(riverId) && riverId === hoveredRiverId;
+    card.classList.toggle("is-active", isActive);
+  });
+}
+
+function handleSummaryPointerOver(event) {
+  const river = getRiverFromSummaryEvent(event);
+  if (!river) {
+    return;
+  }
+
+  renderHoveredRiver(river);
+}
+
+function handleSummaryPointerOut(event) {
+  const currentCard = event.target instanceof Element ? event.target.closest("[data-summary-river-id]") : null;
+  if (!currentCard) {
+    return;
+  }
+
+  const relatedCard = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-summary-river-id]") : null;
+  if (relatedCard === currentCard) {
+    return;
+  }
+
+  clearHoverState();
 }
 
 function getFocusPoint(event, size) {
@@ -650,6 +745,20 @@ function getRiverFromEvent(event) {
 
   const target = event.target instanceof Element ? event.target.closest("[data-river-id]") : null;
   const riverId = target ? Number(target.getAttribute("data-river-id")) : Number.NaN;
+  return getCurrentFrameRiverById(riverId);
+}
+
+function getRiverFromSummaryEvent(event) {
+  if (!currentFrame || currentFrame.type !== "map") {
+    return null;
+  }
+
+  const target = event.target instanceof Element ? event.target.closest("[data-summary-river-id]") : null;
+  const riverId = target ? Number(target.getAttribute("data-summary-river-id")) : Number.NaN;
+  return getCurrentFrameRiverById(riverId);
+}
+
+function getCurrentFrameRiverById(riverId) {
   if (!Number.isFinite(riverId)) {
     return null;
   }
@@ -665,6 +774,7 @@ function renderHoveredGeometry(hoverTarget) {
   const { item, kind } = hoverTarget;
   hoveredCellId = item.id;
   hoveredRiverId = null;
+  syncActiveRiverSummaryState();
   clearRiverOverlay();
   drawNeighborOverlay(item, kind);
   const previewRiverPath = kind === "Cell" && shouldShowRiverPreview() ? computeCenterSeaFlowPath(item.id) : null;
@@ -690,6 +800,7 @@ function renderHoveredRiver(river) {
   clearFlowOverlay();
   clearNeighborOverlay();
   drawRiverOverlay(river);
+  syncActiveRiverSummaryState();
 
   hoveredCellData.className = "cell-data river-hover";
   hoveredCellData.innerHTML = [

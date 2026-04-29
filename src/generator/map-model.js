@@ -22,7 +22,7 @@ export function createInitialMap(options) {
         stepAlgorithms: {
           ...(options.stepAlgorithms || {}),
         },
-        poissonMinDistance: options.poissonMinDistance,
+        poissonSpacingRatio: options.poissonSpacingRatio,
         poissonMaxAttempts: options.poissonMaxAttempts,
         poissonPaddingRatio: options.poissonPaddingRatio,
         waterReachRatio: options.waterReachRatio,

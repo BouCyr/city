@@ -7,7 +7,7 @@
 const RANGE_FIELDS = [
   "pointCount",
   "scatterPaddingRatio",
-  "poissonMinDistance",
+  "poissonSpacingRatio",
   "poissonMaxAttempts",
   "poissonPaddingRatio",
   "waterReachRatio",
@@ -29,9 +29,11 @@ const RANGE_FIELDS = [
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
 const DEFAULT_POINT_COUNT = 500;
+const MIN_POINT_COUNT = 50;
+const MAX_POINT_COUNT = 1200;
 const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
 const DEFAULT_SCATTER_ALGORITHM = "random_scattering";
-const DEFAULT_POISSON_MIN_DISTANCE = 18;
+const DEFAULT_POISSON_SPACING_RATIO = 1.15;
 const DEFAULT_POISSON_MAX_ATTEMPTS = 30;
 const DEFAULT_POISSON_PADDING_RATIO = 0.01;
 const DEFAULT_WATER_REACH_RATIO = 0.2;
@@ -71,6 +73,35 @@ export function bindFormInteractions(form) {
     field.addEventListener("input", sync);
     sync();
   }
+
+  const pointCountField = form.elements.namedItem("pointCount");
+  const pointCountOutput = document.querySelector("#pointCountValue");
+  const scatterAlgorithmFields = Array.from(form.querySelectorAll('input[name="scatterAlgorithm"]'));
+  if (!(pointCountField instanceof HTMLInputElement) || !(pointCountOutput instanceof HTMLOutputElement) || !scatterAlgorithmFields.length) {
+    return;
+  }
+
+  const syncSquareGridPointCount = () => {
+    const scatterAlgorithm = getSelectedScatterAlgorithm(form);
+    const normalizedValue = normalizePointCountForScatterAlgorithm(
+      Number(pointCountField.value),
+      scatterAlgorithm,
+      Number(pointCountField.min) || MIN_POINT_COUNT,
+      Number(pointCountField.max) || MAX_POINT_COUNT,
+    );
+
+    if (String(normalizedValue) !== pointCountField.value) {
+      pointCountField.value = String(normalizedValue);
+    }
+    pointCountOutput.value = pointCountField.value;
+    pointCountOutput.textContent = pointCountField.value;
+  };
+
+  pointCountField.addEventListener("input", syncSquareGridPointCount);
+  scatterAlgorithmFields.forEach((field) => {
+    field.addEventListener("change", syncSquareGridPointCount);
+  });
+  syncSquareGridPointCount();
 }
 
 /**
@@ -80,6 +111,7 @@ export function bindFormInteractions(form) {
  */
 export function readFormState(form) {
   const data = new FormData(form);
+  const scatterAlgorithm = normalizeScatterAlgorithm(String(data.get("scatterAlgorithm") || DEFAULT_SCATTER_ALGORITHM));
   const selectedWaterSides = data.getAll("waterSides");
   const waterSides = WATER_SIDE_NAMES.map((side) => ({
     name: side,
@@ -88,11 +120,11 @@ export function readFormState(form) {
   return {
     seed: String(data.get("seed") || DEFAULT_SEED),
     stepAlgorithms: {
-      scatterPoints: normalizeScatterAlgorithm(String(data.get("scatterAlgorithm") || DEFAULT_SCATTER_ALGORITHM)),
+      scatterPoints: scatterAlgorithm,
     },
-    pointCount: normalizeInteger(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), 50, 1200),
+    pointCount: normalizePointCountForScatterAlgorithm(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), scatterAlgorithm, MIN_POINT_COUNT, MAX_POINT_COUNT),
     scatterPaddingRatio: normalizeDecimal(Number(data.get("scatterPaddingRatio") || DEFAULT_SCATTER_PADDING_RATIO), 0, 0.1),
-    poissonMinDistance: normalizeDecimal(Number(data.get("poissonMinDistance") || DEFAULT_POISSON_MIN_DISTANCE), 2, 48),
+    poissonSpacingRatio: normalizeDecimal(Number(data.get("poissonSpacingRatio") || DEFAULT_POISSON_SPACING_RATIO), 0.4, 2.4),
     poissonMaxAttempts: normalizeInteger(Number(data.get("poissonMaxAttempts") || DEFAULT_POISSON_MAX_ATTEMPTS), 4, 80),
     poissonPaddingRatio: normalizeDecimal(Number(data.get("poissonPaddingRatio") || DEFAULT_POISSON_PADDING_RATIO), 0, 0.15),
     hillCount: normalizeNonNegativeCount(Number(data.get("hillCount") || DEFAULT_HILL_COUNT)),
@@ -115,7 +147,38 @@ export function readFormState(form) {
 }
 
 function normalizeScatterAlgorithm(value) {
-  return value === "poisson_disk" ? "poisson_disk" : "random_scattering";
+  if (value === "poisson_disk" || value === "square_grid") {
+    return value;
+  }
+  return "random_scattering";
+}
+
+function getSelectedScatterAlgorithm(form) {
+  const selected = form.querySelector('input[name="scatterAlgorithm"]:checked');
+  return normalizeScatterAlgorithm(selected instanceof HTMLInputElement ? selected.value : DEFAULT_SCATTER_ALGORITHM);
+}
+
+function normalizePointCountForScatterAlgorithm(value, scatterAlgorithm, min, max) {
+  const normalized = normalizeInteger(value, min, max);
+  if (scatterAlgorithm !== "square_grid") {
+    return normalized;
+  }
+
+  return findNearestPerfectSquare(normalized, min, max);
+}
+
+function findNearestPerfectSquare(value, min, max) {
+  const minRoot = Math.ceil(Math.sqrt(min));
+  const maxRoot = Math.floor(Math.sqrt(max));
+  const lowerRoot = clamp(Math.floor(Math.sqrt(value)), minRoot, maxRoot);
+  const upperRoot = clamp(Math.ceil(Math.sqrt(value)), minRoot, maxRoot);
+  const lowerSquare = lowerRoot * lowerRoot;
+  const upperSquare = upperRoot * upperRoot;
+
+  if (Math.abs(value - lowerSquare) <= Math.abs(upperSquare - value)) {
+    return lowerSquare;
+  }
+  return upperSquare;
 }
 
 function normalizeNonNegativeCount(value) {
@@ -134,4 +197,8 @@ function normalizeInteger(value, min, max) {
 function normalizeDecimal(value, min, max) {
   const normalized = Number.isFinite(value) ? value : min;
   return Math.min(max, Math.max(min, normalized));
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }

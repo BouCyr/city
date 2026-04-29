@@ -9,9 +9,14 @@ const TAU = Math.PI * 2;
 export function runScatterPointsStep(map, { rng }) {
   const algorithm = map.init.params.stepAlgorithms?.scatterPoints || "random_scattering";
   const pointCount = map.init.params.pointCount;
-  const points = algorithm === "poisson_disk"
-    ? generatePoissonPoints(map, rng, pointCount)
-    : generateRandomPoints(map, rng, pointCount);
+  let points;
+  if (algorithm === "poisson_disk") {
+    points = generatePoissonPoints(map, rng, pointCount);
+  } else if (algorithm === "square_grid") {
+    points = generateSquareGridPoints(map, pointCount);
+  } else {
+    points = generateRandomPoints(map, rng, pointCount);
+  }
 
   const nextMap = {
     ...map,
@@ -54,7 +59,9 @@ function generateRandomPoints(map, rng, pointCount) {
 function generatePoissonPoints(map, rng, pointCount) {
   const size = map.meta.size;
   const paddingRatio = map.init.params.poissonPaddingRatio ?? map.init.params.scatterPaddingRatio ?? 0.01;
-  const minDistance = map.init.params.poissonMinDistance ?? 18;
+  const spacingRatio = map.init.params.poissonSpacingRatio ?? 1.15;
+  const nominalSpacing = Math.sqrt((size * size) / Math.max(1, pointCount));
+  const minDistance = Math.max(2, nominalSpacing * spacingRatio);
   const maxAttempts = map.init.params.poissonMaxAttempts ?? 30;
   const minX = size * paddingRatio;
   const minY = size * paddingRatio;
@@ -91,13 +98,42 @@ function generatePoissonPoints(map, rng, pointCount) {
   }));
 }
 
+function generateSquareGridPoints(map, pointCount) {
+  const size = map.meta.size;
+  const padding = size * (map.init.params.scatterPaddingRatio ?? 0.01);
+  const minX = padding;
+  const minY = padding;
+  const maxX = size - padding;
+  const maxY = size - padding;
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+
+  const cols = Math.max(1, Math.ceil(Math.sqrt((pointCount * width) / height)));
+  const rows = Math.max(1, Math.ceil(pointCount / cols));
+  const stepX = width / cols;
+  const stepY = height / rows;
+  const points = [];
+
+  for (let row = 0; row < rows && points.length < pointCount; row += 1) {
+    for (let col = 0; col < cols && points.length < pointCount; col += 1) {
+      points.push({
+        id: points.length,
+        x: minX + (col + 0.5) * stepX,
+        y: minY + (row + 0.5) * stepY,
+      });
+    }
+  }
+
+  return points;
+}
+
 function samplePoissonDisk({ pointCount, minDistance, maxAttempts, minX, minY, maxX, maxY, rng }) {
   const cellSize = minDistance / Math.sqrt(2);
   const width = maxX - minX;
   const height = maxY - minY;
   const cols = Math.max(1, Math.ceil(width / cellSize));
   const rows = Math.max(1, Math.ceil(height / cellSize));
-  const grid = Array.from({ length: cols * rows }, () => -1);
+  const grid = Array.from({ length: cols * rows }, () => []);
   const points = [];
   const active = [];
 
@@ -143,7 +179,7 @@ function samplePoissonDisk({ pointCount, minDistance, maxAttempts, minX, minY, m
     const pointIndex = points.length;
     points.push(point);
     active.push(pointIndex);
-    grid[cellIndex(point)] = pointIndex;
+    grid[cellIndex(point)].push(pointIndex);
   }
 
   function insideBounds(point) {
@@ -165,16 +201,18 @@ function samplePoissonDisk({ pointCount, minDistance, maxAttempts, minX, minY, m
     const cell = cellCoordinates(point);
     for (let y = Math.max(0, cell.y - 2); y <= Math.min(rows - 1, cell.y + 2); y += 1) {
       for (let x = Math.max(0, cell.x - 2); x <= Math.min(cols - 1, cell.x + 2); x += 1) {
-        const neighborIndex = grid[y * cols + x];
-        if (neighborIndex < 0) {
+        const neighborIndices = grid[y * cols + x];
+        if (!neighborIndices.length) {
           continue;
         }
 
-        const neighbor = points[neighborIndex];
-        const dx = neighbor.x - point.x;
-        const dy = neighbor.y - point.y;
-        if ((dx * dx) + (dy * dy) < minDistance * minDistance) {
-          return false;
+        for (let index = 0; index < neighborIndices.length; index += 1) {
+          const neighbor = points[neighborIndices[index]];
+          const dx = neighbor.x - point.x;
+          const dy = neighbor.y - point.y;
+          if ((dx * dx) + (dy * dy) < minDistance * minDistance) {
+            return false;
+          }
         }
       }
     }

@@ -336,10 +336,47 @@ output {
   opacity: 0.5;
 }
 
-.map-controls {
-  display: flex;
-  justify-content: flex-start;
-  gap: 8px;
+.map-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.map-summary-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.map-summary-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.map-summary-value {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.map-summary-item-river {
+  cursor: default;
+}
+
+.map-summary-item-river[data-summary-river-id] {
+  cursor: pointer;
+}
+
+.map-summary-item-river.is-active {
+  border-color: rgba(30, 86, 197, 0.38);
+  background: rgba(79, 124, 255, 0.08);
 }
 
 .map-shell {
@@ -484,6 +521,10 @@ output {
   }
 
   .map-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .map-summary {
     grid-template-columns: 1fr;
   }
 

@@ -43,6 +43,7 @@
                     <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="scatterAlgorithm" aria-label="Scatter algorithm help">?</button></legend>
                     <label><input type="radio" name="scatterAlgorithm" value="random_scattering" checked>Random scattering</label>
                     <label><input type="radio" name="scatterAlgorithm" value="poisson_disk">Poisson disk distribution</label>
+                    <label><input type="radio" name="scatterAlgorithm" value="square_grid">Square grid</label>
                   </fieldset>
                   <label>
                     <span class="field-title">Point Count <button class="control-help-trigger" type="button" data-help-key="pointCount" aria-label="Point Count help">?</button></span>
@@ -56,9 +57,9 @@
                   </label>
                   <section id="poissonControlsPanel" class="algorithm-secondary-controls">
                     <label>
-                      <span class="field-title">Poisson Min Distance <button class="control-help-trigger" type="button" data-help-key="poissonMinDistance" aria-label="Poisson min distance help">?</button></span>
-                      <input id="poissonMinDistance" name="poissonMinDistance" type="range" min="2" max="48" step="1" value="18">
-                      <output for="poissonMinDistance" id="poissonMinDistanceValue">18</output>
+                      <span class="field-title">Poisson Spacing Ratio <button class="control-help-trigger" type="button" data-help-key="poissonSpacingRatio" aria-label="Poisson spacing ratio help">?</button></span>
+                      <input id="poissonSpacingRatio" name="poissonSpacingRatio" type="range" min="0.4" max="2.4" step="0.05" value="1.15">
+                      <output for="poissonSpacingRatio" id="poissonSpacingRatioValue">1.15</output>
                     </label>
                     <label>
                       <span class="field-title">Poisson Max Attempts <button class="control-help-trigger" type="button" data-help-key="poissonMaxAttempts" aria-label="Poisson max attempts help">?</button></span>
@@ -201,10 +202,27 @@
       </section>
 
       <section class="panel canvas-panel">
-        <div class="map-controls" aria-label="Map zoom controls">
-          <button id="zoomOutButton" class="secondary-button" type="button" aria-label="Zoom out">-</button>
-          <button id="zoomInButton" class="secondary-button" type="button" aria-label="Zoom in">+</button>
-          <button id="resetViewButton" class="secondary-button" type="button">Reset View</button>
+        <div class="map-summary" aria-label="Map generation summary">
+          <div class="map-summary-item">
+            <span class="map-summary-label">Sea cells</span>
+            <span id="seaCellCount" class="map-summary-value">0</span>
+          </div>
+          <div class="map-summary-item">
+            <span class="map-summary-label">Land cells</span>
+            <span id="landCellCount" class="map-summary-value">0</span>
+          </div>
+          <div class="map-summary-item">
+            <span class="map-summary-label">Total time</span>
+            <span id="generationTimeValue" class="map-summary-value">--</span>
+          </div>
+          <div id="primaryRiverSummary" class="map-summary-item map-summary-item-river">
+            <span id="primaryRiverLabel" class="map-summary-label">Primary river</span>
+            <span id="primaryRiverLength" class="map-summary-value">--</span>
+          </div>
+          <div id="tributaryRiverSummary" class="map-summary-item map-summary-item-river">
+            <span id="tributaryRiverLabel" class="map-summary-label">Tributary</span>
+            <span id="tributaryRiverLength" class="map-summary-value">--</span>
+          </div>
         </div>
         <div class="map-shell">
           <div id="mapViewport" class="map-viewport">
