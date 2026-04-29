@@ -8,9 +8,9 @@ import { getMapGeometry } from "../generator/map-model.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
-const EDGE_STROKE_WIDTH = 0.85;
-const SEGMENT_ENDPOINT_RADIUS = 1.0;
-const RIVER_ENDPOINT_RADIUS = 2.35;
+const EDGE_STROKE_WIDTH = 2.55;
+const SEGMENT_ENDPOINT_RADIUS = 3.0;
+const RIVER_ENDPOINT_RADIUS = 7.05;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -80,7 +80,7 @@ function createBaseLayer(size) {
 
 function createGrid(size) {
   const group = createElement("g", {
-    "stroke-width": 1,
+    "stroke-width": 3,
     stroke: COLORS.grid,
     "aria-hidden": "true",
   });
@@ -284,7 +284,7 @@ function createTessellationVerticesGroup(vertices) {
       createElement("circle", {
         cx: vertex.x,
         cy: vertex.y,
-        r: 0.75,
+        r: 2.25,
         fill: COLORS.tessellation,
       }),
     );
@@ -309,7 +309,7 @@ function createPointsGroup(points) {
       createElement("circle", {
         cx: point.x,
         cy: point.y,
-        r: 1.8,
+        r: 5.4,
         fill: COLORS.point,
       }),
     );
@@ -342,7 +342,7 @@ function createRiversGroup(rivers, segments) {
 }
 
 function createRiverStrokes(river) {
-  const widthBeforeMerge = river.strokeWidthBeforeMerge ?? river.strokeWidth ?? 6;
+  const widthBeforeMerge = river.strokeWidthBeforeMerge ?? river.strokeWidth ?? 18;
   const widthAfterMerge = river.strokeWidthAfterMerge ?? river.strokeWidth ?? widthBeforeMerge;
   const mergePointIndex = findRiverMergePointIndex(river);
 
@@ -392,7 +392,7 @@ function createRiverHitStroke(riverId, points, width) {
     points: toSvgPoints(points),
     fill: "none",
     stroke: COLORS.riverHit,
-    "stroke-width": Math.max(10, width + 6),
+    "stroke-width": Math.max(30, width + 18),
     "stroke-linecap": "round",
     "stroke-linejoin": "round",
     "data-river-id": riverId,
@@ -426,7 +426,7 @@ function createRiverEndpointGroup(segments) {
           r: RIVER_ENDPOINT_RADIUS,
           fill: COLORS.riverEndpoint,
           stroke: COLORS.seaEdge,
-          "stroke-width": 0.45,
+          "stroke-width": 1.35,
           "data-river-endpoint": "true",
         }),
       );

@@ -73,7 +73,7 @@ export function buildRiverLength(sourcePoint, points) {
   return length;
 }
 
-function edgeOnSide(edge, mapSize, side, epsilon = 0.75) {
+function edgeOnSide(edge, mapSize, side, epsilon = 2.25) {
   if (side === "north") {
     return Math.abs(edge.from.y) <= epsilon && Math.abs(edge.to.y) <= epsilon;
   }

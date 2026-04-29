@@ -363,7 +363,7 @@ function mergeVertexPoints(first, second, size) {
   return merged;
 }
 
-function boundarySidesForPoint(point, size, epsilon = 0.75) {
+function boundarySidesForPoint(point, size, epsilon = 2.25) {
   const sides = [];
   if (Math.abs(point.x) <= epsilon) {
     sides.push("west");
@@ -384,7 +384,7 @@ function clampToMap(value, size) {
   return Math.min(size, Math.max(0, value));
 }
 
-function liesOnCanvasBoundary(from, to, size, epsilon = 0.75) {
+function liesOnCanvasBoundary(from, to, size, epsilon = 2.25) {
   return (
     (Math.abs(from.x) <= epsilon && Math.abs(to.x) <= epsilon)
     || (Math.abs(from.x - size) <= epsilon && Math.abs(to.x - size) <= epsilon)

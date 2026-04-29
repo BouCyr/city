@@ -28,7 +28,7 @@ Through step 1.8 the map is cell geometry:
 
 ```js
 {
-  meta: { size: 1000, stepIndex: 6, stepLabel: "Trace the first river" },
+  meta: { size: 3000, stepIndex: 6, stepLabel: "Trace the first river" },
   points: [{ id: 0, x: 120, y: 240 }, ...],
   vertices: [{ id: 0, x: 10, y: 20, edgeIds: ["0-1-..."] }, ...],
   edges: [{
@@ -103,7 +103,7 @@ Function input:
 {
   rng,
   map: {
-    meta: { size: 1000 },
+    meta: { size: 3000 },
     init: { params: { pointCount: 500, scatterPaddingRatio: 0.01, ... } }
   }
 }
@@ -136,7 +136,7 @@ Function input:
 ```js
 {
   points: [{ id: 0, x: 123.4, y: 456.7 }, ...],
-  meta: { size: 1000 }
+  meta: { size: 3000 }
 }
 ```
 
@@ -363,13 +363,13 @@ Function output:
 {
   cells: [{ id: 31, features: { river: true, ... } }, ...],
   river: {
-    primary: { id: 0, widthMergeCellId: 27, strokeWidthBeforeMerge: 6, strokeWidthAfterMerge: 7.2, ... },
+    primary: { id: 0, widthMergeCellId: 27, strokeWidthBeforeMerge: 18, strokeWidthAfterMerge: 21.6, ... },
     secondary: {
       id: 1,
       mergedIntoRiverId: 0,
       mergeCellId: 27,
       cellIds: [31, 30, 24, ...],
-      points: [{ x: 1000, y: 120 }, { x: 970, y: 130 }, ...]
+      points: [{ x: 3000, y: 360 }, { x: 2910, y: 390 }, ...]
     }
   },
   rivers: [{ id: 0, ... }, { id: 1, ... }]

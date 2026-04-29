@@ -7,7 +7,7 @@
 import { cross } from "./geometry.js";
 
 export const BLANK_STEP_INDEX = -1;
-export const DEFAULT_SEGMENT_LENGTH = 10;
+export const DEFAULT_SEGMENT_LENGTH = 30;
 
 const SNAPSHOT_FALLBACK = (value) => JSON.parse(JSON.stringify(value));
 
@@ -508,7 +508,7 @@ export function clonePoint(point) {
   return cloned;
 }
 
-function liesOnCanvasBoundary(edge, width, height, epsilon = 0.75) {
+function liesOnCanvasBoundary(edge, width, height, epsilon = 2.25) {
   return (
     (Math.abs(edge.from.x) <= epsilon && Math.abs(edge.to.x) <= epsilon)
     || (Math.abs(edge.from.x - width) <= epsilon && Math.abs(edge.to.x - width) <= epsilon)

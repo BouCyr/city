@@ -46,11 +46,11 @@ const DEFAULT_HILL_COUNT = 9;
 const DEFAULT_HILL_SEA_DISTANCE = 4;
 const DEFAULT_HILLSIDE_RADIUS = 1;
 const DEFAULT_RIVER_TURN_ANGLE = 90;
-const DEFAULT_PRIMARY_RIVER_WIDTH = 6;
+const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
 const DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE = 6;
 const DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
-const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 1.2;
+const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
 
 /**
  * WHAT: Attach the live form behaviors that keep visible values in sync.
@@ -66,8 +66,9 @@ export function bindFormInteractions(form) {
     }
 
     const sync = () => {
-      output.value = field.value;
-      output.textContent = field.value;
+      const suffix = name === "primaryRiverWidth" || name === "primaryMergeWidthGain" ? " m" : "";
+      output.value = `${field.value}${suffix}`;
+      output.textContent = `${field.value}${suffix}`;
     };
 
     field.addEventListener("input", sync);
@@ -131,7 +132,7 @@ export function readFormState(form) {
     hillSeaDistance: normalizeInteger(Number(data.get("hillSeaDistance") || DEFAULT_HILL_SEA_DISTANCE), 0, 12),
     hillsideRadius: normalizeInteger(Number(data.get("hillsideRadius") || DEFAULT_HILLSIDE_RADIUS), 0, 6),
     riverTurnAngle: normalizeBoundedCount(Number(data.get("riverTurnAngle") || DEFAULT_RIVER_TURN_ANGLE), 0, 120),
-    primaryRiverWidth: normalizeDecimal(Number(data.get("primaryRiverWidth") || DEFAULT_PRIMARY_RIVER_WIDTH), 2, 12),
+    primaryRiverWidth: normalizeDecimal(Number(data.get("primaryRiverWidth") || DEFAULT_PRIMARY_RIVER_WIDTH), 6, 36),
     tributarySourceRiverDistance: normalizeInteger(Number(data.get("tributarySourceRiverDistance") || DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE), 0, 20),
     waterReachRatio: normalizeDecimal(Number(data.get("waterReachRatio") || DEFAULT_WATER_REACH_RATIO), 0, 0.5),
     waterExpansionBase: normalizeDecimal(Number(data.get("waterExpansionBase") || DEFAULT_WATER_EXPANSION_BASE), 0, 1),
@@ -141,7 +142,7 @@ export function readFormState(form) {
     relaxPaddingRatio: normalizeDecimal(Number(data.get("relaxPaddingRatio") || DEFAULT_RELAX_PADDING_RATIO), 0, 0.15),
     tributaryMergeSeaDistance: normalizeInteger(Number(data.get("tributaryMergeSeaDistance") || DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE), 0, 20),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
-    primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 4),
+    primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 12),
     waterSides,
   };
 }

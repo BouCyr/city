@@ -420,8 +420,8 @@ function findWestOutlet(cells, edges, size) {
   const westTarget = { x: 0, y: size / 2 };
   const westBoundaryEdges = edges.filter((edge) =>
     edge.features.boundary
-    && Math.abs(edge.from.x) <= 0.75
-    && Math.abs(edge.to.x) <= 0.75,
+    && Math.abs(edge.from.x) <= 2.25
+    && Math.abs(edge.to.x) <= 2.25,
   );
 
   const candidates = westBoundaryEdges

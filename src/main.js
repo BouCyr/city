@@ -11,7 +11,7 @@ import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 import { GENERATION_STEPS } from "./generator/steps.js";
 import { getMapLots } from "./generator/map-model.js";
 
-const CANVAS_SIZE = 1000;
+const CANVAS_SIZE = 3000;
 const REGENERATE_DEBOUNCE_MS = 250;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 12;
@@ -21,9 +21,9 @@ const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
 const HOVER_NEIGHBOR_OVERLAY_ID = "hoveredNeighborOverlay";
 const HOVER_RIVER_OVERLAY_ID = "hoveredRiverOverlay";
 const HOVER_NEIGHBOR_STROKE = "#7a5a2e";
-const HOVER_NEIGHBOR_STROKE_WIDTH = 1.5;
+const HOVER_NEIGHBOR_STROKE_WIDTH = 4.5;
 const FLOW_STROKE = "#4f7cff";
-const FLOW_STROKE_WIDTH = 4;
+const FLOW_STROKE_WIDTH = 12;
 const RIVER_HOVER_STROKE = "#1e56c5";
 const RIVER_HOVER_GLOW = "rgba(255, 255, 255, 0.82)";
 const HILLS_STEP_INDEX = 5;
@@ -85,11 +85,11 @@ const CONTROL_HELP_TEXT = {
   hillSeaDistance: "Minimum graph distance from sea required for a cell to qualify as a hill.",
   hillsideRadius: "How many neighbor rings around each hill are marked as hillside.",
   riverTurnAngle: "Minimum turn angle constraint while tracing rivers. Larger values enforce smoother paths.",
-  primaryRiverWidth: "Base render width for the primary river before tributary merge adjustments.",
+  primaryRiverWidth: "Base render width for the primary river in meters before tributary merge adjustments.",
   tributarySourceRiverDistance: "Minimum distance between tributary source candidates and the primary river.",
   tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
-  primaryMergeWidthGain: "Additional width added to the primary river downstream after tributary merge.",
+  primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
 };
 
 bindFormInteractions(form);
@@ -639,7 +639,7 @@ function syncRiverSummaryCard(card, labelElement, valueElement, { label, length,
   }
 
   labelElement.textContent = label;
-  valueElement.textContent = length === null || length === undefined ? "--" : `${length.toFixed(1)} px`;
+  valueElement.textContent = length === null || length === undefined ? "--" : formatDistanceMeters(length);
   if (riverId === null || riverId === undefined) {
     card.removeAttribute("data-summary-river-id");
   } else {
@@ -783,7 +783,7 @@ function renderHoveredGeometry(hoverTarget) {
   hoveredCellData.innerHTML = [
     createCellDataRow("Id", formatGeometryId(item, kind)),
     createCellDataRow("Features", formatFeatures(item.features)),
-    createCellDataRow("Area", `${getGeometryArea(item).toFixed(1)} px2`),
+    createCellDataRow("Area", formatAreaSquareMeters(getGeometryArea(item))),
     createCellDataRow("Lots", formatContainedLotCount(item, kind)),
     createCellDataRow("Neighbours", formatNeighborList(item, kind)),
   ].join("");
@@ -806,7 +806,7 @@ function renderHoveredRiver(river) {
   hoveredCellData.innerHTML = [
     createCellDataRow("River", river.name || `River ${river.id}`),
     createCellDataRow("Id", String(river.id)),
-    createCellDataRow("Length", `${river.length.toFixed(1)} px`),
+    createCellDataRow("Length", formatDistanceMeters(river.length)),
     createCellDataRow("Cells", String(river.cellIds?.length || 0)),
     createCellDataRow("Width", formatRiverWidth(river)),
     createCellDataRow("Source Cell", river.sourceCellId ?? "n/a"),
@@ -912,7 +912,7 @@ function drawRiverOverlay(river) {
   glow.setAttribute("points", toSvgPoints(river.points));
   glow.setAttribute("fill", "none");
   glow.setAttribute("stroke", RIVER_HOVER_GLOW);
-  glow.setAttribute("stroke-width", String((river.strokeWidthAfterMerge ?? river.strokeWidth ?? 6) + 3));
+  glow.setAttribute("stroke-width", String((river.strokeWidthAfterMerge ?? river.strokeWidth ?? 18) + 9));
   glow.setAttribute("stroke-linecap", "round");
   glow.setAttribute("stroke-linejoin", "round");
 
@@ -920,7 +920,7 @@ function drawRiverOverlay(river) {
   line.setAttribute("points", toSvgPoints(river.points));
   line.setAttribute("fill", "none");
   line.setAttribute("stroke", RIVER_HOVER_STROKE);
-  line.setAttribute("stroke-width", String((river.strokeWidthAfterMerge ?? river.strokeWidth ?? 6) + 1));
+  line.setAttribute("stroke-width", String((river.strokeWidthAfterMerge ?? river.strokeWidth ?? 18) + 3));
   line.setAttribute("stroke-linecap", "round");
   line.setAttribute("stroke-linejoin", "round");
 
@@ -998,6 +998,14 @@ function formatFeatures(features = {}) {
     .join(", ") || "none";
 }
 
+function formatDistanceMeters(value) {
+  return `${value.toFixed(1)} m`;
+}
+
+function formatAreaSquareMeters(value) {
+  return `${value.toFixed(0)} m2`;
+}
+
 function getGeometryArea(geometry) {
   if (Number.isFinite(geometry.area)) {
     return geometry.area;
@@ -1028,7 +1036,7 @@ function appendFlowPolyline(overlay, flowPath, stroke) {
   outline.setAttribute("points", toSvgPoints(flowPath.points));
   outline.setAttribute("fill", "none");
   outline.setAttribute("stroke", "rgba(255, 255, 255, 0.75)");
-  outline.setAttribute("stroke-width", String(FLOW_STROKE_WIDTH + 2));
+  outline.setAttribute("stroke-width", String(FLOW_STROKE_WIDTH + 6));
   outline.setAttribute("stroke-linecap", "round");
   outline.setAttribute("stroke-linejoin", "round");
 
@@ -1050,7 +1058,7 @@ function shouldShowRiverPreview() {
 function formatRiverWidth(river) {
   const before = river.strokeWidthBeforeMerge ?? river.strokeWidth ?? 0;
   const after = river.strokeWidthAfterMerge ?? river.strokeWidth ?? before;
-  return before === after ? `${before}` : `${before} -> ${after}`;
+  return before === after ? formatDistanceMeters(before) : `${formatDistanceMeters(before)} -> ${formatDistanceMeters(after)}`;
 }
 
 function describeRiverBranch(river) {
