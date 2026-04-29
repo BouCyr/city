@@ -63,6 +63,10 @@ const viewportState = createViewportState(CANVAS_SIZE);
 const CONTROL_HELP_TEXT = {
   pointCount: "How many seed points are scattered before Voronoi generation. Higher values create denser and smaller cells.",
   scatterPaddingRatio: "Margin ratio that keeps scattered points away from map borders. Higher values create a wider border buffer.",
+  scatterAlgorithm: "Select the scatter algorithm for step 1.1. Different algorithms produce different point distributions and downstream map geometry.",
+  poissonMinDistance: "Minimum spacing target between Poisson points. Larger values produce more even and sparser distributions.",
+  poissonMaxAttempts: "Candidate attempts per active Poisson sample before it is retired. Higher values improve fill quality at higher CPU cost.",
+  poissonPaddingRatio: "Poisson-specific edge padding ratio. Higher values keep Poisson points farther from map borders.",
   waterSides: "Select borders that can flood inward. More active sides usually increases sea coverage.",
   waterReachRatio: "Maximum inland reach used during water expansion. Higher values let water penetrate farther.",
   waterExpansionBase: "Base chance for water to expand from sea-adjacent cells into land cells.",
@@ -142,6 +146,7 @@ document.querySelectorAll(".control-help-trigger").forEach((button) => {
   });
 });
 setupStepControlPanels();
+setupScatterAlgorithmControls();
 
 form.requestSubmit();
 
@@ -164,6 +169,25 @@ function setupStepControlPanels() {
       }
     });
   });
+}
+
+function setupScatterAlgorithmControls() {
+  const radios = Array.from(form.querySelectorAll('input[name="scatterAlgorithm"]'));
+  const poissonPanel = document.querySelector("#poissonControlsPanel");
+  if (!radios.length || !(poissonPanel instanceof HTMLElement)) {
+    return;
+  }
+
+  const sync = () => {
+    const selected = form.querySelector('input[name="scatterAlgorithm"]:checked');
+    const usePoisson = selected instanceof HTMLInputElement && selected.value === "poisson_disk";
+    poissonPanel.hidden = !usePoisson;
+  };
+
+  radios.forEach((radio) => {
+    radio.addEventListener("change", sync);
+  });
+  sync();
 }
 
 /**

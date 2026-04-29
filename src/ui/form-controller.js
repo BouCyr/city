@@ -7,6 +7,9 @@
 const RANGE_FIELDS = [
   "pointCount",
   "scatterPaddingRatio",
+  "poissonMinDistance",
+  "poissonMaxAttempts",
+  "poissonPaddingRatio",
   "waterReachRatio",
   "waterExpansionBase",
   "waterExpansionEdgeWeight",
@@ -27,6 +30,10 @@ const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
 const DEFAULT_POINT_COUNT = 500;
 const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
+const DEFAULT_SCATTER_ALGORITHM = "random_scattering";
+const DEFAULT_POISSON_MIN_DISTANCE = 18;
+const DEFAULT_POISSON_MAX_ATTEMPTS = 30;
+const DEFAULT_POISSON_PADDING_RATIO = 0.01;
 const DEFAULT_WATER_REACH_RATIO = 0.2;
 const DEFAULT_WATER_EXPANSION_BASE = 0.14;
 const DEFAULT_WATER_EXPANSION_EDGE_WEIGHT = 0.52;
@@ -80,8 +87,14 @@ export function readFormState(form) {
   }));
   return {
     seed: String(data.get("seed") || DEFAULT_SEED),
+    stepAlgorithms: {
+      scatterPoints: normalizeScatterAlgorithm(String(data.get("scatterAlgorithm") || DEFAULT_SCATTER_ALGORITHM)),
+    },
     pointCount: normalizeInteger(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), 50, 1200),
     scatterPaddingRatio: normalizeDecimal(Number(data.get("scatterPaddingRatio") || DEFAULT_SCATTER_PADDING_RATIO), 0, 0.1),
+    poissonMinDistance: normalizeDecimal(Number(data.get("poissonMinDistance") || DEFAULT_POISSON_MIN_DISTANCE), 2, 48),
+    poissonMaxAttempts: normalizeInteger(Number(data.get("poissonMaxAttempts") || DEFAULT_POISSON_MAX_ATTEMPTS), 4, 80),
+    poissonPaddingRatio: normalizeDecimal(Number(data.get("poissonPaddingRatio") || DEFAULT_POISSON_PADDING_RATIO), 0, 0.15),
     hillCount: normalizeNonNegativeCount(Number(data.get("hillCount") || DEFAULT_HILL_COUNT)),
     hillSeaDistance: normalizeInteger(Number(data.get("hillSeaDistance") || DEFAULT_HILL_SEA_DISTANCE), 0, 12),
     hillsideRadius: normalizeInteger(Number(data.get("hillsideRadius") || DEFAULT_HILLSIDE_RADIUS), 0, 6),
@@ -99,6 +112,10 @@ export function readFormState(form) {
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 4),
     waterSides,
   };
+}
+
+function normalizeScatterAlgorithm(value) {
+  return value === "poisson_disk" ? "poisson_disk" : "random_scattering";
 }
 
 function normalizeNonNegativeCount(value) {

@@ -114,8 +114,12 @@ function getStepParametersForStep(stepIndex, options) {
   switch (stepIndex) {
     case 0:
       return {
+        scatterAlgorithm: options.stepAlgorithms?.scatterPoints || "random_scattering",
         pointCount: options.pointCount,
         scatterPaddingRatio: options.scatterPaddingRatio,
+        poissonMinDistance: options.poissonMinDistance,
+        poissonMaxAttempts: options.poissonMaxAttempts,
+        poissonPaddingRatio: options.poissonPaddingRatio,
       };
     case 1:
       return {

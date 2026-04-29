@@ -39,6 +39,11 @@
               <li data-step-index="0">
                 <button class="step-select" type="button">1.1 Scatter pseudo-random points</button>
                 <div class="step-controls">
+                  <fieldset class="algorithm-choice">
+                    <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="scatterAlgorithm" aria-label="Scatter algorithm help">?</button></legend>
+                    <label><input type="radio" name="scatterAlgorithm" value="random_scattering" checked>Random scattering</label>
+                    <label><input type="radio" name="scatterAlgorithm" value="poisson_disk">Poisson disk distribution</label>
+                  </fieldset>
                   <label>
                     <span class="field-title">Point Count <button class="control-help-trigger" type="button" data-help-key="pointCount" aria-label="Point Count help">?</button></span>
                     <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500">
@@ -49,6 +54,23 @@
                     <input id="scatterPaddingRatio" name="scatterPaddingRatio" type="range" min="0" max="0.1" step="0.005" value="0.01">
                     <output for="scatterPaddingRatio" id="scatterPaddingRatioValue">0.01</output>
                   </label>
+                  <section id="poissonControlsPanel" class="algorithm-secondary-controls">
+                    <label>
+                      <span class="field-title">Poisson Min Distance <button class="control-help-trigger" type="button" data-help-key="poissonMinDistance" aria-label="Poisson min distance help">?</button></span>
+                      <input id="poissonMinDistance" name="poissonMinDistance" type="range" min="2" max="48" step="1" value="18">
+                      <output for="poissonMinDistance" id="poissonMinDistanceValue">18</output>
+                    </label>
+                    <label>
+                      <span class="field-title">Poisson Max Attempts <button class="control-help-trigger" type="button" data-help-key="poissonMaxAttempts" aria-label="Poisson max attempts help">?</button></span>
+                      <input id="poissonMaxAttempts" name="poissonMaxAttempts" type="range" min="4" max="80" step="1" value="30">
+                      <output for="poissonMaxAttempts" id="poissonMaxAttemptsValue">30</output>
+                    </label>
+                    <label>
+                      <span class="field-title">Poisson Padding Ratio <button class="control-help-trigger" type="button" data-help-key="poissonPaddingRatio" aria-label="Poisson padding ratio help">?</button></span>
+                      <input id="poissonPaddingRatio" name="poissonPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.01">
+                      <output for="poissonPaddingRatio" id="poissonPaddingRatioValue">0.01</output>
+                    </label>
+                  </section>
                 </div>
               </li>
               <li data-step-index="1">

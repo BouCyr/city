@@ -1,17 +1,17 @@
 /*
- * WHAT: Scatter the initial pseudo-random sites used to seed the Voronoi map.
- * HOW: Sample the seeded RNG inside a small padded box and replace any previous geometry.
+ * WHAT: Scatter the initial sites used to seed the Voronoi map.
+ * HOW: Use the selected step 1.1 algorithm from map params (random scatter or Poisson disk).
  * WHY: Point generation is the deterministic source for every later step.
  */
 
+const TAU = Math.PI * 2;
+
 export function runScatterPointsStep(map, { rng }) {
-  const padding = map.meta.size * (map.init.params.scatterPaddingRatio ?? 0.01);
+  const algorithm = map.init.params.stepAlgorithms?.scatterPoints || "random_scattering";
   const pointCount = map.init.params.pointCount;
-  const points = Array.from({ length: pointCount }, (_, index) => ({
-    id: index,
-    x: rng.between(padding, map.meta.size - padding),
-    y: rng.between(padding, map.meta.size - padding),
-  }));
+  const points = algorithm === "poisson_disk"
+    ? generatePoissonPoints(map, rng, pointCount)
+    : generateRandomPoints(map, rng, pointCount);
 
   const nextMap = {
     ...map,
@@ -40,4 +40,144 @@ export function runScatterPointsStep(map, { rng }) {
       },
     ],
   };
+}
+
+function generateRandomPoints(map, rng, pointCount) {
+  const padding = map.meta.size * (map.init.params.scatterPaddingRatio ?? 0.01);
+  return Array.from({ length: pointCount }, (_, index) => ({
+    id: index,
+    x: rng.between(padding, map.meta.size - padding),
+    y: rng.between(padding, map.meta.size - padding),
+  }));
+}
+
+function generatePoissonPoints(map, rng, pointCount) {
+  const size = map.meta.size;
+  const paddingRatio = map.init.params.poissonPaddingRatio ?? map.init.params.scatterPaddingRatio ?? 0.01;
+  const minDistance = map.init.params.poissonMinDistance ?? 18;
+  const maxAttempts = map.init.params.poissonMaxAttempts ?? 30;
+  const minX = size * paddingRatio;
+  const minY = size * paddingRatio;
+  const maxX = size - minX;
+  const maxY = size - minY;
+
+  if (maxX <= minX || maxY <= minY) {
+    return generateRandomPoints(map, rng, pointCount);
+  }
+
+  const poissonPoints = samplePoissonDisk({
+    pointCount,
+    minDistance,
+    maxAttempts,
+    minX,
+    minY,
+    maxX,
+    maxY,
+    rng,
+  });
+
+  // Ensure downstream steps always receive pointCount points.
+  while (poissonPoints.length < pointCount) {
+    poissonPoints.push({
+      x: rng.between(minX, maxX),
+      y: rng.between(minY, maxY),
+    });
+  }
+
+  return poissonPoints.slice(0, pointCount).map((point, index) => ({
+    id: index,
+    x: point.x,
+    y: point.y,
+  }));
+}
+
+function samplePoissonDisk({ pointCount, minDistance, maxAttempts, minX, minY, maxX, maxY, rng }) {
+  const cellSize = minDistance / Math.sqrt(2);
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const cols = Math.max(1, Math.ceil(width / cellSize));
+  const rows = Math.max(1, Math.ceil(height / cellSize));
+  const grid = Array.from({ length: cols * rows }, () => -1);
+  const points = [];
+  const active = [];
+
+  const first = {
+    x: rng.between(minX, maxX),
+    y: rng.between(minY, maxY),
+  };
+  addPoint(first);
+
+  while (active.length && points.length < pointCount) {
+    const activeIndex = Math.floor(rng.next() * active.length);
+    const basePoint = points[active[activeIndex]];
+    let placed = false;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const angle = rng.between(0, TAU);
+      const distance = minDistance * (1 + rng.next());
+      const candidate = {
+        x: basePoint.x + Math.cos(angle) * distance,
+        y: basePoint.y + Math.sin(angle) * distance,
+      };
+
+      if (!insideBounds(candidate)) {
+        continue;
+      }
+      if (!isFarEnough(candidate)) {
+        continue;
+      }
+
+      addPoint(candidate);
+      placed = true;
+      break;
+    }
+
+    if (!placed) {
+      active.splice(activeIndex, 1);
+    }
+  }
+
+  return points;
+
+  function addPoint(point) {
+    const pointIndex = points.length;
+    points.push(point);
+    active.push(pointIndex);
+    grid[cellIndex(point)] = pointIndex;
+  }
+
+  function insideBounds(point) {
+    return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+  }
+
+  function cellCoordinates(point) {
+    const x = Math.max(0, Math.min(cols - 1, Math.floor((point.x - minX) / cellSize)));
+    const y = Math.max(0, Math.min(rows - 1, Math.floor((point.y - minY) / cellSize)));
+    return { x, y };
+  }
+
+  function cellIndex(point) {
+    const cell = cellCoordinates(point);
+    return cell.y * cols + cell.x;
+  }
+
+  function isFarEnough(point) {
+    const cell = cellCoordinates(point);
+    for (let y = Math.max(0, cell.y - 2); y <= Math.min(rows - 1, cell.y + 2); y += 1) {
+      for (let x = Math.max(0, cell.x - 2); x <= Math.min(cols - 1, cell.x + 2); x += 1) {
+        const neighborIndex = grid[y * cols + x];
+        if (neighborIndex < 0) {
+          continue;
+        }
+
+        const neighbor = points[neighborIndex];
+        const dx = neighbor.x - point.x;
+        const dy = neighbor.y - point.y;
+        if ((dx * dx) + (dy * dy) < minDistance * minDistance) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 }

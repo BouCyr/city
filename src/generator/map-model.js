@@ -19,6 +19,12 @@ export function createInitialMap(options) {
         seed: options.seed,
         pointCount: options.pointCount,
         scatterPaddingRatio: options.scatterPaddingRatio,
+        stepAlgorithms: {
+          ...(options.stepAlgorithms || {}),
+        },
+        poissonMinDistance: options.poissonMinDistance,
+        poissonMaxAttempts: options.poissonMaxAttempts,
+        poissonPaddingRatio: options.poissonPaddingRatio,
         waterReachRatio: options.waterReachRatio,
         waterExpansionBase: options.waterExpansionBase,
         waterExpansionEdgeWeight: options.waterExpansionEdgeWeight,
