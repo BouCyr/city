@@ -26,171 +26,167 @@
             <span id="backgroundTaskStatus" class="task-status" aria-live="polite"></span>
           </label>
 
-          <details class="controls-root">
-            <summary>Geographical Feature Controls</summary>
-
-            <details class="control-section">
-              <summary>Step 1.1 / Scatter Points</summary>
-
-              <label>
-                <span class="field-title">Point Count <button class="help-dot" type="button" data-tooltip="Sets how many pseudo-random sites are scattered before the Voronoi pass. Higher values create smaller cells and denser edge networks." aria-label="Point count help">?</button></span>
-                <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500">
-                <output for="pointCount" id="pointCountValue">500</output>
-              </label>
-
-              <label>
-                <span class="field-title">Scatter Padding Ratio <button class="help-dot" type="button" data-tooltip="Keeps random seed points away from the outer map boundary. Higher values create a wider empty margin near the border." aria-label="Scatter padding help">?</button></span>
-                <input id="scatterPaddingRatio" name="scatterPaddingRatio" type="range" min="0" max="0.1" step="0.005" value="0.01">
-                <output for="scatterPaddingRatio" id="scatterPaddingRatioValue">0.01</output>
-              </label>
-            </details>
-
-            <details class="control-section">
-              <summary>Step 1.3 / Water Classification</summary>
-
-              <fieldset class="water-sides">
-                <legend>Water Sides <button class="help-dot" type="button" data-tooltip="Choose which outer borders can flood inward. No sides gives an inland city, one or two sides yields a coastal city, and all four sides tends toward an island core." aria-label="Water sides help">?</button></legend>
-                <label><input type="checkbox" name="waterSides" value="north">North</label>
-                <label><input type="checkbox" name="waterSides" value="east">East</label>
-                <label><input type="checkbox" name="waterSides" value="south" checked>South</label>
-                <label><input type="checkbox" name="waterSides" value="west" checked>West</label>
-              </fieldset>
-
-              <label>
-                <span class="field-title">Water Reach Ratio <button class="help-dot" type="button" data-tooltip="Limits how far inland initial water seeding and expansion may reach from enabled borders." aria-label="Water reach help">?</button></span>
-                <input id="waterReachRatio" name="waterReachRatio" type="range" min="0" max="0.5" step="0.01" value="0.2">
-                <output for="waterReachRatio" id="waterReachRatioValue">0.2</output>
-              </label>
-
-              <label>
-                <span class="field-title">Water Expansion Base <button class="help-dot" type="button" data-tooltip="Base probability that coastal flooding expands from one cell to the next." aria-label="Water expansion base help">?</button></span>
-                <input id="waterExpansionBase" name="waterExpansionBase" type="range" min="0" max="1" step="0.01" value="0.14">
-                <output for="waterExpansionBase" id="waterExpansionBaseValue">0.14</output>
-              </label>
-
-              <label>
-                <span class="field-title">Water Edge Weight <button class="help-dot" type="button" data-tooltip="Extra flooding pressure added near enabled map sides." aria-label="Water edge weight help">?</button></span>
-                <input id="waterExpansionEdgeWeight" name="waterExpansionEdgeWeight" type="range" min="0" max="1" step="0.01" value="0.52">
-                <output for="waterExpansionEdgeWeight" id="waterExpansionEdgeWeightValue">0.52</output>
-              </label>
-
-              <label>
-                <span class="field-title">Water Pressure Range <button class="help-dot" type="button" data-tooltip="How deep the border-side pressure remains effective as water expands inland." aria-label="Water pressure range help">?</button></span>
-                <input id="waterPressureRangeRatio" name="waterPressureRangeRatio" type="range" min="0.1" max="1" step="0.01" value="0.42">
-                <output for="waterPressureRangeRatio" id="waterPressureRangeRatioValue">0.42</output>
-              </label>
-
-              <label>
-                <span class="field-title">Water Center Bias Radius <button class="help-dot" type="button" data-tooltip="Controls how strongly water expansion resists pushing toward the center of the map." aria-label="Water center bias help">?</button></span>
-                <input id="waterCenterBiasRadiusRatio" name="waterCenterBiasRadiusRatio" type="range" min="0" max="1" step="0.01" value="0.68">
-                <output for="waterCenterBiasRadiusRatio" id="waterCenterBiasRadiusRatioValue">0.68</output>
-              </label>
-            </details>
-
-            <details class="control-section">
-              <summary>Step 1.4 / Lloyd Relaxation</summary>
-
-              <label>
-                <span class="field-title">Relax Padding Ratio <button class="help-dot" type="button" data-tooltip="Keeps relaxed points away from the map border after the Lloyd pass." aria-label="Relax padding help">?</button></span>
-                <input id="relaxPaddingRatio" name="relaxPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.04">
-                <output for="relaxPaddingRatio" id="relaxPaddingRatioValue">0.04</output>
-              </label>
-            </details>
-
-            <details class="control-section">
-              <summary>Step 1.5 / Hills</summary>
-
-              <label>
-                <span class="field-title">Hills <button class="help-dot" type="button" data-tooltip="Choose how many hill cells to flag. Hills are always land cells and must stay inland from the sea threshold below." aria-label="Hill count help">?</button></span>
-                <input id="hillCount" name="hillCount" type="range" min="0" max="40" value="9">
-                <output for="hillCount" id="hillCountValue">9</output>
-              </label>
-
-              <label>
-                <span class="field-title">Hill Sea Distance <button class="help-dot" type="button" data-tooltip="Minimum graph distance from the sea for a cell to be eligible as a hill." aria-label="Hill sea distance help">?</button></span>
-                <input id="hillSeaDistance" name="hillSeaDistance" type="range" min="0" max="12" step="1" value="4">
-                <output for="hillSeaDistance" id="hillSeaDistanceValue">4</output>
-              </label>
-
-              <label>
-                <span class="field-title">Hillside Radius <button class="help-dot" type="button" data-tooltip="How many cell steps away from a hill are marked as hillside terrain." aria-label="Hillside radius help">?</button></span>
-                <input id="hillsideRadius" name="hillsideRadius" type="range" min="0" max="6" step="1" value="1">
-                <output for="hillsideRadius" id="hillsideRadiusValue">1</output>
-              </label>
-            </details>
-
-            <details class="control-section">
-              <summary>Step 1.6 / First River</summary>
-
-              <label>
-                <span class="field-title">River Turn Angle <button class="help-dot" type="button" data-tooltip="Set the minimum allowed turn angle for rivers at each cell centroid. Higher values force smoother rivers and reject sharper bends." aria-label="River turn angle help">?</button></span>
-                <input id="riverTurnAngle" name="riverTurnAngle" type="range" min="0" max="120" value="90">
-                <output for="riverTurnAngle" id="riverTurnAngleValue">90</output>
-              </label>
-
-              <label>
-                <span class="field-title">Primary River Width <button class="help-dot" type="button" data-tooltip="Base stroke width used to render the primary river before any tributary merges into it." aria-label="Primary river width help">?</button></span>
-                <input id="primaryRiverWidth" name="primaryRiverWidth" type="range" min="2" max="12" step="0.5" value="6">
-                <output for="primaryRiverWidth" id="primaryRiverWidthValue">6</output>
-              </label>
-            </details>
-
-            <details class="control-section">
-              <summary>Step 1.7 / First Tributary</summary>
-
-              <label>
-                <span class="field-title">Tributary Source Distance <button class="help-dot" type="button" data-tooltip="Minimum graph distance a tributary source cell must keep from the main river." aria-label="Tributary source distance help">?</button></span>
-                <input id="tributarySourceRiverDistance" name="tributarySourceRiverDistance" type="range" min="0" max="20" step="1" value="6">
-                <output for="tributarySourceRiverDistance" id="tributarySourceRiverDistanceValue">6</output>
-              </label>
-
-              <label>
-                <span class="field-title">Tributary Merge Distance <button class="help-dot" type="button" data-tooltip="Minimum number of cells upstream from the sea or outlet before a tributary may merge into the primary river." aria-label="Tributary merge distance help">?</button></span>
-                <input id="tributaryMergeSeaDistance" name="tributaryMergeSeaDistance" type="range" min="0" max="20" step="1" value="5">
-                <output for="tributaryMergeSeaDistance" id="tributaryMergeSeaDistanceValue">5</output>
-              </label>
-
-              <label>
-                <span class="field-title">Tributary Width Ratio <button class="help-dot" type="button" data-tooltip="Width of the tributary relative to the primary river width." aria-label="Tributary width ratio help">?</button></span>
-                <input id="tributaryWidthRatio" name="tributaryWidthRatio" type="range" min="0.3" max="1" step="0.02" value="0.72">
-                <output for="tributaryWidthRatio" id="tributaryWidthRatioValue">0.72</output>
-              </label>
-
-              <label>
-                <span class="field-title">Merge Width Gain <button class="help-dot" type="button" data-tooltip="Extra width added to the primary river downstream from the tributary merge." aria-label="Merge width gain help">?</button></span>
-                <input id="primaryMergeWidthGain" name="primaryMergeWidthGain" type="range" min="0" max="4" step="0.1" value="1.2">
-                <output for="primaryMergeWidthGain" id="primaryMergeWidthGainValue">1.2</output>
-              </label>
-            </details>
-
-          </details>
-
-          <details class="controls-root">
-            <summary>Human Usage Controls</summary>
-            <p class="empty-controls">No human-usage controls yet.</p>
-          </details>
-        </form>
-
-        <section class="steps-box">
-          <section class="replay-panel">
-            <div class="replay-header">
-              <h3>Replay</h3>
-              <button id="playReplayButton" class="secondary-button" type="button">Play</button>
+          <section class="steps-box">
+            <div class="steps-header">
+              <h2>Generation Steps</h2>
+              <span id="statusBadge" class="status-badge">Idle</span>
             </div>
-            <div class="replay-controls">
-              <button id="prevReplayButton" class="secondary-button" type="button">Prev</button>
-              <label class="replay-slider">
-                <input id="replaySlider" type="range" min="0" max="0" value="0">
-              </label>
-              <button id="nextReplayButton" class="secondary-button" type="button">Next</button>
-            </div>
+            <ol id="stepsList" class="steps-list">
+              <li data-step-index="0">
+                <button class="step-select" type="button">1.1 Scatter pseudo-random points</button>
+                <div class="step-controls">
+                  <label>
+                    <span class="field-title">Point Count</span>
+                    <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500">
+                    <output for="pointCount" id="pointCountValue">500</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Scatter Padding Ratio</span>
+                    <input id="scatterPaddingRatio" name="scatterPaddingRatio" type="range" min="0" max="0.1" step="0.005" value="0.01">
+                    <output for="scatterPaddingRatio" id="scatterPaddingRatioValue">0.01</output>
+                  </label>
+                </div>
+              </li>
+              <li data-step-index="1">
+                <button class="step-select" type="button">1.2 Compute Voronoi cells and edges</button>
+                <div class="step-controls">
+                  <p class="step-empty-params">No parameters</p>
+                </div>
+              </li>
+              <li data-step-index="2">
+                <button class="step-select" type="button">1.3 Apply one Lloyd relaxation pass</button>
+                <div class="step-controls">
+                  <label>
+                    <span class="field-title">Relax Padding Ratio</span>
+                    <input id="relaxPaddingRatio" name="relaxPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.04">
+                    <output for="relaxPaddingRatio" id="relaxPaddingRatioValue">0.04</output>
+                  </label>
+                </div>
+              </li>
+              <li data-step-index="3">
+                <button class="step-select" type="button">1.4 Collapse short edges</button>
+                <div class="step-controls">
+                  <p class="step-empty-params">No parameters</p>
+                </div>
+              </li>
+              <li data-step-index="4">
+                <button class="step-select" type="button">1.5 Select and paint sea areas</button>
+                <div class="step-controls">
+                  <fieldset class="water-sides">
+                    <legend>Water Sides</legend>
+                    <label><input type="checkbox" name="waterSides" value="north">North</label>
+                    <label><input type="checkbox" name="waterSides" value="east">East</label>
+                    <label><input type="checkbox" name="waterSides" value="south" checked>South</label>
+                    <label><input type="checkbox" name="waterSides" value="west" checked>West</label>
+                  </fieldset>
+                  <label>
+                    <span class="field-title">Water Reach Ratio</span>
+                    <input id="waterReachRatio" name="waterReachRatio" type="range" min="0" max="0.5" step="0.01" value="0.2">
+                    <output for="waterReachRatio" id="waterReachRatioValue">0.2</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Water Expansion Base</span>
+                    <input id="waterExpansionBase" name="waterExpansionBase" type="range" min="0" max="1" step="0.01" value="0.14">
+                    <output for="waterExpansionBase" id="waterExpansionBaseValue">0.14</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Water Edge Weight</span>
+                    <input id="waterExpansionEdgeWeight" name="waterExpansionEdgeWeight" type="range" min="0" max="1" step="0.01" value="0.52">
+                    <output for="waterExpansionEdgeWeight" id="waterExpansionEdgeWeightValue">0.52</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Water Pressure Range</span>
+                    <input id="waterPressureRangeRatio" name="waterPressureRangeRatio" type="range" min="0.1" max="1" step="0.01" value="0.42">
+                    <output for="waterPressureRangeRatio" id="waterPressureRangeRatioValue">0.42</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Water Center Bias Radius</span>
+                    <input id="waterCenterBiasRadiusRatio" name="waterCenterBiasRadiusRatio" type="range" min="0" max="1" step="0.01" value="0.68">
+                    <output for="waterCenterBiasRadiusRatio" id="waterCenterBiasRadiusRatioValue">0.68</output>
+                  </label>
+                </div>
+              </li>
+              <li data-step-index="5">
+                <button class="step-select" type="button">1.6 Flag inland hill cells</button>
+                <div class="step-controls">
+                  <label>
+                    <span class="field-title">Hills</span>
+                    <input id="hillCount" name="hillCount" type="range" min="0" max="40" value="9">
+                    <output for="hillCount" id="hillCountValue">9</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Hill Sea Distance</span>
+                    <input id="hillSeaDistance" name="hillSeaDistance" type="range" min="0" max="12" step="1" value="4">
+                    <output for="hillSeaDistance" id="hillSeaDistanceValue">4</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Hillside Radius</span>
+                    <input id="hillsideRadius" name="hillsideRadius" type="range" min="0" max="6" step="1" value="1">
+                    <output for="hillsideRadius" id="hillsideRadiusValue">1</output>
+                  </label>
+                </div>
+              </li>
+              <li data-step-index="6">
+                <button class="step-select" type="button">1.7 Trace the first river</button>
+                <div class="step-controls">
+                  <label>
+                    <span class="field-title">River Turn Angle</span>
+                    <input id="riverTurnAngle" name="riverTurnAngle" type="range" min="0" max="120" value="90">
+                    <output for="riverTurnAngle" id="riverTurnAngleValue">90</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Primary River Width</span>
+                    <input id="primaryRiverWidth" name="primaryRiverWidth" type="range" min="2" max="12" step="0.5" value="6">
+                    <output for="primaryRiverWidth" id="primaryRiverWidthValue">6</output>
+                  </label>
+                </div>
+              </li>
+              <li data-step-index="7">
+                <button class="step-select" type="button">1.8 Trace the first tributary</button>
+                <div class="step-controls">
+                  <label>
+                    <span class="field-title">Tributary Source Distance</span>
+                    <input id="tributarySourceRiverDistance" name="tributarySourceRiverDistance" type="range" min="0" max="20" step="1" value="6">
+                    <output for="tributarySourceRiverDistance" id="tributarySourceRiverDistanceValue">6</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Tributary Merge Distance</span>
+                    <input id="tributaryMergeSeaDistance" name="tributaryMergeSeaDistance" type="range" min="0" max="20" step="1" value="5">
+                    <output for="tributaryMergeSeaDistance" id="tributaryMergeSeaDistanceValue">5</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Tributary Width Ratio</span>
+                    <input id="tributaryWidthRatio" name="tributaryWidthRatio" type="range" min="0.3" max="1" step="0.02" value="0.72">
+                    <output for="tributaryWidthRatio" id="tributaryWidthRatioValue">0.72</output>
+                  </label>
+                  <label>
+                    <span class="field-title">Merge Width Gain</span>
+                    <input id="primaryMergeWidthGain" name="primaryMergeWidthGain" type="range" min="0" max="4" step="0.1" value="1.2">
+                    <output for="primaryMergeWidthGain" id="primaryMergeWidthGainValue">1.2</output>
+                  </label>
+                </div>
+              </li>
+              <li data-step-index="8">
+                <button class="step-select" type="button">1.9 Convert to lot geometry</button>
+                <div class="step-controls">
+                  <p class="step-empty-params">No parameters</p>
+                </div>
+              </li>
+              <li data-step-index="9">
+                <button class="step-select" type="button">1.10 Add rivers to lot geometry</button>
+                <div class="step-controls">
+                  <p class="step-empty-params">No parameters</p>
+                </div>
+              </li>
+              <li data-step-index="10">
+                <button class="step-select" type="button">1.11 Tessellate lot geometry</button>
+                <div class="step-controls">
+                  <p class="step-empty-params">No parameters</p>
+                </div>
+              </li>
+            </ol>
           </section>
-          <div class="steps-header">
-            <h2>Generation Steps</h2>
-            <span id="statusBadge" class="status-badge">Idle</span>
-          </div>
-          <ol id="stepsList" class="steps-list"></ol>
-        </section>
+        </form>
       </section>
 
       <section class="panel canvas-panel">

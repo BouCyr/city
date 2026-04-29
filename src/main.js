@@ -1,5 +1,5 @@
 /*
- * WHAT: Orchestrate the browser app by wiring form input, replay controls, generation, and SVG viewport state.
+ * WHAT: Orchestrate the browser app by wiring form input, step selection, generation, and SVG viewport state.
  * HOW: Read normalized form options, generate deterministic frames, and redraw the selected frame while tracking zoom/pan.
  * WHY: The entrypoint keeps DOM-specific behavior in one place so the generator and renderer stay data-focused.
  */
@@ -12,14 +12,10 @@ import { GENERATION_STEPS } from "./generator/steps.js";
 import { getMapLots } from "./generator/map-model.js";
 
 const CANVAS_SIZE = 1000;
-const REPLAY_DELAY_MS = 1000;
 const REGENERATE_DEBOUNCE_MS = 250;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 12;
 const ZOOM_STEP = 1.25;
-const PLAY_BUTTON_LABEL = "Play";
-const PAUSE_BUTTON_LABEL = "Pause";
-const REPLAY_START_INDEX = 0;
 const VIEWPORT_FALLBACK_RATIO = 0.5;
 const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
 const HOVER_NEIGHBOR_OVERLAY_ID = "hoveredNeighborOverlay";
@@ -36,10 +32,6 @@ const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
 const mapViewport = document.querySelector("#mapViewport");
 const backgroundTaskStatus = document.querySelector("#backgroundTaskStatus");
-const replaySlider = document.querySelector("#replaySlider");
-const playReplayButton = document.querySelector("#playReplayButton");
-const prevReplayButton = document.querySelector("#prevReplayButton");
-const nextReplayButton = document.querySelector("#nextReplayButton");
 const zoomInButton = document.querySelector("#zoomInButton");
 const zoomOutButton = document.querySelector("#zoomOutButton");
 const resetViewButton = document.querySelector("#resetViewButton");
@@ -51,18 +43,16 @@ const stepTracker = createStepTracker({
   listElement: document.querySelector("#stepsList"),
   statusElement: document.querySelector("#statusBadge"),
   onStepSelect: (stepIndex) => {
-    stopReplay();
-    const replayIndex = findReplayIndexForStep(stepIndex);
-    replaySlider.value = String(replayIndex);
-    renderReplayIndex(replayIndex);
+    selectedStepIndex = stepIndex;
+    renderStepIndex(stepIndex);
   },
 });
 let currentMap = null;
-let replayTimer = null;
 let regenerateTimer = null;
 let generationToken = 0;
 let activeWorker = null;
 let currentFrame = null;
+let selectedStepIndex = GENERATION_STEPS.length - 1;
 let hoveredCellId = null;
 let hoveredRiverId = null;
 let isDragging = false;
@@ -73,12 +63,6 @@ const viewportState = createViewportState(CANVAS_SIZE);
 bindFormInteractions(form);
 clearSvg(svg, CANVAS_SIZE);
 applyViewport();
-syncReplayUi(null, 0);
-
-replaySlider.addEventListener("input", () => {
-  stopReplay();
-  renderReplayIndex(Number(replaySlider.value));
-});
 
 for (const field of form.elements) {
   if (!(field instanceof HTMLElement) || !field.name) {
@@ -89,33 +73,10 @@ for (const field of form.elements) {
   field.addEventListener(eventName, scheduleRegeneration);
 }
 
-prevReplayButton.addEventListener("click", () => {
-  stopReplay();
-  stepReplayBy(-1);
-});
-
-nextReplayButton.addEventListener("click", () => {
-  stopReplay();
-  stepReplayBy(1);
-});
-
 zoomInButton.addEventListener("click", () => zoomBy(ZOOM_STEP));
 zoomOutButton.addEventListener("click", () => zoomBy(1 / ZOOM_STEP));
 resetViewButton.addEventListener("click", () => {
   resetViewport();
-});
-
-playReplayButton.addEventListener("click", () => {
-  if (!currentMap || !currentMap.frames.length) {
-    return;
-  }
-
-  if (replayTimer) {
-    stopReplay();
-    return;
-  }
-
-  startReplay();
 });
 
 randomSeedButton?.addEventListener("click", () => {
@@ -138,7 +99,6 @@ bestSeedButton?.addEventListener("click", () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  stopReplay();
   const options = readFormState(form);
   runSingleGeneration(options);
 });
@@ -155,71 +115,27 @@ svg.addEventListener("pointerleave", clearHoverState);
 form.requestSubmit();
 
 /**
- * WHAT: Draw one replay frame and synchronize the side-panel UI with it.
+ * WHAT: Draw one generated step frame and synchronize the side-panel UI with it.
  * HOW: Clear or redraw the SVG, then select the matching generation step.
- * WHY: Replay navigation should update the viewport and step list as one consistent action.
+ * WHY: Step selection should update the viewport and step list as one consistent action.
  */
-function renderReplayIndex(index) {
+function renderStepIndex(stepIndex) {
   if (!currentMap) {
     clearSvg(svg, CANVAS_SIZE);
     applyViewport();
     return;
   }
 
-  const frame = currentMap.frames[index];
+  const frame = findFrameForStep(stepIndex);
+  if (!frame) {
+    return;
+  }
+
   currentFrame = frame;
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
   clearHoverState();
-  stepTracker.setSelectedStep(frame.stepIndex ?? -1);
-}
-
-function syncReplayUi(map, index) {
-  const max = map ? map.frames.length - 1 : 0;
-  replaySlider.max = String(max);
-  replaySlider.value = String(index);
-  playReplayButton.disabled = !map;
-  prevReplayButton.disabled = !map;
-  nextReplayButton.disabled = !map;
-}
-
-function stopReplay() {
-  if (!replayTimer) {
-    playReplayButton.textContent = PLAY_BUTTON_LABEL;
-    return;
-  }
-
-  window.clearInterval(replayTimer);
-  replayTimer = null;
-  playReplayButton.textContent = PLAY_BUTTON_LABEL;
-}
-
-/**
- * WHAT: Start playback from the first replay frame and advance at a fixed cadence.
- * HOW: Reset the slider to frame zero, redraw immediately, then step forward on an interval timer.
- * WHY: Autoplay should always show a complete generation run rather than resuming mid-stream unpredictably.
- */
-function startReplay() {
-  if (!currentMap || !currentMap.frames.length) {
-    return;
-  }
-
-  stopReplay();
-  replaySlider.value = String(REPLAY_START_INDEX);
-  renderReplayIndex(REPLAY_START_INDEX);
-  playReplayButton.textContent = PAUSE_BUTTON_LABEL;
-  let index = REPLAY_START_INDEX;
-
-  replayTimer = window.setInterval(() => {
-    index += 1;
-    if (index >= currentMap.frames.length) {
-      stopReplay();
-      return;
-    }
-
-    replaySlider.value = String(index);
-    renderReplayIndex(index);
-  }, REPLAY_DELAY_MS);
+  stepTracker.setSelectedStep(frame.stepIndex ?? stepIndex);
 }
 
 function generateRandomSeed() {
@@ -230,9 +146,9 @@ function runSingleGeneration(options) {
   const requestId = ++generationToken;
   cancelWorkerTask();
   stepTracker.reset();
+  selectedStepIndex = GENERATION_STEPS.length - 1;
   setBackgroundTaskStatus(`Generating 0/${TOTAL_GENERATION_STEPS}`);
   setAsyncControlsDisabled(true);
-  syncReplayUi(null, 0);
   resetViewport(CANVAS_SIZE);
   clearHoverState();
 
@@ -297,7 +213,6 @@ function runBestOfSeeds(sampleCount) {
   const baselineTributaryLength = currentMap?.rivers?.[1]?.length || 0;
   const baselineSeed = currentMap?.init?.seed || options.seed;
 
-  stopReplay();
   cancelWorkerTask();
   setAsyncControlsDisabled(true);
   setBackgroundTaskStatus(`Best of ${sampleCount}: 0/${sampleCount}`);
@@ -436,27 +351,13 @@ function renderBestCandidate(map) {
 
   currentMap = map;
   stepTracker.setCompletedRun(map.stepDurations || []);
-  const finalIndex = Math.max(0, map.frames.length - 1);
-  syncReplayUi(map, finalIndex);
-  renderReplayIndex(finalIndex);
+  renderStepIndex(selectedStepIndex);
 }
 
 function applyGeneratedMap(map) {
   currentMap = map;
   resetViewport(map.meta.size);
-  const finalIndex = Math.max(0, map.frames.length - 1);
-  syncReplayUi(map, finalIndex);
-  renderReplayIndex(finalIndex);
-}
-
-function stepReplayBy(delta) {
-  if (!currentMap) {
-    return;
-  }
-
-  const nextIndex = Math.min(Math.max(Number(replaySlider.value) + delta, 0), currentMap.frames.length - 1);
-  replaySlider.value = String(nextIndex);
-  renderReplayIndex(nextIndex);
+  renderStepIndex(selectedStepIndex);
 }
 
 function scheduleRegeneration() {
@@ -466,13 +367,23 @@ function scheduleRegeneration() {
   }, REGENERATE_DEBOUNCE_MS);
 }
 
-function findReplayIndexForStep(stepIndex) {
-  if (!currentMap) {
-    return 0;
+function findFrameForStep(stepIndex) {
+  if (!currentMap || !Array.isArray(currentMap.frames)) {
+    return null;
   }
 
-  const replayIndex = currentMap.frames.findIndex((frame) => frame.stepIndex === stepIndex);
-  return replayIndex >= 0 ? replayIndex : 0;
+  const exact = currentMap.frames.find((frame) => frame.stepIndex === stepIndex);
+  if (exact) {
+    return exact;
+  }
+
+  for (let index = currentMap.frames.length - 1; index >= 0; index -= 1) {
+    const frame = currentMap.frames[index];
+    if (frame?.type === "map") {
+      return frame;
+    }
+  }
+  return null;
 }
 
 function handleViewportWheel(event) {
@@ -554,7 +465,7 @@ function clearHoverState() {
 /**
  * WHAT: Zoom the SVG viewBox around a focus point while keeping the viewport inside map bounds.
  * HOW: Convert the desired zoom factor into a new viewBox rectangle anchored at the pointer or viewport center.
- * WHY: Users need precise inspection of dense maps without losing their place in the replay.
+ * WHY: Users need precise inspection of dense maps without losing their place in the selected step view.
  */
 function zoomBy(factor, focusPoint = null, size = currentMap?.meta.size || CANVAS_SIZE) {
   const nextZoom = clamp(viewportState.zoom * factor, MIN_ZOOM, MAX_ZOOM);

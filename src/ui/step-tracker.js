@@ -1,40 +1,46 @@
 /*
- * WHAT: Manage the step list UI that reflects generation progress and replay selection.
- * HOW: Re-render the ordered list whenever the active or selected step changes.
- * WHY: The generator needs a lightweight status view without coupling map logic to the DOM.
+ * WHAT: Manage the step list UI that reflects generation progress and selected visualization step.
+ * HOW: Bind to static step list items, then toggle classes and duration labels by step index.
+ * WHY: Step controls now live inside each step row, so the tracker should not re-render DOM structure.
  */
 
-import { GENERATION_STEPS, GENERATION_STEP_TREE } from "../generator/steps.js";
+import { GENERATION_STEPS } from "../generator/steps.js";
 
 const STATUS_IDLE = "Idle";
 const STATUS_COMPLETE = "Complete";
 const STEP_SELECTION_KEYS = new Set(["Enter", " "]);
-const GEOGRAPHICAL_STEP_NUMBERS = [
-  "1.1",
-  "1.2",
-  "1.3",
-  "1.4",
-  "1.5",
-  "1.6",
-  "1.7",
-  "1.8",
-  "1.9",
-  "1.10",
-  "1.11",
-];
 
-/**
- * WHAT: Create a small stateful controller around the step list and status badge.
- * HOW: Track the active and selected indices locally, then rebuild the list with the right classes and handlers.
- * WHY: The replay UI needs one source of truth for which step is running and which frame is currently selected.
- */
 export function createStepTracker({ listElement, statusElement, onStepSelect }) {
   let activeIndex = -1;
   let selectedIndex = -1;
-  const durationByStepIndex = new Map();
   let currentStatus = STATUS_IDLE;
+  const durationByStepIndex = new Map();
+  const stepItems = new Map();
 
-  function getStepState(index) {
+  Array.from(listElement.querySelectorAll("[data-step-index]")).forEach((item) => {
+    const index = Number(item.getAttribute("data-step-index"));
+    if (!Number.isFinite(index)) {
+      return;
+    }
+
+    const durationElement = document.createElement("span");
+    durationElement.className = "step-duration";
+    durationElement.hidden = true;
+    item.querySelector(".step-select")?.append(durationElement);
+    stepItems.set(index, { item, durationElement });
+
+    const select = () => onStepSelect?.(index);
+    item.querySelector(".step-select")?.addEventListener("click", select);
+    item.querySelector(".step-select")?.addEventListener("keydown", (event) => {
+      if (!STEP_SELECTION_KEYS.has(event.key)) {
+        return;
+      }
+      event.preventDefault();
+      select();
+    });
+  });
+
+  function stepState(index) {
     if (index < activeIndex) {
       return "complete";
     }
@@ -44,104 +50,25 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
     return "idle";
   }
 
-  function getGroupState(stepIndices) {
-    if (stepIndices.length === 0) {
-      return "idle";
-    }
-    const allComplete = stepIndices.every((index) => index < activeIndex);
-    if (allComplete) {
-      return "complete";
-    }
-    const hasActive = stepIndices.includes(activeIndex);
-    if (hasActive) {
-      return "active";
-    }
-    return "idle";
-  }
-
-  function buildItemLabel(numbering, label, durationMs) {
-    const content = document.createElement("span");
-    content.className = "step-item-content";
-
-    const labelSpan = document.createElement("span");
-    labelSpan.className = "step-label";
-    labelSpan.textContent = `${numbering} ${label}`;
-    content.appendChild(labelSpan);
-
-    if (typeof durationMs === "number") {
-      const durationSpan = document.createElement("span");
-      durationSpan.className = "step-duration";
-      durationSpan.textContent = `${Math.round(durationMs)} ms`;
-      content.appendChild(durationSpan);
-    }
-
-    return content;
-  }
-
   function render(status = currentStatus) {
     currentStatus = status;
-    listElement.innerHTML = "";
-    GENERATION_STEP_TREE.forEach((group, groupIndex) => {
-      const groupItem = document.createElement("li");
-      groupItem.className = "step-group";
-
-      const groupState = getGroupState(group.stepIndices);
-      if (groupState !== "idle") {
-        groupItem.classList.add(groupState);
+    stepItems.forEach(({ item, durationElement }, index) => {
+      item.classList.remove("active", "complete", "current");
+      const state = stepState(index);
+      if (state !== "idle") {
+        item.classList.add(state);
       }
-      if (group.stepIndices.includes(selectedIndex)) {
-        groupItem.classList.add("current");
+      if (index === selectedIndex) {
+        item.classList.add("current");
       }
 
-      const groupDurationMs = group.stepIndices.reduce((sum, index) => sum + (durationByStepIndex.get(index) ?? 0), 0);
-      const groupHeader = buildItemLabel(
-        String(groupIndex + 1),
-        group.label,
-        groupDurationMs > 0 ? groupDurationMs : null
-      );
-      groupHeader.classList.add("step-group-label");
-      groupItem.appendChild(groupHeader);
-
-      if (group.stepIndices.length > 0) {
-        const subList = document.createElement("ol");
-        subList.className = "steps-sublist";
-
-        group.stepIndices.forEach((index, childIndex) => {
-          const item = document.createElement("li");
-          item.dataset.stepIndex = String(index);
-          item.tabIndex = 0;
-
-          const stepState = getStepState(index);
-          if (stepState !== "idle") {
-            item.classList.add(stepState);
-          }
-          if (index === selectedIndex) {
-            item.classList.add("current");
-          }
-
-          const stepNumber = GEOGRAPHICAL_STEP_NUMBERS[index] || `${groupIndex + 1}.${childIndex + 1}`;
-          item.appendChild(
-            buildItemLabel(
-              stepNumber,
-              GENERATION_STEPS[index],
-              durationByStepIndex.get(index)
-            )
-          );
-
-          item.addEventListener("click", () => onStepSelect?.(index));
-          item.addEventListener("keydown", (event) => {
-            if (STEP_SELECTION_KEYS.has(event.key)) {
-              event.preventDefault();
-              onStepSelect?.(index);
-            }
-          });
-          subList.appendChild(item);
-        });
-
-        groupItem.appendChild(subList);
+      const durationMs = durationByStepIndex.get(index);
+      if (typeof durationMs === "number") {
+        durationElement.textContent = `${Math.round(durationMs)} ms`;
+        durationElement.hidden = false;
+      } else {
+        durationElement.hidden = true;
       }
-
-      listElement.appendChild(groupItem);
     });
     statusElement.textContent = currentStatus;
   }
@@ -153,7 +80,6 @@ export function createStepTracker({ listElement, statusElement, onStepSelect }) 
       activeIndex = -1;
       selectedIndex = -1;
       durationByStepIndex.clear();
-      currentStatus = STATUS_IDLE;
       render(STATUS_IDLE);
     },
     startStep(index, status) {
