@@ -39,6 +39,7 @@ const hoveredCellData = document.querySelector("#hoveredCellData");
 const randomSeedButton = document.querySelector("#randomSeedButton");
 const bestSeedButton = document.querySelector("#bestSeedButton");
 const seedInput = document.querySelector("#seed");
+const controlHelpText = document.querySelector("#controlHelpText");
 const stepTracker = createStepTracker({
   listElement: document.querySelector("#stepsList"),
   statusElement: document.querySelector("#statusBadge"),
@@ -59,6 +60,26 @@ let isDragging = false;
 let dragPointerId = null;
 let dragStart = null;
 const viewportState = createViewportState(CANVAS_SIZE);
+const CONTROL_HELP_TEXT = {
+  pointCount: "How many seed points are scattered before Voronoi generation. Higher values create denser and smaller cells.",
+  scatterPaddingRatio: "Margin ratio that keeps scattered points away from map borders. Higher values create a wider border buffer.",
+  waterSides: "Select borders that can flood inward. More active sides usually increases sea coverage.",
+  waterReachRatio: "Maximum inland reach used during water expansion. Higher values let water penetrate farther.",
+  waterExpansionBase: "Base chance for water to expand from sea-adjacent cells into land cells.",
+  waterExpansionEdgeWeight: "Additional flooding pressure near enabled map borders.",
+  waterPressureRangeRatio: "Distance range where edge pressure meaningfully affects water spread.",
+  waterCenterBiasRadiusRatio: "Bias against flooding the map center. Higher values keep center landier for longer.",
+  relaxPaddingRatio: "Padding ratio applied during Lloyd relaxation to keep adjusted points away from map edges.",
+  hillCount: "Number of inland cells flagged as hill sources.",
+  hillSeaDistance: "Minimum graph distance from sea required for a cell to qualify as a hill.",
+  hillsideRadius: "How many neighbor rings around each hill are marked as hillside.",
+  riverTurnAngle: "Minimum turn angle constraint while tracing rivers. Larger values enforce smoother paths.",
+  primaryRiverWidth: "Base render width for the primary river before tributary merge adjustments.",
+  tributarySourceRiverDistance: "Minimum distance between tributary source candidates and the primary river.",
+  tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
+  tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
+  primaryMergeWidthGain: "Additional width added to the primary river downstream after tributary merge.",
+};
 
 bindFormInteractions(form);
 clearSvg(svg, CANVAS_SIZE);
@@ -111,8 +132,39 @@ mapViewport.addEventListener("pointercancel", handlePointerUp);
 mapViewport.addEventListener("pointerleave", handlePointerUp);
 svg.addEventListener("pointermove", handleMapHover);
 svg.addEventListener("pointerleave", clearHoverState);
+document.querySelectorAll(".control-help-trigger").forEach((button) => {
+  button.addEventListener("click", () => {
+    const key = button.getAttribute("data-help-key");
+    if (!key || !controlHelpText) {
+      return;
+    }
+    controlHelpText.textContent = CONTROL_HELP_TEXT[key] || "No help is available for this control yet.";
+  });
+});
+setupStepControlPanels();
 
 form.requestSubmit();
+
+function setupStepControlPanels() {
+  const stepItems = Array.from(document.querySelectorAll("#stepsList > li"));
+  stepItems.forEach((item) => {
+    const stepButton = item.querySelector(".step-select");
+    const controls = item.querySelector(".step-controls");
+    if (!stepButton || !controls) {
+      return;
+    }
+
+    stepButton.addEventListener("click", () => {
+      const willOpen = !item.classList.contains("step-controls-open");
+      stepItems.forEach((other) => {
+        other.classList.remove("step-controls-open");
+      });
+      if (willOpen) {
+        item.classList.add("step-controls-open");
+      }
+    });
+  });
+}
 
 /**
  * WHAT: Draw one generated step frame and synchronize the side-panel UI with it.

@@ -184,6 +184,25 @@ output {
   align-items: center;
 }
 
+.control-help-block {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.control-help-block h3 {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+}
+
+.control-help-block p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -244,12 +263,16 @@ output {
 }
 
 .step-controls {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 10px;
   padding: 8px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.55);
+}
+
+.steps-list li.step-controls-open .step-controls {
+  display: flex;
 }
 
 .step-empty-params {
@@ -382,6 +405,20 @@ output {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.72);
   cursor: help;
+}
+
+.control-help-trigger {
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
 }
 
 .help-dot::after {
