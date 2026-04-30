@@ -215,7 +215,7 @@ function buildComputedGeometry(event, algorithm, curveAmplitude, segmentLength) 
       ? { center: inspection.arc.center, radius: inspection.arc.radius }
       : null;
     const description = inspection.arc
-      ? `Interior bisectors define endpoint tangents. Their perpendicular radius lines meet at the circle center, creating an arc of radius ${inspection.arc.radius.toFixed(1)}.`
+      ? `Interior bisectors define endpoint tangents. Their radius lines define a tangent-guided circle through both selected vertices, creating an arc of radius ${inspection.arc.radius.toFixed(1)}.`
       : inspection.fallbackReason;
     return { path: inspection.path, normals, circle, description };
   }

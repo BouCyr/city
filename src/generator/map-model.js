@@ -40,7 +40,6 @@ export function createInitialMap(options) {
         tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
-        curvedBisectionAmplitude: options.curvedBisectionAmplitude,
         waterSides: options.waterSides.map((side) => ({ ...side })),
         mapSize: options.mapSize,
       },

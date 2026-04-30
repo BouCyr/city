@@ -174,7 +174,6 @@ function getStepParametersForStep(stepIndex, options) {
     case 10:
       return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "straight_bisection",
-        curvedBisectionAmplitude: options.curvedBisectionAmplitude,
         minimumSplitChildAreaRatio: 0.4,
         curvedSplitCurve: "circular arc tangent to boundary-vertex bisectors",
         poissonVoronoiTargetSource: "estimated straight-bisection sublot count",

@@ -152,10 +152,23 @@ function buildTangentArc(start, end, startTangent, endTangent) {
 
   const startNormal = leftNormal(startTangent);
   const endNormal = leftNormal(endTangent);
-  const center = intersectLines(start, startNormal, end, endNormal);
-  if (!center) {
+  const tangentCenter = intersectLines(start, startNormal, end, endNormal);
+  if (!tangentCenter) {
     return null;
   }
+  const chord = {
+    x: end.x - start.x,
+    y: end.y - start.y,
+  };
+  const chordNormal = leftNormal(chord);
+  if (vectorLength(chordNormal) <= EPSILON) {
+    return null;
+  }
+  const chordMidpoint = {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  };
+  const center = projectPointToLine(tangentCenter, chordMidpoint, chordNormal);
 
   const radiusVectorStart = {
     x: start.x - center.x,
@@ -181,7 +194,7 @@ function buildTangentArc(start, end, startTangent, endTangent) {
     ? normalizeVector(leftNormal(radiusVectorEnd))
     : normalizeVector(scalePoint(leftNormal(radiusVectorEnd), -1));
   const endAlignment = (expectedEndTangent.x * endTangent.x) + (expectedEndTangent.y * endTangent.y);
-  if (endAlignment < 1 - (EPSILON * 16)) {
+  if (Math.abs(endAlignment) < 0.5) {
     return null;
   }
 
@@ -339,6 +352,19 @@ function intersectLines(firstPoint, firstDirection, secondPoint, secondDirection
   return {
     x: firstPoint.x + (firstDirection.x * distanceAlongFirst),
     y: firstPoint.y + (firstDirection.y * distanceAlongFirst),
+  };
+}
+
+function projectPointToLine(point, linePoint, lineDirection) {
+  const normalizedDirection = normalizeVector(lineDirection);
+  const offset = {
+    x: point.x - linePoint.x,
+    y: point.y - linePoint.y,
+  };
+  const distanceAlongLine = (offset.x * normalizedDirection.x) + (offset.y * normalizedDirection.y);
+  return {
+    x: linePoint.x + (normalizedDirection.x * distanceAlongLine),
+    y: linePoint.y + (normalizedDirection.y * distanceAlongLine),
   };
 }
 

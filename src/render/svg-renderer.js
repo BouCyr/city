@@ -25,7 +25,6 @@ const COLORS = {
   riverEndpoint: "#5f97b0",
   riverHit: "rgba(0, 0, 0, 0)",
   tessellation: "rgba(42, 30, 20, 0.36)",
-  tessellationNormal: "rgba(185, 42, 42, 0.9)",
 };
 
 /**
@@ -271,18 +270,8 @@ function createTessellationGroup(tessellation, map) {
     );
   });
   group.append(hitGroup, lineGroup, createTessellationVerticesGroup(tessellation.vertices));
-  if (shouldRenderTessellationNormals(map, tessellation)) {
-    group.append(createTessellationNormalGroup(tessellation.normalGuides));
-  }
 
   return group;
-}
-
-function shouldRenderTessellationNormals(map, tessellation) {
-  return map?.meta?.stepIndex === 10
-    && map?.init?.params?.stepAlgorithms?.tessellateLots === "curved_bisection"
-    && Array.isArray(tessellation?.normalGuides)
-    && tessellation.normalGuides.length > 0;
 }
 
 function createTessellationVerticesGroup(vertices) {
@@ -297,33 +286,6 @@ function createTessellationVerticesGroup(vertices) {
         cy: vertex.y,
         r: 2.25,
         fill: COLORS.tessellation,
-      }),
-    );
-  });
-
-  return group;
-}
-
-function createTessellationNormalGroup(normalGuides) {
-  const group = createElement("g", {
-    fill: "none",
-    stroke: COLORS.tessellationNormal,
-    "stroke-width": 1.2,
-    "stroke-linecap": "round",
-    "pointer-events": "none",
-  });
-
-  normalGuides.forEach((guide) => {
-    if (!guide?.from || !guide?.to) {
-      return;
-    }
-
-    group.append(
-      createElement("line", {
-        x1: guide.from.x,
-        y1: guide.from.y,
-        x2: guide.to.x,
-        y2: guide.to.y,
       }),
     );
   });

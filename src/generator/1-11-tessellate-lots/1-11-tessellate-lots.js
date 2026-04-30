@@ -28,7 +28,7 @@ export function runTessellateLotsStep(map, { rng }) {
   }
 
   const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "straight_bisection";
-  const curveAmplitude = map.init?.params?.curvedBisectionAmplitude ?? CURVE_TENSION_RATIO;
+  const curveAmplitude = CURVE_TENSION_RATIO;
   const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH, rng, algorithm, curveAmplitude);
   const lotSublotIds = new Map();
   const sublotsByLotId = new Map();
@@ -81,7 +81,6 @@ function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude
   const vertices = [];
   const vertexByKey = new Map();
   const sublots = [];
-  const normalGuides = [];
 
   lots.forEach((lot) => {
     const polygon = normalizePolygon(lot.polygon || []);
@@ -95,7 +94,7 @@ function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude
     const boundaryPoints = getBoundaryVertices(lot, segments);
     const pieces = algorithm === "poisson_voronoi"
       ? createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng)
-      : splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm, curveAmplitude, normalGuides);
+      : splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm, curveAmplitude);
     if (pieces.length < 2) {
       return;
     }
@@ -134,7 +133,6 @@ function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude
   return {
     vertices,
     sublots,
-    normalGuides,
   };
 }
 
