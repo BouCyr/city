@@ -260,6 +260,13 @@ function runSingleGeneration(options) {
       return;
     }
 
+    if (message.type === "generation-step-progress") {
+      renderInterimFrame(message.frame);
+      const progressText = formatStepProgress(message.progress);
+      setBackgroundTaskStatus(`Generating ${message.index + 1}/${TOTAL_GENERATION_STEPS}${progressText}`);
+      return;
+    }
+
     if (message.type === "generation-finished-steps") {
       stepTracker.complete();
       setBackgroundTaskStatus("");
@@ -410,6 +417,13 @@ function setBackgroundTaskStatus(text) {
   }
 
   backgroundTaskStatus.textContent = text;
+}
+
+function formatStepProgress(progress) {
+  if (!progress || !Number.isFinite(progress.completed) || !Number.isFinite(progress.total) || progress.total <= 0) {
+    return "";
+  }
+  return ` - lot ${progress.completed}/${progress.total}`;
 }
 
 function renderInterimFrame(frame) {

@@ -173,7 +173,7 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 10:
       return {
-        tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "straight_bisection",
+        tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,
         curvedSplitCurve: "circular arc tangent to boundary-vertex bisectors",
         poissonVoronoiTargetSource: "estimated straight-bisection sublot count",
@@ -207,6 +207,13 @@ function createGenerationStepTracker(requestId, options) {
     onStepComplete(payload) {
       postMessage({
         type: "generation-step-complete",
+        requestId,
+        ...payload,
+      });
+    },
+    onStepProgress(payload) {
+      postMessage({
+        type: "generation-step-progress",
         requestId,
         ...payload,
       });

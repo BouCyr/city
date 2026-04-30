@@ -60,7 +60,27 @@ async function runGenerationPipeline(options, stepTracker, { endStepIndex = GENE
       label: GENERATION_STEPS[index],
     });
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const result = await step.run(map, { rng });
+    const result = await step.run(map, {
+      rng,
+      onProgress: (payload) => {
+        if (!payload?.map) {
+          return;
+        }
+        const progressMap = withStepMetadata(payload.map, index, GENERATION_STEPS[index]);
+        stepTracker?.onStepProgress?.({
+          index,
+          status: step.status,
+          label: GENERATION_STEPS[index],
+          progress: payload.progress || null,
+          frame: createFrame(
+            payload.label || GENERATION_STEPS[index],
+            progressMap,
+            index,
+            GENERATION_STEPS[index],
+          ),
+        });
+      },
+    });
     const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     const durationMs = finishedAt - startedAt;
     stepDurations[index] = durationMs;

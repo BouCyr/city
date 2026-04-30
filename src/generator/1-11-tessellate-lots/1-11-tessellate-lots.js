@@ -14,7 +14,7 @@ import {
 import { buildCurvedBisectionSplitPath } from "./1-11-curved-bisection.js";
 import { buildStraightBisectionSplitPath } from "./1-11-straight-bisection.js";
 
-export function runTessellateLotsStep(map, { rng }) {
+export function runTessellateLotsStep(map, { rng, onProgress = null }) {
   if (!Array.isArray(map.lots) || !map.lots.length) {
     return {
       map,
@@ -27,29 +27,32 @@ export function runTessellateLotsStep(map, { rng }) {
     };
   }
 
-  const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "straight_bisection";
+  const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "curved_bisection";
   const curveAmplitude = CURVE_TENSION_RATIO;
-  const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH, rng, algorithm, curveAmplitude);
-  const lotSublotIds = new Map();
-  const sublotsByLotId = new Map();
-  tessellation.sublots.forEach((sublot) => {
-    const ids = lotSublotIds.get(sublot.lotId) || [];
-    ids.push(sublot.id);
-    lotSublotIds.set(sublot.lotId, ids);
-    const sublots = sublotsByLotId.get(sublot.lotId) || [];
-    sublots.push(sublot);
-    sublotsByLotId.set(sublot.lotId, sublots);
+  let lastProgressAt = 0;
+  const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH, rng, algorithm, curveAmplitude, (progress) => {
+    if (typeof onProgress !== "function") {
+      return;
+    }
+    const now = getTimestamp();
+    if (progress.completed < progress.total && now - lastProgressAt < PROGRESS_UPDATE_INTERVAL_MS) {
+      return;
+    }
+    lastProgressAt = now;
+    const progressTessellation = {
+      vertices: progress.vertices.map((vertex) => ({ ...vertex })),
+      sublots: progress.sublots.map((sublot) => cloneSublot(sublot)),
+    };
+    onProgress({
+      label: `Step 1.11 / Tessellate lot geometry (${progress.completed}/${progress.total})`,
+      map: buildTessellatedMap(map, progressTessellation),
+      progress: {
+        completed: progress.completed,
+        total: progress.total,
+      },
+    });
   });
-
-  const nextMap = {
-    ...map,
-    lots: map.lots.map((lot) => ({
-      ...lot,
-      sublotIds: lotSublotIds.get(lot.id) || [],
-      sublots: sublotsByLotId.get(lot.id) || [],
-    })),
-    tessellation,
-  };
+  const nextMap = buildTessellatedMap(map, tessellation);
 
   return {
     map: nextMap,
@@ -74,57 +77,34 @@ const POISSON_SPACING_RATIO = 0.95;
 const POISSON_MAX_ATTEMPTS = 30;
 const POISSON_CANDIDATE_ATTEMPTS = 120;
 const POISSON_BBOX_PADDING = 0.001;
+const PROGRESS_UPDATE_INTERVAL_MS = 150;
 
-function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude) {
+function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude, onLotComplete = null) {
   const lots = map.lots || [];
   const segments = map.segments || [];
   const vertices = [];
   const vertexByKey = new Map();
   const sublots = [];
-
-  lots.forEach((lot) => {
+  const landLots = lots.filter((lot) => {
     const polygon = normalizePolygon(lot.polygon || []);
-    if (polygon.length < 3 || Math.abs(computeSignedArea(polygon)) <= EPSILON) {
-      return;
-    }
-    if (!isLandLot(lot)) {
-      return;
-    }
+    return polygon.length >= 3 && Math.abs(computeSignedArea(polygon)) > EPSILON && isLandLot(lot);
+  });
+  let completedLots = 0;
 
+  landLots.forEach((lot) => {
+    const polygon = normalizePolygon(lot.polygon || []);
     const boundaryPoints = getBoundaryVertices(lot, segments);
     const pieces = algorithm === "poisson_voronoi"
       ? createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng)
       : splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm, curveAmplitude);
-    if (pieces.length < 2) {
-      return;
-    }
-
-    const validPieces = pieces
-      .map((piece, pieceIndex) => ({
-        piece: normalizePolygon(piece),
-        pieceIndex,
-        area: Math.abs(computeSignedArea(piece)),
-      }))
-      .filter(({ piece, area }) => piece.length >= 3 && area >= MIN_SUBLOT_AREA);
-    if (validPieces.length < 2) {
-      return;
-    }
-
-    validPieces.forEach(({ piece, pieceIndex, area }) => {
-      const vertexIds = piece.map((point) => getOrCreateVertex(vertices, vertexByKey, point));
-      sublots.push({
-        id: sublots.length,
-        lotId: lot.id,
-        splitIndex: pieceIndex,
-        vertexIds,
-        centroid: computePolygonCentroid(piece),
-        area,
-        neighborSublotIds: [],
-        neighborLotIds: [],
-        features: {
-          ...(lot.features || {}),
-        },
-      });
+    appendSublotsForLot(lot, pieces, vertices, vertexByKey, sublots);
+    completedLots += 1;
+    onLotComplete?.({
+      completed: completedLots,
+      total: landLots.length,
+      lotId: lot.id,
+      vertices,
+      sublots,
     });
   });
 
@@ -134,6 +114,78 @@ function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude
     vertices,
     sublots,
   };
+}
+
+function appendSublotsForLot(lot, pieces, vertices, vertexByKey, sublots) {
+  if (pieces.length < 2) {
+    return;
+  }
+
+  const validPieces = pieces
+    .map((piece, pieceIndex) => ({
+      piece: normalizePolygon(piece),
+      pieceIndex,
+      area: Math.abs(computeSignedArea(piece)),
+    }))
+    .filter(({ piece, area }) => piece.length >= 3 && area >= MIN_SUBLOT_AREA);
+  if (validPieces.length < 2) {
+    return;
+  }
+
+  validPieces.forEach(({ piece, pieceIndex, area }) => {
+    const vertexIds = piece.map((point) => getOrCreateVertex(vertices, vertexByKey, point));
+    sublots.push({
+      id: sublots.length,
+      lotId: lot.id,
+      splitIndex: pieceIndex,
+      vertexIds,
+      centroid: computePolygonCentroid(piece),
+      area,
+      neighborSublotIds: [],
+      neighborLotIds: [],
+      features: {
+        ...(lot.features || {}),
+      },
+    });
+  });
+}
+
+function buildTessellatedMap(map, tessellation) {
+  const lotSublotIds = new Map();
+  const sublotsByLotId = new Map();
+  tessellation.sublots.forEach((sublot) => {
+    const ids = lotSublotIds.get(sublot.lotId) || [];
+    ids.push(sublot.id);
+    lotSublotIds.set(sublot.lotId, ids);
+    const sublots = sublotsByLotId.get(sublot.lotId) || [];
+    sublots.push(sublot);
+    sublotsByLotId.set(sublot.lotId, sublots);
+  });
+
+  return {
+    ...map,
+    lots: map.lots.map((lot) => ({
+      ...lot,
+      sublotIds: lotSublotIds.get(lot.id) || [],
+      sublots: sublotsByLotId.get(lot.id) || [],
+    })),
+    tessellation,
+  };
+}
+
+function cloneSublot(sublot) {
+  return {
+    ...sublot,
+    vertexIds: [...sublot.vertexIds],
+    centroid: { ...sublot.centroid },
+    neighborSublotIds: [...sublot.neighborSublotIds],
+    neighborLotIds: [...sublot.neighborLotIds],
+    features: { ...sublot.features },
+  };
+}
+
+function getTimestamp() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
 function createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng) {
