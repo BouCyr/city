@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bissection Process</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="tutorial-shell">
+    <section class="tutorial-toolbar panel">
+      <label class="tutorial-control">
+        <span class="field-title">Algorithm</span>
+        <select id="algorithmSelect">
+          <option value="straight_bisection">Straight bisection</option>
+          <option value="curved_bisection">Curved bisection</option>
+          <option value="poisson_voronoi">Poisson Voronoi</option>
+        </select>
+      </label>
+      <div class="tutorial-navigation">
+        <button id="previousStepButton" class="secondary-button" type="button">Prev</button>
+        <output id="stepCounter" class="tutorial-counter">1 / 1</output>
+        <button id="nextStepButton" class="secondary-button" type="button">Next</button>
+      </div>
+      <a class="secondary-button tutorial-home-link" href="./index.html">Main map</a>
+    </section>
+
+    <section class="tutorial-layout">
+      <section class="tutorial-visual-panel panel">
+        <svg id="bissectionSvg" class="tutorial-svg" role="img" aria-label="Bisection process diagram"></svg>
+      </section>
+      <aside class="tutorial-text-panel panel">
+        <p class="tutorial-kicker">Lot #436</p>
+        <h1 id="stepTitle">Bissection process</h1>
+        <p id="stepBody">Choose an algorithm to inspect the process.</p>
+      </aside>
+    </section>
+  </main>
+  <script type="module" src="./src/bissection.js"></script>
+</body>
+</html>

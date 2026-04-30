@@ -148,13 +148,18 @@ function createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength,
   const polygon = normalizePolygon(boundaryPoints);
   const targetCount = estimatedPieces.length;
   const area = Math.abs(computeSignedArea(polygon));
+  const boundarySites = collectSegmentBoundaryPoints(lot, segments);
   const sites = samplePoissonPointsInPolygon(polygon, area, targetCount, rng);
   if (sites.length < 2) {
     return estimatedPieces;
   }
 
+  const voronoiSites = [
+    ...boundarySites,
+    ...sites,
+  ];
   const bbox = computeBoundingBox(polygon);
-  const delaunay = Delaunay.from(sites.map((point) => [point.x, point.y]));
+  const delaunay = Delaunay.from(voronoiSites.map((point) => [point.x, point.y]));
   const voronoi = delaunay.voronoi([
     bbox.minX - POISSON_BBOX_PADDING,
     bbox.minY - POISSON_BBOX_PADDING,
@@ -163,8 +168,8 @@ function createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength,
   ]);
 
   return sites
-    .map((site, index) => {
-      const rawCell = sanitizeCellPolygon(voronoi.cellPolygon(index));
+    .map((_, index) => {
+      const rawCell = sanitizeCellPolygon(voronoi.cellPolygon(boundarySites.length + index));
       if (rawCell.length < 3) {
         return null;
       }
@@ -174,7 +179,7 @@ function createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength,
         return null;
       }
 
-      return reinsertBoundaryVertices(normalizePolygon(clipped), collectSegmentBoundaryPoints(lot, segments));
+      return reinsertBoundaryVertices(normalizePolygon(clipped), boundarySites);
     })
     .filter(Boolean)
     .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
@@ -431,11 +436,13 @@ function leftNormal(vector) {
   };
 }
 
-function splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm = "straight_bisection", curveAmplitude = CURVE_TENSION_RATIO, normalGuides = []) {
+export function splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm = "straight_bisection", curveAmplitude = CURVE_TENSION_RATIO, normalGuides = [], observer = null) {
   const minimumLeafArea = (segmentLength ** 2) * MIN_RECURSIVE_SPLIT_AREA_RATIO;
   const leaves = [];
+  const polygon = normalizePolygon(boundaryPoints);
   splitBranch({
-    polygon: normalizePolygon(boundaryPoints),
+    polygon,
+    partition: [polygon],
     blockedVertexKeys: new Set(),
     algorithm,
     curveAmplitude,
@@ -443,25 +450,57 @@ function splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm = "
     minimumLeafArea,
     leaves,
     normalGuides,
+    observer,
+    depth: 0,
   });
   return leaves;
 }
 
-function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafArea, leaves, algorithm, curveAmplitude, normalGuides }) {
+function splitBranch({ polygon, partition, blockedVertexKeys, segmentLength, minimumLeafArea, leaves, algorithm, curveAmplitude, normalGuides, observer, depth }) {
   const area = Math.abs(computeSignedArea(polygon));
   if (polygon.length < 3 || area <= minimumLeafArea) {
     leaves.push(polygon);
+    observer?.({
+      type: "leaf",
+      polygon,
+      partition,
+      depth,
+      area,
+      minimumLeafArea,
+    });
     return;
   }
 
-  const split = findShortestBalancedSplit(polygon, blockedVertexKeys);
+  const candidates = findBalancedSplitCandidates(polygon, blockedVertexKeys);
+  observer?.({
+    type: "candidates",
+    polygon,
+    partition,
+    depth,
+    blockedVertexKeys: new Set(blockedVertexKeys),
+    candidates,
+  });
+  const split = candidates[0] || null;
   if (!split) {
     leaves.push(polygon);
+    observer?.({
+      type: "no-split",
+      polygon,
+      partition,
+      depth,
+    });
     return;
   }
+  observer?.({
+    type: "selected",
+    polygon,
+    partition,
+    depth,
+    split,
+  });
 
   const splitSegmentLength = segmentLength * SPLIT_SEGMENT_LENGTH_RATIO;
-  const pieces = splitBetweenBoundaryPoints(
+  const splitPath = buildSplitPath(
     polygon,
     split.firstIndex,
     split.secondIndex,
@@ -469,6 +508,20 @@ function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafAre
     algorithm,
     curveAmplitude,
     normalGuides,
+  );
+  observer?.({
+    type: "computed",
+    polygon,
+    partition,
+    depth,
+    split,
+    splitPath,
+  });
+  const pieces = splitBetweenBoundaryPoints(
+    polygon,
+    split.firstIndex,
+    split.secondIndex,
+    splitPath,
   );
   const nextBlockedVertexKeys = new Set(blockedVertexKeys);
   nextBlockedVertexKeys.add(pointKey(polygon[split.firstIndex]));
@@ -478,12 +531,31 @@ function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafAre
     .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
   if (childPolygons.length < 2) {
     leaves.push(polygon);
+    observer?.({
+      type: "rejected",
+      polygon,
+      partition,
+      depth,
+      split,
+      splitPath,
+    });
     return;
   }
+  replacePartitionLeaf(partition, polygon, childPolygons);
+  observer?.({
+    type: "children",
+    polygon,
+    partition,
+    depth,
+    split,
+    splitPath,
+    pieces: childPolygons,
+  });
 
   childPolygons.forEach((normalizedPiece) => {
     splitBranch({
       polygon: normalizedPiece,
+      partition,
       blockedVertexKeys: nextBlockedVertexKeys,
       algorithm,
       curveAmplitude,
@@ -491,6 +563,8 @@ function splitBranch({ polygon, blockedVertexKeys, segmentLength, minimumLeafAre
       minimumLeafArea,
       leaves,
       normalGuides,
+      observer,
+      depth: depth + 1,
     });
   });
 }
@@ -629,10 +703,10 @@ function collectSegmentBoundaryPoints(lot, segments) {
   return Array.from(pointsByKey.values());
 }
 
-function findShortestBalancedSplit(boundaryPoints, blockedVertexKeys = new Set()) {
+function findBalancedSplitCandidates(boundaryPoints, blockedVertexKeys = new Set()) {
   const totalArea = Math.abs(computeSignedArea(boundaryPoints));
   const minimumChildArea = totalArea * MIN_SPLIT_CHILD_AREA_RATIO;
-  let best = null;
+  const candidates = [];
 
   for (let firstIndex = 0; firstIndex < boundaryPoints.length; firstIndex += 1) {
     if (blockedVertexKeys.has(pointKey(boundaryPoints[firstIndex]))) {
@@ -647,14 +721,14 @@ function findShortestBalancedSplit(boundaryPoints, blockedVertexKeys = new Set()
         continue;
       }
 
-      const pieces = splitBetweenBoundaryPoints(boundaryPoints, firstIndex, secondIndex, null);
+      const pieces = splitBetweenBoundaryPoints(boundaryPoints, firstIndex, secondIndex, [boundaryPoints[firstIndex], boundaryPoints[secondIndex]]);
       const firstArea = Math.abs(computeSignedArea(pieces[0]));
       const secondArea = Math.abs(computeSignedArea(pieces[1]));
       if (Math.min(firstArea, secondArea) + EPSILON < minimumChildArea) {
         continue;
       }
 
-      best = chooseBetterSplitCandidate(best, {
+      candidates.push({
         firstIndex,
         secondIndex,
         length: pointDistance(boundaryPoints[firstIndex], boundaryPoints[secondIndex]),
@@ -663,37 +737,17 @@ function findShortestBalancedSplit(boundaryPoints, blockedVertexKeys = new Set()
     }
   }
 
-  return best;
-}
-
-function chooseBetterSplitCandidate(current, candidate) {
-  if (!candidate) {
-    return current;
-  }
-  if (
-    !current
-    || candidate.length < current.length - EPSILON
-    || (Math.abs(candidate.length - current.length) <= EPSILON && candidate.balanceGap < current.balanceGap)
-  ) {
-    return candidate;
-  }
-  return current;
+  return candidates.sort((first, second) => first.length - second.length || first.balanceGap - second.balanceGap);
 }
 
 function splitBetweenBoundaryPoints(
   points,
   firstIndex,
   secondIndex,
-  splitSegmentLength,
-  algorithm = "straight_bisection",
-  curveAmplitude = CURVE_TENSION_RATIO,
-  normalGuides = null,
+  chordPoints,
 ) {
   const forwardPath = takePathBetweenIndices(points, firstIndex, secondIndex);
   const backwardPath = takePathBetweenIndices(points, secondIndex, firstIndex);
-  const chordPoints = algorithm === "curved_bisection"
-    ? buildCurvedBisectionSplitPath(points, firstIndex, secondIndex, splitSegmentLength, curveAmplitude, normalGuides)
-    : buildStraightBisectionSplitPath(points[firstIndex], points[secondIndex], splitSegmentLength);
   const chordForwardInterior = chordPoints.slice(1, -1);
   const chordBackwardInterior = [...chordForwardInterior].reverse();
 
@@ -707,6 +761,29 @@ function splitBetweenBoundaryPoints(
       ...chordForwardInterior,
     ]),
   ];
+}
+
+function buildSplitPath(points, firstIndex, secondIndex, splitSegmentLength, algorithm = "straight_bisection", curveAmplitude = CURVE_TENSION_RATIO, normalGuides = null) {
+  return algorithm === "curved_bisection"
+    ? buildCurvedBisectionSplitPath(points, firstIndex, secondIndex, splitSegmentLength, curveAmplitude, normalGuides)
+    : buildStraightBisectionSplitPath(points[firstIndex], points[secondIndex], splitSegmentLength);
+}
+
+function replacePartitionLeaf(partition, leaf, childPolygons) {
+  const index = partition.findIndex((piece) => samePolygon(piece, leaf));
+  if (index < 0) {
+    partition.push(...childPolygons);
+    return partition;
+  }
+  partition.splice(index, 1, ...childPolygons);
+  return partition;
+}
+
+function samePolygon(first, second) {
+  if (!first || !second || first.length !== second.length) {
+    return false;
+  }
+  return first.every((point, index) => pointDistance(point, second[index]) <= EPSILON);
 }
 
 function resamplePolyline(points, segmentCount) {

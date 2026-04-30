@@ -46,6 +46,31 @@ export function buildCurvedBisectionSplitPath(points, firstIndex, secondIndex, t
   return resamplePolyline(sampled, segmentCount);
 }
 
+export function inspectCurvedBisection(points, firstIndex, secondIndex, targetLength, curveAmplitude) {
+  const start = points[firstIndex];
+  const end = points[secondIndex];
+  const chordLength = pointDistance(start, end);
+  const polygonCentroid = computePolygonCentroid(points);
+  const guideLength = chordLength * curveAmplitude;
+  const startDirection = computeInteriorBisectorDirection(points, firstIndex, polygonCentroid);
+  const endDirection = computeInteriorBisectorDirection(points, secondIndex, polygonCentroid);
+  const arc = buildTangentArc(start, end, startDirection, endDirection);
+  const path = arc
+    ? resamplePolyline(sampleArc(arc, CURVE_SAMPLING_STEPS), Math.max(1, Math.round(Math.abs(arc.radius * arc.deltaAngle) / Math.max(EPSILON, targetLength))))
+    : buildStraightFallback(start, end, targetLength);
+
+  return {
+    start: clonePoint(start),
+    end: clonePoint(end),
+    startDirection,
+    endDirection,
+    guideLength,
+    arc,
+    path,
+    fallbackReason: arc ? null : "The endpoint tangents are parallel or do not define a stable tangent circle, so this bisection falls back to a straight split.",
+  };
+}
+
 function buildStraightFallback(start, end, targetLength) {
   if (!targetLength) {
     return [clonePoint(start), clonePoint(end)];

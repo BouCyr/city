@@ -69,11 +69,11 @@ let dragStart = null;
 const viewportState = createViewportState(CANVAS_SIZE);
 const CONTROL_HELP_TEXT = {
   pointCount: "How many seed points are scattered before Voronoi generation. Higher values create denser and smaller cells. Square grid mode snaps this to the nearest perfect square.",
-  scatterPaddingRatio: "Margin ratio that keeps scattered points away from map borders. Higher values create a wider border buffer.",
+  scatterPaddingRatio: "Border padding ratio for the point scatterer. Higher values shrink the usable area, which keeps the density more even near map edges.",
   scatterAlgorithm: "Select the scatter algorithm for step 1.1. Different algorithms produce different point distributions and downstream map geometry.",
-  poissonSpacingRatio: "Scales Poisson spacing relative to the requested point count. Higher ratio yields fewer, more separated accepted Poisson points before fallback fill.",
+  poissonSpacingRatio: "Density multiplier for Poisson disk spacing. Higher values push accepted points farther apart, so the result looks less crowded but more structured.",
   poissonMaxAttempts: "Candidate attempts per active Poisson sample before it is retired. Higher values improve fill quality at higher CPU cost.",
-  poissonPaddingRatio: "Poisson-specific edge padding ratio. Higher values keep Poisson points farther from map borders.",
+  poissonPaddingRatio: "Border padding ratio for Poisson disk sampling. Higher values reserve more empty space around the edge before points are accepted.",
   waterSides: "Select borders that can flood inward. More active sides usually increases sea coverage.",
   waterReachRatio: "Maximum inland reach used during water expansion. Higher values let water penetrate farther.",
   waterExpansionBase: "Base chance for water to expand from sea-adjacent cells into land cells.",
@@ -90,7 +90,7 @@ const CONTROL_HELP_TEXT = {
   tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
   primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
-  tessellateAlgorithm: "Choose how step 1.11 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi scatters lot-local seed points and clips Voronoi cells to the lot boundary.",
+  tessellateAlgorithm: "Choose how step 1.11 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
   curvedBisectionAmplitude: "Scales the displayed endpoint normal guides used by curved bisection. The split itself follows the circular arc implied by those endpoint normals.",
 };
 

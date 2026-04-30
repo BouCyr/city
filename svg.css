@@ -4,3 +4,146 @@
   display: block;
   user-select: none;
 }
+
+.tutorial-svg {
+  width: 500px;
+  height: 500px;
+  display: block;
+  background:
+    linear-gradient(rgba(24, 33, 38, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 33, 38, 0.05) 1px, transparent 1px),
+    #f8f6f1;
+  background-size: 40px 40px;
+}
+
+.tutorial-base-lot {
+  fill: rgba(246, 239, 221, 0.24);
+  stroke: rgba(24, 33, 38, 0.32);
+  stroke-width: 3;
+}
+
+.tutorial-active-highlight {
+  fill: rgba(255, 255, 255, 0.08);
+  stroke: #c66a25;
+  stroke-width: 7;
+  stroke-linejoin: round;
+}
+
+.tutorial-active-area {
+  fill: rgba(255, 244, 190, 0.74);
+  stroke: #7c5818;
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+.tutorial-partition-muted {
+  fill: rgba(120, 137, 139, 0.2);
+  stroke: rgba(24, 33, 38, 0.26);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.tutorial-partition-active {
+  fill: rgba(255, 244, 190, 0.6);
+  stroke: #c66a25;
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+.tutorial-lot {
+  fill: rgba(197, 220, 206, 0.7);
+  stroke: #182126;
+  stroke-width: 4;
+}
+
+.segmented-lot {
+  stroke-dasharray: 10 8;
+}
+
+.tutorial-piece {
+  fill: rgba(196, 214, 205, 0.58);
+  stroke: #182126;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.piece-0 { fill: rgba(148, 188, 211, 0.7); }
+.piece-1 { fill: rgba(214, 188, 117, 0.72); }
+.piece-2 { fill: rgba(177, 151, 208, 0.62); }
+.piece-3 { fill: rgba(126, 182, 151, 0.68); }
+.piece-4 { fill: rgba(218, 151, 130, 0.64); }
+.piece-5 { fill: rgba(145, 168, 214, 0.64); }
+.piece-final { fill: rgba(172, 194, 154, 0.68); }
+
+.candidate-line {
+  stroke: rgba(24, 33, 38, 0.24);
+  stroke-width: 2;
+  stroke-dasharray: 8 8;
+}
+
+.selected-line {
+  stroke: #111;
+  stroke-width: 5;
+}
+
+.selected-line.muted {
+  opacity: 0.35;
+}
+
+.normal-line {
+  stroke: #b92f2f;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.tutorial-split-path {
+  fill: none;
+  stroke: #0b58b4;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.raw-voronoi {
+  fill: rgba(255, 255, 255, 0.08);
+  stroke: rgba(11, 88, 180, 0.58);
+  stroke-width: 3;
+}
+
+.tutorial-tangent-circle {
+  fill: none;
+  stroke: rgba(185, 47, 47, 0.36);
+  stroke-width: 3;
+  stroke-dasharray: 12 10;
+}
+
+.tutorial-circle-center {
+  fill: #b92f2f;
+}
+
+.tutorial-point circle {
+  fill: #182126;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+.tutorial-point text {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 24px;
+  fill: #182126;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 5;
+}
+
+.blocked-vertex circle {
+  fill: #7d8184;
+}
+
+.boundary-site circle {
+  fill: #b92f2f;
+}
+
+.poisson-site circle {
+  fill: #0b58b4;
+}

@@ -60,9 +60,14 @@ function generatePoissonPoints(map, rng, pointCount) {
   const size = map.meta.size;
   const paddingRatio = map.init.params.poissonPaddingRatio ?? map.init.params.scatterPaddingRatio ?? 0.01;
   const spacingRatio = map.init.params.poissonSpacingRatio ?? 1.15;
-  const nominalSpacing = Math.sqrt((size * size) / Math.max(1, pointCount));
-  const minDistance = Math.max(2, nominalSpacing * spacingRatio);
-  const maxAttempts = map.init.params.poissonMaxAttempts ?? 30;
+  const area = size * size;
+  const nominalSpacing = Math.sqrt(area / Math.max(1, pointCount));
+  const densitySpacing = nominalSpacing * 0.72;
+  const minDistance = Math.max(size * 0.0025, densitySpacing * spacingRatio);
+  const maxAttempts = Math.max(
+    map.init.params.poissonMaxAttempts ?? 30,
+    Math.round(Math.sqrt(size) * 2),
+  );
   const minX = size * paddingRatio;
   const minY = size * paddingRatio;
   const maxX = size - minX;
@@ -171,6 +176,10 @@ function samplePoissonDisk({ pointCount, minDistance, maxAttempts, minX, minY, m
     if (!placed) {
       active.splice(activeIndex, 1);
     }
+  }
+
+  if (points.length >= pointCount) {
+    return points;
   }
 
   return points;

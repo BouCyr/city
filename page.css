@@ -64,3 +64,93 @@ h1 { margin: 0; font-size: clamp(1.4rem, 2vw, 2rem); line-height: 1; }
   .layout, .map-shell { grid-template-columns: 1fr; }
   .map-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.tutorial-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+.tutorial-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) auto auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.tutorial-control {
+  display: grid;
+  gap: 6px;
+}
+
+.tutorial-navigation {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tutorial-counter {
+  min-width: 76px;
+  font-family: "IBM Plex Mono", monospace;
+  text-align: center;
+  color: var(--muted);
+}
+
+.tutorial-home-link {
+  justify-self: end;
+  text-decoration: none;
+}
+
+.tutorial-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 12px;
+}
+
+.tutorial-visual-panel {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
+}
+
+.tutorial-text-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.tutorial-text-panel h1 {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.tutorial-text-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tutorial-kicker {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 980px) {
+  .tutorial-toolbar,
+  .tutorial-layout {
+    grid-template-columns: 1fr;
+  }
+  .tutorial-home-link {
+    justify-self: stretch;
+    text-align: center;
+  }
+  .tutorial-visual-panel {
+    min-height: 520px;
+  }
+}
