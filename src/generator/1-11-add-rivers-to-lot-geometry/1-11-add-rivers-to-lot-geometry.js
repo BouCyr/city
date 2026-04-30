@@ -48,14 +48,18 @@ const POINT_EPSILON = 0.05;
 const GRAPH_NODE_EPSILON = 0.05;
 const RIVER_SPAN_EPSILON = 0.5;
 const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
+const TRIBUTARY_MERGE_DOWNSTREAM_RATIO = 0.33;
+const PRIMARY_OUTLET_INLAND_RATIO = 0.5;
 
 function buildRiverSegmentModel(rivers) {
   const nodes = [];
   const segments = [];
+  const outletAdjustments = [];
   const nodeByKey = new Map();
+  const adjustedPointsByRiverId = buildAdjustedRiverPointMap(rivers);
   const riverBranchByRiverId = new Map();
   rivers.forEach((river) => {
-    if (river.mergedIntoRiverId !== undefined) {
+    if (isTributaryRiver(river)) {
       riverBranchByRiverId.set(river.id, "tributary");
       return;
     }
@@ -80,10 +84,11 @@ function buildRiverSegmentModel(rivers) {
       return;
     }
 
-    const pointIndex = river.points.length - 1;
+    const riverPoints = adjustedPointsByRiverId.get(river.id) || normalizePolyline(river.points || []);
+    const pointIndex = riverPoints.length - 1;
     if (pointIndex >= 0) {
-      mergePointByRiverId.set(river.id, clonePoint(river.points[pointIndex]));
-      pinnedPointKeys.add(pointKey(river.points[pointIndex]));
+      mergePointByRiverId.set(river.id, clonePoint(riverPoints[pointIndex]));
+      pinnedPointKeys.add(pointKey(riverPoints[pointIndex]));
     }
   });
   rivers.forEach((river) => {
@@ -92,19 +97,24 @@ function buildRiverSegmentModel(rivers) {
     }
 
     const mergePointIndex = findPrimaryMergePointIndex(river);
-    if (mergePointIndex !== null && river.points[mergePointIndex]) {
-      pinnedPointKeys.add(pointKey(river.points[mergePointIndex]));
+    const riverPoints = adjustedPointsByRiverId.get(river.id) || normalizePolyline(river.points || []);
+    if (mergePointIndex !== null && riverPoints[mergePointIndex]) {
+      pinnedPointKeys.add(pointKey(riverPoints[mergePointIndex]));
     }
   });
 
   rivers.forEach((river) => {
-    const points = normalizePolyline(river.points || []);
+    const points = adjustedPointsByRiverId.get(river.id) || normalizePolyline(river.points || []);
     if (points.length < 2) {
       return;
     }
 
     const mergeIndex = findPrimaryMergePointIndex(river);
-    const smoothedPoints = smoothRiverPolyline(points, pinnedPointKeys);
+    const smoothedResult = adjustSmoothedRiverPoints(river, smoothRiverPolyline(points, pinnedPointKeys));
+    const smoothedPoints = smoothedResult.points;
+    if (smoothedResult.outletAdjustment) {
+      outletAdjustments.push(smoothedResult.outletAdjustment);
+    }
     let segmentCursor = 0;
 
     for (let index = 0; index < smoothedPoints.length - 1; index += 1) {
@@ -136,7 +146,71 @@ function buildRiverSegmentModel(rivers) {
   return {
     nodes,
     segments: dedupeRiverSegments(segments),
+    outletAdjustments,
   };
+}
+
+function buildAdjustedRiverPointMap(rivers) {
+  const pointsByRiverId = new Map(rivers.map((river) => [
+    river.id,
+    normalizePolyline(river.points || []),
+  ]));
+
+  rivers.forEach((river) => {
+    if (!isTributaryRiver(river)) {
+      return;
+    }
+
+    const tributaryPoints = pointsByRiverId.get(river.id);
+    const primaryRiver = rivers.find((candidate) => candidate.id === river.mergedIntoRiverId);
+    const primaryPoints = primaryRiver ? pointsByRiverId.get(primaryRiver.id) : null;
+    const primaryMergePointIndex = primaryRiver ? findPrimaryMergePointIndexForCell(primaryRiver, river.mergeCellId) : null;
+    if (
+      !tributaryPoints
+      || tributaryPoints.length < 2
+      || !primaryPoints
+      || primaryMergePointIndex === null
+      || !primaryPoints[primaryMergePointIndex]
+    ) {
+      return;
+    }
+
+    const mergePoint = primaryPoints[primaryMergePointIndex];
+    const downstreamPoint = primaryPoints[Math.min(primaryMergePointIndex + 1, primaryPoints.length - 1)];
+    const shiftedMergePoint = downstreamPoint && !pointsMatch(mergePoint, downstreamPoint)
+      ? pointAlongSegment(mergePoint, downstreamPoint, TRIBUTARY_MERGE_DOWNSTREAM_RATIO)
+      : clonePoint(mergePoint);
+
+    primaryPoints[primaryMergePointIndex] = clonePoint(shiftedMergePoint);
+    tributaryPoints[tributaryPoints.length - 1] = clonePoint(shiftedMergePoint);
+  });
+
+  return pointsByRiverId;
+}
+
+function adjustSmoothedRiverPoints(river, points) {
+  if (isTributaryRiver(river) || points.length < 2) {
+    return {
+      points,
+      outletAdjustment: null,
+    };
+  }
+
+  const adjusted = points.map((point) => clonePoint(point));
+  const lastIndex = adjusted.length - 1;
+  const originalOutlet = clonePoint(adjusted[lastIndex]);
+  adjusted[lastIndex] = pointAlongSegment(adjusted[lastIndex - 1], adjusted[lastIndex], PRIMARY_OUTLET_INLAND_RATIO);
+  return {
+    points: dedupeConsecutivePoints(adjusted),
+    outletAdjustment: {
+      from: originalOutlet,
+      to: clonePoint(adjusted[lastIndex]),
+    },
+  };
+}
+
+function isTributaryRiver(river) {
+  return river.mergedIntoRiverId !== null && river.mergedIntoRiverId !== undefined;
 }
 
 function smoothRiverPolyline(points, pinnedPointKeys, targetLength = DEFAULT_SEGMENT_LENGTH) {
@@ -264,13 +338,14 @@ function appendPath(target, path) {
 }
 
 function splitLotsByRiverGraph(map, riverGraph) {
+  const sourceLots = applyRiverOutletAdjustments(map.lots, riverGraph.outletAdjustments);
   const nextLotId = {
-    value: Math.max(-1, ...map.lots.map((lot) => lot.id)) + 1,
+    value: Math.max(-1, ...sourceLots.map((lot) => lot.id)) + 1,
   };
   const splitLots = [];
   const riverSpatialIndex = buildSegmentSpatialIndex(riverGraph.segments);
 
-  map.lots.forEach((lot) => {
+  sourceLots.forEach((lot) => {
     const splitPolygons = splitLotPolygon(lot, riverSpatialIndex);
     if (splitPolygons.length <= 1) {
       splitLots.push({
@@ -292,6 +367,46 @@ function splitLotsByRiverGraph(map, riverGraph) {
     lots: rebuilt.lots,
     segments: rebuilt.segments,
   };
+}
+
+function applyRiverOutletAdjustments(lots, outletAdjustments = []) {
+  if (!outletAdjustments.length) {
+    return lots;
+  }
+
+  return lots.map((lot) => ({
+    ...lot,
+    polygon: outletAdjustments.reduce(
+      (polygon, adjustment) => moveBoundaryPoint(polygon, adjustment.from, adjustment.to),
+      lot.polygon,
+    ),
+  }));
+}
+
+function moveBoundaryPoint(polygon, source, target) {
+  const normalized = normalizePolygon(polygon);
+  const moved = [];
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const current = normalized[index];
+    const next = normalized[(index + 1) % normalized.length];
+    const currentMatches = pointsMatch(current, source, RIVER_SPAN_EPSILON);
+    const nextMatches = pointsMatch(next, source, RIVER_SPAN_EPSILON);
+    appendBoundaryPoint(moved, currentMatches ? target : current);
+
+    if (!currentMatches && !nextMatches && pointLiesOnSegmentInclusive(source, current, next, RIVER_SPAN_EPSILON)) {
+      appendBoundaryPoint(moved, target);
+    }
+  }
+
+  return normalizePolygon(moved);
+}
+
+function appendBoundaryPoint(points, point) {
+  const previous = points[points.length - 1];
+  if (!previous || !pointsMatch(previous, point)) {
+    points.push(clonePoint(point));
+  }
 }
 
 function splitLotPolygon(lot, riverSpatialIndex) {
@@ -877,7 +992,15 @@ function findPrimaryMergePointIndex(river) {
     return null;
   }
 
-  const cellIndex = river.cellIds?.indexOf(river.widthMergeCellId) ?? -1;
+  return findPrimaryMergePointIndexForCell(river, river.widthMergeCellId);
+}
+
+function findPrimaryMergePointIndexForCell(river, cellId) {
+  if (cellId === null || cellId === undefined) {
+    return null;
+  }
+
+  const cellIndex = river.cellIds?.indexOf(cellId) ?? -1;
   if (cellIndex < 0) {
     return null;
   }
