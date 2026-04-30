@@ -4,8 +4,8 @@
  * WHY: Downstream lots should not inherit tiny Voronoi edges that are shorter than the canonical segment size.
  */
 
-import { DEFAULT_SEGMENT_LENGTH, clonePoint, midpointBetween, pointDistance } from "./map-model.js";
-import { cross } from "./geometry.js";
+import { DEFAULT_SEGMENT_LENGTH, clonePoint, midpointBetween, pointDistance } from "../map-model.js";
+import { cross } from "../geometry.js";
 
 export function runCollapseShortEdgesStep(map) {
   const nextMap = collapseShortEdges(map, DEFAULT_SEGMENT_LENGTH);

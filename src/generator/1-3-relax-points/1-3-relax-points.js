@@ -4,9 +4,9 @@
  * WHY: Smoothing geometry should happen before coastline classification so later simplification works on land-neutral cells.
  */
 
-import { buildVoronoiDiagram } from "../lib/voronoi-client.js";
-import { clamp } from "./geometry.js";
-import { buildCanonicalGeometry } from "./map-model.js";
+import { buildVoronoiDiagram } from "../../lib/voronoi-client.js";
+import { clamp } from "../geometry.js";
+import { buildCanonicalGeometry } from "../map-model.js";
 
 export function runRelaxPointsStep(map) {
   const padding = map.meta.size * (map.init.params.relaxPaddingRatio ?? 0.04);

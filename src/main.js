@@ -90,7 +90,8 @@ const CONTROL_HELP_TEXT = {
   tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
   primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
-  tessellateAlgorithm: "Choose how step 1.11 creates sublots. Straight bisection uses straight split chords, Curved bisection bends the split with cubic Hermite curves, and Poisson Voronoi scatters lot-local seed points and clips Voronoi cells to the lot boundary.",
+  tessellateAlgorithm: "Choose how step 1.11 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi scatters lot-local seed points and clips Voronoi cells to the lot boundary.",
+  curvedBisectionAmplitude: "Scales the displayed endpoint normal guides used by curved bisection. The split itself follows the circular arc implied by those endpoint normals.",
 };
 
 bindFormInteractions(form);
@@ -151,6 +152,7 @@ document.querySelectorAll(".control-help-trigger").forEach((button) => {
 });
 setupStepControlPanels();
 setupScatterAlgorithmControls();
+setupTessellationAlgorithmControls();
 
 form.requestSubmit();
 
@@ -186,6 +188,25 @@ function setupScatterAlgorithmControls() {
     const selected = form.querySelector('input[name="scatterAlgorithm"]:checked');
     const usePoisson = selected instanceof HTMLInputElement && selected.value === "poisson_disk";
     poissonPanel.hidden = !usePoisson;
+  };
+
+  radios.forEach((radio) => {
+    radio.addEventListener("change", sync);
+  });
+  sync();
+}
+
+function setupTessellationAlgorithmControls() {
+  const radios = Array.from(form.querySelectorAll('input[name="tessellateAlgorithm"]'));
+  const curvedPanel = document.querySelector("#curvedBisectionControlsPanel");
+  if (!radios.length || !(curvedPanel instanceof HTMLElement)) {
+    return;
+  }
+
+  const sync = () => {
+    const selected = form.querySelector('input[name="tessellateAlgorithm"]:checked');
+    const useCurved = selected instanceof HTMLInputElement && selected.value === "curved_bisection";
+    curvedPanel.hidden = !useCurved;
   };
 
   radios.forEach((radio) => {

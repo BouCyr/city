@@ -1,8 +1,8 @@
 # Generation Steps
 
-This file is the implemented geometry contract for the deterministic generation pipeline. Keep it aligned with `src/generator/steps.js`, `src/generator/city-generator.js`, and the step files under `src/generator/`.
+This file is the implemented geometry contract for the deterministic generation pipeline. Keep it aligned with `src/generator/steps.js`, `src/generator/city-generator.js`, and the numbered step folders under `src/generator/`.
 
-Each step is a simple function. Its input is exactly the previous step output, except step 1.1, which takes the seeded RNG and initial parameters. Each step owns one file, and any helper used by more than one step belongs in a helper module such as `cell-graph.js`, `geometry.js`, `map-model.js`, `river-model.js`, or `river-path.js`.
+Each step is a simple function. Its input is exactly the previous step output, except step 1.1, which takes the seeded RNG and initial parameters. Each step owns one numbered folder and one numbered step file. If a step has multiple algorithms, keep the step entry file separate from one file per algorithm. Rename folders and files whenever the step ordering changes so the numeric prefix always matches the canonical step number.
 
 ## Canonical Order
 
@@ -95,7 +95,7 @@ The `rivers` array is kept for renderer compatibility. The canonical named field
 
 ## 1.1 Scatter Pseudo-Random Points
 
-Source: `src/generator/step-scatter-points.js`
+Source: `src/generator/1-1-scatter-points/1-1-scatter-points.js`
 
 Function input:
 
@@ -129,7 +129,7 @@ Rules:
 
 ## 1.2 Compute Voronoi Cells And Edges
 
-Source: `src/generator/step-build-voronoi.js`
+Source: `src/generator/1-2-build-voronoi/1-2-build-voronoi.js`
 
 Function input:
 
@@ -173,7 +173,7 @@ Rules:
 
 ## 1.3 Apply One Lloyd Relaxation Pass
 
-Source: `src/generator/step-relax-points.js`
+Source: `src/generator/1-3-relax-points/1-3-relax-points.js`
 
 Function input:
 
@@ -206,7 +206,7 @@ Rules:
 
 ## 1.4 Collapse Short Edges
 
-Source: `src/generator/step-collapse-short-edges.js`
+Source: `src/generator/1-4-collapse-short-edges/1-4-collapse-short-edges.js`
 
 Function input:
 
@@ -243,7 +243,7 @@ Rules:
 
 ## 1.5 Select And Paint Sea Areas
 
-Source: `src/generator/step-apply-water.js`
+Source: `src/generator/1-5-apply-water/1-5-apply-water.js`
 
 Function input:
 
@@ -274,7 +274,7 @@ Rules:
 
 ## 1.6 Flag Inland Hill Cells
 
-Source: `src/generator/step-flag-hills.js`
+Source: `src/generator/1-6-flag-hills/1-6-flag-hills.js`
 
 Function input:
 
@@ -301,7 +301,7 @@ Rules:
 
 ## 1.7 Trace The First River
 
-Source: `src/generator/step-first-river.js`
+Source: `src/generator/1-7-first-river/1-7-first-river.js`
 
 Function input:
 
@@ -344,7 +344,7 @@ Rules:
 
 ## 1.8 Trace The First Tributary
 
-Source: `src/generator/step-first-tributary.js`
+Source: `src/generator/1-8-first-tributary/1-8-first-tributary.js`
 
 Function input:
 
@@ -384,7 +384,7 @@ Rules:
 
 ## 1.9 Convert To Lot Geometry
 
-Source: `src/generator/step-convert-lots.js`
+Source: `src/generator/1-9-convert-lots/1-9-convert-lots.js`
 
 Function input:
 
@@ -417,7 +417,7 @@ Rules:
 
 ## 1.10 Add Rivers To Lot Geometry
 
-Source: `src/generator/step-add-rivers-to-lot-geometry.js`
+Source: `src/generator/1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js`
 
 Function input:
 
@@ -450,7 +450,7 @@ Rules:
 
 ## 1.11 Tessellate Lot Geometry
 
-Source: `src/generator/step-tessellate-lots.js`
+Source: `src/generator/1-11-tessellate-lots/1-11-tessellate-lots.js`
 
 Function input:
 

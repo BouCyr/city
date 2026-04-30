@@ -4,7 +4,7 @@
  * WHY: Later replay, hover, and rendering should work from the same segment-based model the user now sees.
  */
 
-import { DEFAULT_SEGMENT_LENGTH, convertCellGeometryToLotGeometry } from "./map-model.js";
+import { DEFAULT_SEGMENT_LENGTH, convertCellGeometryToLotGeometry } from "../map-model.js";
 
 export function runConvertLotsStep(map) {
   const nextMap = convertCellGeometryToLotGeometry(map, DEFAULT_SEGMENT_LENGTH);

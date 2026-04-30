@@ -5,7 +5,7 @@
  * WHY: Hills should form a distinct inland belt, and the surrounding slopes should read as a secondary terrain zone.
  */
 
-import { computeCellDistances } from "./cell-graph.js";
+import { computeCellDistances } from "../cell-graph.js";
 
 export function runFlagHillsStep(map, { rng }) {
   const hillCellIds = chooseHillCells(map, rng, map.init.params.hillCount ?? 0);

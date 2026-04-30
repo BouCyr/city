@@ -5,7 +5,7 @@
  * WHY: Rivers should become part of the lot topology instead of only drawing as an overlay.
  */
 
-import { cross } from "./geometry.js";
+import { cross } from "../geometry.js";
 import {
   DEFAULT_SEGMENT_LENGTH,
   clonePoint,
@@ -14,7 +14,7 @@ import {
   normalizePolyline,
   pointDistance,
   resamplePolyline,
-} from "./map-model.js";
+} from "../map-model.js";
 
 export function runAddRiversToLotGeometryStep(map) {
   if (!Array.isArray(map.lots) || !map.lots.length || !Array.isArray(map.rivers) || !map.rivers.length) {

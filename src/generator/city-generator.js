@@ -6,17 +6,17 @@
 
 import { createSeededRandom } from "./random.js";
 import { BLANK_STEP_INDEX, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
-import { runBuildVoronoiStep } from "./step-build-voronoi.js";
-import { runApplyWaterStep } from "./step-apply-water.js";
-import { runFlagHillsStep } from "./step-flag-hills.js";
-import { runFirstRiverStep } from "./step-first-river.js";
-import { runFirstTributaryStep } from "./step-first-tributary.js";
-import { runConvertLotsStep } from "./step-convert-lots.js";
-import { runAddRiversToLotGeometryStep } from "./step-add-rivers-to-lot-geometry.js";
-import { runTessellateLotsStep } from "./step-tessellate-lots.js";
-import { runRelaxPointsStep } from "./step-relax-points.js";
-import { runScatterPointsStep } from "./step-scatter-points.js";
-import { runCollapseShortEdgesStep } from "./step-collapse-short-edges.js";
+import { runBuildVoronoiStep } from "./1-2-build-voronoi/1-2-build-voronoi.js";
+import { runApplyWaterStep } from "./1-5-apply-water/1-5-apply-water.js";
+import { runFlagHillsStep } from "./1-6-flag-hills/1-6-flag-hills.js";
+import { runFirstRiverStep } from "./1-7-first-river/1-7-first-river.js";
+import { runFirstTributaryStep } from "./1-8-first-tributary/1-8-first-tributary.js";
+import { runConvertLotsStep } from "./1-9-convert-lots/1-9-convert-lots.js";
+import { runAddRiversToLotGeometryStep } from "./1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js";
+import { runTessellateLotsStep } from "./1-11-tessellate-lots/1-11-tessellate-lots.js";
+import { runRelaxPointsStep } from "./1-3-relax-points/1-3-relax-points.js";
+import { runScatterPointsStep } from "./1-1-scatter-points/1-1-scatter-points.js";
+import { runCollapseShortEdgesStep } from "./1-4-collapse-short-edges/1-4-collapse-short-edges.js";
 import { GENERATION_STEPS } from "./steps.js";
 
 const GENERATION_PIPELINE = [

@@ -25,6 +25,7 @@ const RANGE_FIELDS = [
   "tributaryMergeSeaDistance",
   "tributaryWidthRatio",
   "primaryMergeWidthGain",
+  "curvedBisectionAmplitude",
 ];
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
@@ -52,6 +53,7 @@ const DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE = 6;
 const DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
+const DEFAULT_CURVED_BISECTION_AMPLITUDE = 0.35;
 
 /**
  * WHAT: Attach the live form behaviors that keep visible values in sync.
@@ -145,6 +147,7 @@ export function readFormState(form) {
     tributaryMergeSeaDistance: normalizeInteger(Number(data.get("tributaryMergeSeaDistance") || DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE), 0, 20),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 12),
+    curvedBisectionAmplitude: normalizeDecimal(Number(data.get("curvedBisectionAmplitude") || DEFAULT_CURVED_BISECTION_AMPLITUDE), 0.1, 1.4),
     waterSides,
   };
 }

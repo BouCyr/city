@@ -4,8 +4,8 @@
  * WHY: The first river should feel like the dominant drainage line of the map rather than an arbitrary source.
  */
 
-import { findCenterSeaLandPath } from "./river-path.js";
-import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "./river-model.js";
+import { findCenterSeaLandPath } from "../river-path.js";
+import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
 export function runFirstRiverStep(map, { rng }) {
   const river = chooseFirstRiver(map, rng);

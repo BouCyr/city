@@ -5,9 +5,9 @@
  * WHY: Tributaries should read as distinct feeders rather than overlapping the main stem or merging too close to the sea.
  */
 
-import { computeCellDistances } from "./cell-graph.js";
-import { computeSeaDistances, findLandPathToTargets } from "./river-path.js";
-import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "./river-model.js";
+import { computeCellDistances } from "../cell-graph.js";
+import { computeSeaDistances, findLandPathToTargets } from "../river-path.js";
+import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
 export function runFirstTributaryStep(map, { rng }) {
   const tributary = chooseFirstTributary(map, rng);

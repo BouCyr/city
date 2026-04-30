@@ -4,7 +4,7 @@
  * WHY: Coastline decisions should live in one step module and be reapplied after geometry changes.
  */
 
-import { centerBias, distanceToSide } from "./geometry.js";
+import { centerBias, distanceToSide } from "../geometry.js";
 
 export function runApplyWaterStep(map, { rng }) {
   const nextMap = applyWaterClassification(map, rng);

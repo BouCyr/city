@@ -4,8 +4,8 @@
  * WHY: Later steps should operate on cells and edges, not library-specific Voronoi internals.
  */
 
-import { buildVoronoiDiagram } from "../lib/voronoi-client.js";
-import { buildCanonicalGeometry } from "./map-model.js";
+import { buildVoronoiDiagram } from "../../lib/voronoi-client.js";
+import { buildCanonicalGeometry } from "../map-model.js";
 
 export function runBuildVoronoiStep(map) {
   const diagram = buildVoronoiDiagram({
