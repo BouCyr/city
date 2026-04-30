@@ -147,3 +147,78 @@
 .poisson-site circle {
   fill: #0b58b4;
 }
+
+.coastline-svg {
+  width: min(760px, 100%);
+  height: min(640px, calc(100vh - 150px));
+}
+
+.coastline-land-cell {
+  fill: rgba(197, 220, 206, 0.72);
+  stroke: rgba(24, 33, 38, 0.18);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.coastline-sea-cell {
+  fill: rgba(126, 187, 212, 0.42);
+  stroke: rgba(31, 78, 114, 0.18);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.coastline-raw-edge {
+  stroke: rgba(24, 33, 38, 0.58);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.coastline-muted-edge {
+  stroke: rgba(24, 33, 38, 0.18);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.coastline-coast-edge,
+.coastline-chain-edge {
+  stroke: #c66a25;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.coastline-chain-edge.chain-1 { stroke: #0b58b4; }
+.coastline-chain-edge.chain-2 { stroke: #7c5818; }
+.coastline-chain-edge.chain-3 { stroke: #4d835f; }
+
+.coastline-bezier-guide {
+  fill: none;
+  stroke: #0b58b4;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coastline-final-path {
+  fill: none;
+  stroke: #182126;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coastline-midpoint circle {
+  fill: #0b58b4;
+}
+
+.coastline-control-point circle {
+  fill: #b92f2f;
+}
+
+.coastline-sample-point circle {
+  fill: #182126;
+  r: 4;
+}
+
+.coastline-reconnect-point circle {
+  fill: #c66a25;
+}

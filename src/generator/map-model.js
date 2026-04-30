@@ -5,6 +5,7 @@
  */
 
 import { cross } from "./geometry.js";
+import { buildCoastlineTrace } from "./coastline-model.js";
 
 export const BLANK_STEP_INDEX = -1;
 export const DEFAULT_SEGMENT_LENGTH = 30;
@@ -170,10 +171,138 @@ export function buildCanonicalGeometry(diagram) {
 }
 
 export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
+  return convertCellGeometryToLotGeometryWithEdgeSampler(map, (edge, lotById, edgeLength) => {
+    const path = normalizePolyline(edge.path?.length ? edge.path : [edge.from, edge.to]);
+    const resolvedSegmentCount = Math.max(1, Math.round(edgeLength / segmentLength));
+    return resamplePolyline(path, resolvedSegmentCount);
+  });
+}
+
+export function convertCellGeometryToCoastlineLotGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH / 2) {
   if (Array.isArray(map.lots) && Array.isArray(map.segments) && !map.cells?.length && !map.edges?.length) {
     return map;
   }
 
+  const coastlineTrace = buildCoastlineTrace(map, { segmentLength });
+  return convertCellGeometryToLotGeometryWithEdgeSampler(map, (edge, lotById, edgeLength) => {
+    const coastlinePath = coastlineTrace.edgePathById.get(edge.id);
+    if (coastlinePath) {
+      return coastlinePath;
+    }
+
+    const from = coastlineTrace.replacementPointByVertexKey.get(pointKey(edge.from)) || edge.from;
+    const to = coastlineTrace.replacementPointByVertexKey.get(pointKey(edge.to)) || edge.to;
+    const path = normalizePolyline(edge.path?.length ? edge.path : [from, to]);
+    return resamplePolyline(path, Math.max(1, Math.round(edgeLength / segmentLength)));
+  });
+}
+
+export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
+  if (!Array.isArray(map.lots) || !Array.isArray(map.segments)) {
+    return map;
+  }
+
+  const lots = (map.lots || []).map((lot) => ({
+    ...lot,
+    segmentIds: [],
+    neighborLotIds: [],
+    vertexIds: [],
+  }));
+  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+  const vertices = [];
+  const vertexByKey = new Map();
+  const segments = [];
+  const segmentPathById = new Map();
+
+  (map.segments || []).forEach((segment) => {
+    const path = normalizePolyline(segment.path?.length ? segment.path : [segment.from, segment.to]);
+    const keepAsIs = Boolean(segment.features?.coast) || Boolean(segment.features?.sea);
+    const sampledPoints = keepAsIs
+      ? path
+      : resamplePolyline(path, Math.max(1, Math.round(polylineLength(path) / segmentLength)));
+    segmentPathById.set(segment.id, sampledPoints);
+
+    for (let index = 0; index < sampledPoints.length - 1; index += 1) {
+      const from = sampledPoints[index];
+      const to = sampledPoints[index + 1];
+      const fromVertexId = getOrCreateLotVertex(vertices, vertexByKey, from);
+      const toVertexId = getOrCreateLotVertex(vertices, vertexByKey, to);
+      const leftLotId = segment.leftLotId;
+      const rightLotId = segment.rightLotId;
+      const nextSegment = {
+        id: `${segment.id}:${index}`,
+        edgeId: segment.edgeId || segment.id,
+        fromVertexId,
+        toVertexId,
+        from: clonePoint(from),
+        to: clonePoint(to),
+        midpoint: midpointBetween(from, to),
+        length: pointDistance(from, to),
+        leftLotId,
+        rightLotId,
+        features: {
+          ...segment.features,
+          sea: keepAsIs && Boolean(segment.features?.sea),
+        },
+      };
+      segments.push(nextSegment);
+      vertices[fromVertexId].segmentIds.push(nextSegment.id);
+      vertices[toVertexId].segmentIds.push(nextSegment.id);
+      if (leftLotId !== null) {
+        lotById.get(leftLotId)?.segmentIds.push(nextSegment.id);
+      }
+      if (rightLotId !== null && rightLotId !== leftLotId) {
+        lotById.get(rightLotId)?.segmentIds.push(nextSegment.id);
+      }
+    }
+  });
+
+  rebuildLotPolygonsFromSegmentPaths(lots, map.segments || [], segmentPathById);
+  rebuildLotRelationships(lots, lotById, segments);
+  lots.forEach((lot) => {
+    lot.vertexIds = lot.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point));
+  });
+  applyVertexFeaturesFromSegments(vertices, segments);
+  return {
+    ...stripCellGeometry(map),
+    vertices,
+    lots,
+    segments,
+  };
+}
+
+function rebuildLotPolygonsFromSegmentPaths(lots, sourceSegments, segmentPathById) {
+  const segmentEntries = sourceSegments.map((segment) => ({
+    segment,
+    fromKey: pointKey(segment.from),
+    toKey: pointKey(segment.to),
+  }));
+
+  lots.forEach((lot) => {
+    if (!Array.isArray(lot.polygon) || lot.polygon.length < 3) {
+      return;
+    }
+
+    const polygon = [];
+    for (let index = 0; index < lot.polygon.length; index += 1) {
+      const from = lot.polygon[index];
+      const to = lot.polygon[(index + 1) % lot.polygon.length];
+      const fromKey = pointKey(from);
+      const toKey = pointKey(to);
+      const entry = segmentEntries.find(({ fromKey: segmentFromKey, toKey: segmentToKey }) =>
+        (segmentFromKey === fromKey && segmentToKey === toKey) || (segmentFromKey === toKey && segmentToKey === fromKey)
+      );
+      const segmentPath = entry ? segmentPathById.get(entry.segment.id) : null;
+      const path = segmentPath
+        ? orientPathForEndpoints(segmentPath, from, to)
+        : [clonePoint(from), clonePoint(to)];
+      appendPath(polygon, path);
+    }
+    lot.polygon = dedupeConsecutivePoints(polygon);
+  });
+}
+
+function convertCellGeometryToLotGeometryWithEdgeSampler(map, sampleEdgePath) {
   const cells = map.cells || [];
   const edges = map.edges || [];
   const vertices = [];
@@ -183,7 +312,7 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
     site: clonePoint(cell.site),
     centroid: clonePoint(cell.centroid),
     polygon: cell.polygon.map((point) => clonePoint(point)),
-    vertexIds: cell.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point)),
+    vertexIds: [],
     segmentIds: [],
     neighborLotIds: [],
     boundarySides: [...(cell.boundarySides || [])],
@@ -191,18 +320,16 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
   }));
   const lotById = new Map(lots.map((lot) => [lot.id, lot]));
   const segments = [];
+  const edgePathById = new Map();
 
   edges.forEach((edge) => {
-    const path = normalizePolyline(edge.path?.length ? edge.path : [edge.from, edge.to]);
-    const edgeLength = polylineLength(path);
-    const resolvedSegmentCount = Math.max(1, Math.round(edgeLength / segmentLength));
-    const sampledPoints = resamplePolyline(path, resolvedSegmentCount);
+    const path = sampleEdgePath(edge, lotById, polylineLength(normalizePolyline(edge.path?.length ? edge.path : [edge.from, edge.to])));
+    edgePathById.set(edge.id, path);
     const leftLotId = edge.leftCellId;
     const rightLotId = edge.rightCellId;
-
-    for (let index = 0; index < resolvedSegmentCount; index += 1) {
-      const from = sampledPoints[index];
-      const to = sampledPoints[index + 1];
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const from = path[index];
+      const to = path[index + 1];
       const fromVertexId = getOrCreateLotVertex(vertices, vertexByKey, from);
       const toVertexId = getOrCreateLotVertex(vertices, vertexByKey, to);
       const features = buildLotBoundaryFeatures(edge, lotById);
@@ -229,31 +356,102 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
         lotById.get(rightLotId)?.segmentIds.push(segment.id);
       }
     }
-
-    if (leftLotId !== null && rightLotId !== null) {
-      const leftLot = lotById.get(leftLotId);
-      const rightLot = lotById.get(rightLotId);
-      if (leftLot && !leftLot.neighborLotIds.includes(rightLotId)) {
-        leftLot.neighborLotIds.push(rightLotId);
-      }
-      if (rightLot && !rightLot.neighborLotIds.includes(leftLotId)) {
-        rightLot.neighborLotIds.push(leftLotId);
-      }
-    }
   });
 
+  rebuildLotPolygonsFromEdgePaths(lots, cells, edges, edgePathById);
   lots.forEach((lot) => {
-    lot.neighborLotIds.sort((first, second) => first - second);
+    lot.vertexIds = lot.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point));
   });
+  rebuildLotRelationships(lots, lotById, segments);
   applyVertexFeaturesFromSegments(vertices, segments);
-
-  const { cells: _cells, edges: _edges, vertices: _cellVertices, ...rest } = map;
   return {
-    ...rest,
+    ...stripCellGeometry(map),
     vertices,
     lots,
     segments,
   };
+}
+
+function rebuildLotPolygonsFromEdgePaths(lots, cells, edges, edgePathById) {
+  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+  const edgeEntries = edges.map((edge) => ({
+    edge,
+    fromKey: pointKey(edge.from),
+    toKey: pointKey(edge.to),
+  }));
+
+  cells.forEach((cell) => {
+    const lot = lotById.get(cell.id);
+    if (!lot || !Array.isArray(cell.polygon) || cell.polygon.length < 3) {
+      return;
+    }
+
+    const polygon = [];
+    for (let index = 0; index < cell.polygon.length; index += 1) {
+      const from = cell.polygon[index];
+      const to = cell.polygon[(index + 1) % cell.polygon.length];
+      const fromKey = pointKey(from);
+      const toKey = pointKey(to);
+      const entry = edgeEntries.find(({ fromKey: edgeFromKey, toKey: edgeToKey }) =>
+        (edgeFromKey === fromKey && edgeToKey === toKey) || (edgeFromKey === toKey && edgeToKey === fromKey)
+      );
+      const edgePath = entry ? edgePathById.get(entry.edge.id) : null;
+      const path = edgePath
+        ? orientPathForEndpoints(edgePath, from, to)
+        : [clonePoint(from), clonePoint(to)];
+      appendPath(polygon, path);
+    }
+    lot.polygon = dedupeConsecutivePoints(polygon);
+  });
+}
+
+function orientPathForEndpoints(path, from, to) {
+  if (!path?.length) {
+    return [clonePoint(from), clonePoint(to)];
+  }
+
+  const first = path[0];
+  const last = path[path.length - 1];
+  const forwardDistance = pointDistance(first, from) + pointDistance(last, to);
+  const reverseDistance = pointDistance(last, from) + pointDistance(first, to);
+  const oriented = forwardDistance <= reverseDistance ? path : [...path].reverse();
+  return oriented.map((point) => clonePoint(point));
+}
+
+function appendPath(target, path) {
+  path.forEach((point, index) => {
+    const previous = target[target.length - 1];
+    if (index > 0 && previous && pointDistance(previous, point) <= 0.0001) {
+      return;
+    }
+    target.push(clonePoint(point));
+  });
+}
+
+function rebuildLotRelationships(lots, lotById, segments) {
+  lots.forEach((lot) => {
+    lot.neighborLotIds = [];
+  });
+  segments.forEach((segment) => {
+    if (segment.leftLotId !== null && segment.rightLotId !== null) {
+      const leftLot = lotById.get(segment.leftLotId);
+      const rightLot = lotById.get(segment.rightLotId);
+      if (leftLot && !leftLot.neighborLotIds.includes(segment.rightLotId)) {
+        leftLot.neighborLotIds.push(segment.rightLotId);
+      }
+      if (rightLot && !rightLot.neighborLotIds.includes(segment.leftLotId)) {
+        rightLot.neighborLotIds.push(segment.leftLotId);
+      }
+    }
+  });
+  lots.forEach((lot) => {
+    lot.neighborLotIds.sort((first, second) => first - second);
+  });
+}
+
+function stripCellGeometry(map) {
+  const { cells: _cells, edges: _edges, vertices: _cellVertices, ...rest } = map;
+  return rest;
 }
 
 export function getMapGeometry(map) {
@@ -367,7 +565,7 @@ function buildLotBoundaryFeatures(edge, lotById) {
     boundary: Boolean(edge.features?.boundary),
     coast,
     land: hasLand && !coast,
-    sea: Boolean(edge.features?.sea),
+    sea: Boolean(leftSea && rightSea),
     river: Boolean(edge.features?.river),
     riverside: false,
   };

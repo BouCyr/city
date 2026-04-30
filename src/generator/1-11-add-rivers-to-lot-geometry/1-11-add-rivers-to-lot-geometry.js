@@ -22,7 +22,7 @@ export function runAddRiversToLotGeometryStep(map) {
       map,
       frameEntries: [
         {
-          label: "Step 1.10 / Add rivers to lot geometry",
+          label: "Step 1.11 / Add rivers to lot geometry",
           map,
         },
       ],
@@ -36,7 +36,7 @@ export function runAddRiversToLotGeometryStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.10 / Add rivers to lot geometry",
+        label: "Step 1.11 / Add rivers to lot geometry",
         map: nextMap,
       },
     ],

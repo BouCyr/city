@@ -15,9 +15,10 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.6 Flag inland hill cells
 1.7 Trace the first river
 1.8 Trace the first tributary
-1.9 Convert to lot geometry
-1.10 Add rivers to lot geometry
-1.11 Tessellate lot geometry
+1.9 Build coastline geometry
+1.10 Build land-edge geometry
+1.11 Add rivers to lot geometry
+1.12 Tessellate lot geometry
 2. Human usage
 
 `Human usage` is reserved and has no implemented child steps yet.
@@ -382,9 +383,9 @@ Rules:
 - It must merge into a valid primary river cell.
 - The primary river width is increased downstream of the merge cell.
 
-## 1.9 Convert To Lot Geometry
+## 1.9 Build Coastline Geometry
 
-Source: `src/generator/1-9-convert-lots/1-9-convert-lots.js`
+Source: `src/generator/1-9-build-coastline-geometry/1-9-build-coastline-geometry.js`
 
 Function input:
 
@@ -409,15 +410,18 @@ Function output:
 ```
 
 Rules:
-- Cells become lots.
-- Edges become sampled segments.
+- Cells become lots and coastline chains are traced from land/sea edges.
+- Coastline corners become quadratic Bezier curves from the previous coast-edge midpoint to the next coast-edge midpoint, controlled by the shared Voronoi vertex.
+- Boundary-ending coastline chains synthesize the missing exterior midpoint by mirroring the adjacent midpoint across the endpoint.
+- Bezier curves are sampled at half the default segment length and emitted only as ordinary vertices and segments.
+- Non-coast edges that touched an original coast vertex reconnect to the sampled curve point nearest that original vertex.
 - Lots inherit source cell features, except temporary hill and hillside features are cleared before this step.
 - Segment and vertex features are limited to lot-stage surface data such as `coast`, `land`, `sea`, and later `riverside`.
 - Cell geometry is removed from the output; later work uses lots only.
 
-## 1.10 Add Rivers To Lot Geometry
+## 1.10 Build Land-Edge Geometry
 
-Source: `src/generator/1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js`
+Source: `src/generator/1-10-build-land-edge-geometry/1-10-build-land-edge-geometry.js`
 
 Function input:
 
@@ -442,15 +446,25 @@ Function output:
 ```
 
 Rules:
+- Coastline segments from step 1.9 are preserved.
+- Pure sea segments are preserved as single unchanged segments.
+- Remaining non-sea land and boundary edges are resampled as straight segments at the default segment length.
+- Lot adjacency, vertex dedupe, and segment ownership are rebuilt from the normalized geometry.
+
+## 1.11 Add Rivers To Lot Geometry
+
+Source: `src/generator/1-11-add-rivers-to-lot-geometry/1-11-add-rivers-to-lot-geometry.js`
+
+Rules:
 - River paths are sampled into segment geometry.
 - Lots crossed by rivers are split.
 - River-derived segments and their vertices receive `features.riverside`.
 - River segments are canonical `segments`; they are not stored again in a river-specific output field.
 - Lot adjacency and segment ownership are rebuilt from the new polygons.
 
-## 1.11 Tessellate Lot Geometry
+## 1.12 Tessellate Lot Geometry
 
-Source: `src/generator/1-11-tessellate-lots/1-11-tessellate-lots.js`
+Source: `src/generator/1-12-tessellate-lots/1-12-tessellate-lots.js`
 
 Function input:
 

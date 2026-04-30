@@ -68,6 +68,10 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 10:
       return stableSignature({
+        segmentLength: "default",
+      });
+    case 11:
+      return stableSignature({
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         splitSegmentLength: "default",
       });

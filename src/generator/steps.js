@@ -13,7 +13,8 @@ export const GENERATION_STEPS = [
   "Flag inland hill cells",
   "Trace the first river",
   "Trace the first tributary",
-  "Convert to lot geometry",
+  "Build coastline geometry",
+  "Build land-edge geometry",
   "Add rivers to lot geometry",
   "Tessellate lot geometry",
 ];

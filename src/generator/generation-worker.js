@@ -7,7 +7,7 @@
 import { generateCity, generateCityThroughStep } from "./city-generator.js";
 import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
 
-const RIVER_EVALUATION_STEP_INDEX = 7;
+const RIVER_EVALUATION_STEP_INDEX = 8;
 
 self.addEventListener("message", async (event) => {
   const message = event.data;
@@ -165,13 +165,17 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 8:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
+        segmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
       };
     case 9:
       return {
         segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 10:
+      return {
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
+      };
+    case 11:
       return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,
