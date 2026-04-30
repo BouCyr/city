@@ -13,6 +13,7 @@ import { splitLotPolygonRecursively } from "./1-11-tessellate-lots.js";
 const EPSILON = 0.0001;
 const POISSON_SPACING_RATIO = 0.95;
 const POISSON_MAX_ATTEMPTS = 30;
+const POISSON_CANDIDATE_ATTEMPTS = 120;
 const POISSON_BBOX_PADDING = 0.001;
 const EDGE_SEGMENT_LENGTH = 70;
 
@@ -153,7 +154,7 @@ function buildPoissonTrace({ polygon, segmentLength, seed, frames }) {
   const estimatedPieces = splitLotPolygonForCount(polygon, segmentLength);
   const boundarySites = polygon.map((point) => clonePoint(point));
   const rng = createSeededRandom(seed);
-  const sites = samplePoissonPointsInPolygon(polygon, Math.abs(computeSignedArea(polygon)), Math.max(2, estimatedPieces.length), rng);
+  const sites = samplePoissonPointsInPolygon(polygon, Math.abs(computeSignedArea(polygon)), Math.max(2, estimatedPieces.length), rng, boundarySites);
   const voronoiSites = [...boundarySites, ...sites];
   const bbox = computeBoundingBox(polygon);
   const delaunay = Delaunay.from(voronoiSites.map((point) => [point.x, point.y]));
@@ -163,7 +164,7 @@ function buildPoissonTrace({ polygon, segmentLength, seed, frames }) {
     bbox.maxX + POISSON_BBOX_PADDING,
     bbox.maxY + POISSON_BBOX_PADDING,
   ]);
-  const rawCells = sites.map((_, index) => sanitizeCellPolygon(voronoi.cellPolygon(boundarySites.length + index)));
+  const rawCells = voronoiSites.map((_, index) => sanitizeCellPolygon(voronoi.cellPolygon(index)));
   const clippedCells = rawCells.map((cell) => normalizePolygon(clipPolygonToPolygon(cell, polygon))).filter((cell) => cell.length >= 3);
 
   frames.push(frame("Estimate the target count", `Poisson Voronoi first runs the straight bisection logic to estimate how many sublots this lot should produce. Here that target is ${estimatedPieces.length}.`, {
@@ -175,7 +176,7 @@ function buildPoissonTrace({ polygon, segmentLength, seed, frames }) {
     polygons: [{ points: polygon, className: "tutorial-active-area" }],
     points: boundarySites.map((point, index) => ({ point, label: `B${index}`, className: "boundary-site" })),
   }));
-  frames.push(frame("Sample Poisson sites", `${sites.length} interior Poisson sites are sampled with a minimum-distance rule so the generated cells are more evenly spaced than random points.`, {
+  frames.push(frame("Sample Poisson sites", `${sites.length} interior Poisson sites are sampled with a minimum-distance rule. The boundary vertices are already in the spacing set, so interior sites cannot be placed too close to the segmented lot edge.`, {
     basePolygon: polygon,
     polygons: [{ points: polygon, className: "tutorial-active-area" }],
     points: [
@@ -183,15 +184,21 @@ function buildPoissonTrace({ polygon, segmentLength, seed, frames }) {
       ...sites.map((point, index) => ({ point, label: String(index), className: "poisson-site" })),
     ],
   }));
-  frames.push(frame("Build Voronoi cells", "The Voronoi diagram is computed from both boundary vertices and Poisson sites. This frame shows the raw cells for the interior Poisson sites.", {
+  frames.push(frame("Build Voronoi cells", "The Voronoi diagram is computed from both boundary vertices and Poisson sites. This frame shows raw cells for every generated site, including boundary vertices.", {
     basePolygon: polygon,
     polygons: [{ points: polygon, className: "tutorial-active-area" }, ...rawCells.map((points) => ({ points, className: "raw-voronoi" }))],
-    points: sites.map((point) => ({ point, className: "poisson-site" })),
+    points: [
+      ...boundarySites.map((point) => ({ point, className: "boundary-site" })),
+      ...sites.map((point) => ({ point, className: "poisson-site" })),
+    ],
   }));
-  frames.push(frame("Clip to the lot", "Each raw cell is clipped back to the original lot polygon. The clipped polygons become the final Poisson Voronoi sublots.", {
+  frames.push(frame("Clip to the lot", "Each raw cell is clipped back to the original lot polygon. Boundary-site cells are included, so the final sublots cover both edge and interior regions.", {
     basePolygon: polygon,
     polygons: clippedCells.map((points, index) => ({ points, className: `tutorial-piece piece-${index % 6}` })),
-    points: sites.map((point) => ({ point, className: "poisson-site" })),
+    points: [
+      ...boundarySites.map((point) => ({ point, className: "boundary-site" })),
+      ...sites.map((point) => ({ point, className: "poisson-site" })),
+    ],
   }));
 
   return frames;
@@ -225,73 +232,57 @@ function splitLotPolygonForCount(polygon, segmentLength) {
   return splitLotPolygonRecursively(normalizePolygon(polygon), segmentLength, "straight_bisection");
 }
 
-function samplePoissonPointsInPolygon(polygon, area, targetCount, rng) {
+function samplePoissonPointsInPolygon(polygon, area, targetCount, rng, spacingObstacles = []) {
   const bbox = computeBoundingBox(polygon);
-  const nominalSpacing = Math.sqrt(area / Math.max(1, targetCount));
+  const spacingSiteCount = targetCount + spacingObstacles.length;
+  const nominalSpacing = Math.sqrt(area / Math.max(1, spacingSiteCount));
   const minDistance = Math.max(1, nominalSpacing * POISSON_SPACING_RATIO);
-  const cellSize = minDistance / Math.sqrt(2);
-  const cols = Math.max(1, Math.ceil((bbox.maxX - bbox.minX) / cellSize));
-  const rows = Math.max(1, Math.ceil((bbox.maxY - bbox.minY) / cellSize));
-  const grid = Array.from({ length: cols * rows }, () => []);
   const points = [];
-  const active = [];
-  const first = randomPointInPolygon(polygon, bbox, rng);
-  if (!first) {
-    return points;
-  }
-  addPoint(first);
-  while (active.length && points.length < targetCount) {
-    const activeIndex = Math.floor(rng.next() * active.length);
-    const basePoint = points[active[activeIndex]];
-    let placed = false;
-    for (let attempt = 0; attempt < POISSON_MAX_ATTEMPTS; attempt += 1) {
-      const angle = rng.between(0, Math.PI * 2);
-      const distance = minDistance * (1 + rng.next());
-      const candidate = { x: basePoint.x + Math.cos(angle) * distance, y: basePoint.y + Math.sin(angle) * distance };
-      if (pointInPolygon(candidate, polygon) && isFarEnough(candidate)) {
-        addPoint(candidate);
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) {
-      active.splice(activeIndex, 1);
-    }
-  }
+  const spacingPoints = [];
+  spacingObstacles.forEach((point) => addSpacingPoint(point));
   while (points.length < targetCount) {
-    const fallback = randomPointInPolygon(polygon, bbox, rng);
-    if (!fallback) {
+    const point = chooseBestCandidatePoint();
+    if (!point) {
       break;
     }
-    points.push(fallback);
+    addPoint(point);
   }
   return points.slice(0, targetCount);
 
   function addPoint(point) {
-    const pointIndex = points.length;
     points.push(point);
-    active.push(pointIndex);
-    grid[cellIndex(point)].push(pointIndex);
+    addSpacingPoint(point);
   }
-  function cellIndex(point) {
-    const x = Math.max(0, Math.min(cols - 1, Math.floor((point.x - bbox.minX) / cellSize)));
-    const y = Math.max(0, Math.min(rows - 1, Math.floor((point.y - bbox.minY) / cellSize)));
-    return y * cols + x;
+  function addSpacingPoint(point) {
+    spacingPoints.push(point);
   }
-  function isFarEnough(point) {
-    const xCell = Math.max(0, Math.min(cols - 1, Math.floor((point.x - bbox.minX) / cellSize)));
-    const yCell = Math.max(0, Math.min(rows - 1, Math.floor((point.y - bbox.minY) / cellSize)));
-    for (let y = Math.max(0, yCell - 2); y <= Math.min(rows - 1, yCell + 2); y += 1) {
-      for (let x = Math.max(0, xCell - 2); x <= Math.min(cols - 1, xCell + 2); x += 1) {
-        for (const neighborIndex of grid[y * cols + x]) {
-          const neighbor = points[neighborIndex];
-          if (((neighbor.x - point.x) ** 2) + ((neighbor.y - point.y) ** 2) < minDistance ** 2) {
-            return false;
-          }
-        }
+  function chooseBestCandidatePoint() {
+    let best = null;
+    let bestDistance = -Infinity;
+    for (let attempt = 0; attempt < POISSON_CANDIDATE_ATTEMPTS; attempt += 1) {
+      const point = randomCandidatePoint();
+      if (!point) {
+        continue;
+      }
+      const distance = nearestSpacingDistance(point);
+      if (distance > bestDistance) {
+        best = point;
+        bestDistance = distance;
       }
     }
-    return true;
+    return best && bestDistance + EPSILON >= minDistance ? best : null;
+  }
+  function randomCandidatePoint(maxAttempts = POISSON_MAX_ATTEMPTS) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const point = { x: rng.between(bbox.minX, bbox.maxX), y: rng.between(bbox.minY, bbox.maxY) };
+      if (pointInPolygon(point, polygon)) {
+        return point;
+      }
+    }
+    return null;
+  }
+  function nearestSpacingDistance(point) {
+    return spacingPoints.reduce((minimum, neighbor) => Math.min(minimum, pointDistance(point, neighbor)), Infinity);
   }
 }
 
@@ -390,16 +381,6 @@ function lineIntersection(firstFrom, firstTo, secondFrom, secondTo) {
   const deltaY = secondFrom.y - firstFrom.y;
   const t = ((deltaX * secondDy) - (deltaY * secondDx)) / denominator;
   return { x: firstFrom.x + (firstDx * t), y: firstFrom.y + (firstDy * t) };
-}
-
-function randomPointInPolygon(polygon, bbox, rng, maxAttempts = 200) {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const point = { x: rng.between(bbox.minX, bbox.maxX), y: rng.between(bbox.minY, bbox.maxY) };
-    if (pointInPolygon(point, polygon)) {
-      return point;
-    }
-  }
-  return computePolygonCentroid(polygon);
 }
 
 function pointInPolygon(point, polygon) {
