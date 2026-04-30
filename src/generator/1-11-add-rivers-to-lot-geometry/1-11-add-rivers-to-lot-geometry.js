@@ -46,6 +46,7 @@ export function runAddRiversToLotGeometryStep(map) {
 const EPSILON = 0.0001;
 const POINT_EPSILON = 0.05;
 const GRAPH_NODE_EPSILON = 0.05;
+const RIVER_SPAN_EPSILON = 0.5;
 const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
 
 function buildRiverSegmentModel(rivers) {
@@ -647,7 +648,7 @@ function spanIsRiver(from, to, riverEdgeKeys, riverSpatialIndex) {
     return true;
   }
 
-  const bounds = expandBounds(computeBounds([from, to]), GRAPH_NODE_EPSILON);
+  const bounds = expandBounds(computeBounds([from, to]), RIVER_SPAN_EPSILON);
   return querySpatialIndex(riverSpatialIndex, bounds).some((riverSegment) => spanLiesOnRiverSegment(from, to, riverSegment));
 }
 
@@ -657,9 +658,9 @@ function spanLiesOnRiverSegment(from, to, riverSegment) {
   }
 
   const midpoint = midpointBetween(from, to);
-  return pointLiesOnSegmentInclusive(from, riverSegment.from, riverSegment.to)
-    && pointLiesOnSegmentInclusive(to, riverSegment.from, riverSegment.to)
-    && pointDistanceToSegment(midpoint, riverSegment.from, riverSegment.to) <= GRAPH_NODE_EPSILON;
+  return pointLiesOnSegmentInclusive(from, riverSegment.from, riverSegment.to, RIVER_SPAN_EPSILON)
+    && pointLiesOnSegmentInclusive(to, riverSegment.from, riverSegment.to, RIVER_SPAN_EPSILON)
+    && pointDistanceToSegment(midpoint, riverSegment.from, riverSegment.to) <= RIVER_SPAN_EPSILON;
 }
 
 function pointLiesOnSegmentInclusive(point, from, to, epsilon = GRAPH_NODE_EPSILON) {
