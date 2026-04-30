@@ -12,6 +12,7 @@ const TUTORIAL_SEGMENT_LENGTH = 70;
 export const COASTLINE_TUTORIAL_DATASETS = {
   threeCellIsland: buildThreeCellIslandDataset(),
   northSouthCoastline: buildNorthSouthCoastlineDataset(),
+  snakingRiverLand: buildSnakingRiverLandDataset(),
 };
 
 export const DEFAULT_COASTLINE_DATASET = COASTLINE_TUTORIAL_DATASETS.threeCellIsland;
@@ -26,6 +27,7 @@ export function buildCoastlineTutorialTrace(dataset = DEFAULT_COASTLINE_DATASET)
     points,
     className: "coastline-final-path",
   }));
+  const riverFrames = dataset.riverPaths?.length ? buildRiverFrames(dataset) : [];
 
   return {
     dataset,
@@ -74,6 +76,7 @@ export function buildCoastlineTutorialTrace(dataset = DEFAULT_COASTLINE_DATASET)
         lots: finalMap.lots,
         segments: finalMap.segments,
       }),
+      ...riverFrames,
     ],
   };
 }
@@ -109,6 +112,84 @@ function uniqueControlPoints(curves) {
     }
   });
   return points;
+}
+
+function buildRiverFrames(dataset) {
+  const riverTraces = dataset.riverPaths.map((path) => buildRiverBezierTrace(path));
+  return [
+    frame("Build river Bezier curves", "The river sample uses the same midpoint-control-point smoothing pattern: each bend controls a short Bezier arc between adjacent span midpoints.", {
+      cells: dataset.cells,
+      riverCurves: riverTraces.flatMap((trace) => trace.curves.map((curve) => ({ points: curve.points, className: "coastline-river-bezier-guide" }))),
+      points: riverTraces.flatMap((trace) => trace.controls.map((point) => ({ point, label: "R", className: "coastline-control-point" }))),
+    }),
+    frame("Final smoothed river segments", "The angular river path is emitted as ordinary short river segments after smoothing. Merge points would be pinned exactly in the production step so tributaries share the same vertex as the primary river.", {
+      cells: dataset.cells,
+      riverCurves: riverTraces.map((trace) => ({ points: trace.path, className: "coastline-final-river-path" })),
+      points: riverTraces.flatMap((trace) => trace.path.map((point) => ({ point, className: "coastline-sample-point" }))),
+    }),
+  ];
+}
+
+function buildRiverBezierTrace(points) {
+  const curves = [];
+  const path = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const control = points[index];
+    const previousMidpoint = index > 0 ? midpoint(points[index - 1], control) : null;
+    const nextMidpoint = index < points.length - 1 ? midpoint(control, points[index + 1]) : null;
+    const start = previousMidpoint || mirrorPoint(nextMidpoint, control);
+    const end = nextMidpoint || mirrorPoint(previousMidpoint, control);
+    const curvePoints = sampleQuadraticBezier(start, control, end, TUTORIAL_SEGMENT_LENGTH);
+    curves.push({ points: curvePoints, control });
+    appendTracePath(path, curvePoints);
+  }
+  return {
+    curves,
+    controls: points,
+    path,
+  };
+}
+
+function sampleQuadraticBezier(start, control, end, targetLength) {
+  const approximateLength = distance(start, control) + distance(control, end);
+  const segmentCount = Math.max(2, Math.ceil(approximateLength / targetLength));
+  const points = [];
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const t = index / segmentCount;
+    const inverse = 1 - t;
+    points.push({
+      x: (inverse * inverse * start.x) + (2 * inverse * t * control.x) + (t * t * end.x),
+      y: (inverse * inverse * start.y) + (2 * inverse * t * control.y) + (t * t * end.y),
+    });
+  }
+  return points;
+}
+
+function appendTracePath(target, path) {
+  path.forEach((point) => {
+    const previous = target[target.length - 1];
+    if (!previous || distance(previous, point) > 0.0001) {
+      target.push(point);
+    }
+  });
+}
+
+function midpoint(first, second) {
+  return {
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2,
+  };
+}
+
+function mirrorPoint(point, origin) {
+  return {
+    x: (origin.x * 2) - point.x,
+    y: (origin.y * 2) - point.y,
+  };
+}
+
+function distance(first, second) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
 }
 
 function buildThreeCellIslandDataset() {
@@ -170,6 +251,75 @@ function buildNorthSouthCoastlineDataset() {
     landEdge("land:2-3", point(100, 430), v3, 2, 3),
   ];
   return { id: "northSouthCoastline", name: "North-south coastline", cells, edges, map: tutorialMap(cells, edges, 650) };
+}
+
+function buildSnakingRiverLandDataset() {
+  const size = 700;
+  const columns = 4;
+  const rows = 6;
+  const cellWidth = size / columns;
+  const cellHeight = size / rows;
+  const cells = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const id = (row * columns) + column;
+      const x = column * cellWidth;
+      const y = row * cellHeight;
+      cells.push(landCell(id, [
+        point(x, y),
+        point(x + cellWidth, y),
+        point(x + cellWidth, y + cellHeight),
+        point(x, y + cellHeight),
+      ]));
+    }
+  }
+
+  const edges = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column <= columns; column += 1) {
+      const x = column * cellWidth;
+      const from = point(x, row * cellHeight);
+      const to = point(x, (row + 1) * cellHeight);
+      const leftCellId = column > 0 ? (row * columns) + column - 1 : null;
+      const rightCellId = column < columns ? (row * columns) + column : null;
+      edges.push(landEdge(`riverland:v:${row}:${column}`, from, to, leftCellId, rightCellId));
+    }
+  }
+  for (let row = 0; row <= rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const y = row * cellHeight;
+      const from = point(column * cellWidth, y);
+      const to = point((column + 1) * cellWidth, y);
+      const topCellId = row > 0 ? ((row - 1) * columns) + column : null;
+      const bottomCellId = row < rows ? (row * columns) + column : null;
+      edges.push(landEdge(`riverland:h:${row}:${column}`, from, to, bottomCellId, topCellId));
+    }
+  }
+
+  const riverPaths = [[
+    point(360, 0),
+    point(295, 70),
+    point(425, 145),
+    point(235, 235),
+    point(465, 330),
+    point(255, 430),
+    point(410, 535),
+    point(335, 620),
+    point(355, 700),
+  ]];
+
+  return {
+    id: "snakingRiverLand",
+    name: "Snaking river land",
+    cells,
+    edges,
+    riverPaths,
+    map: {
+      ...tutorialMap(cells, edges, size),
+      rivers: [{ id: 0, points: riverPaths[0] }],
+    },
+  };
 }
 
 function tutorialMap(cells, edges, size) {

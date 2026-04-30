@@ -238,6 +238,36 @@
   stroke-linecap: round;
 }
 
+.coastline-river-path {
+  fill: none;
+  stroke: rgba(11, 88, 180, 0.86);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coastline-final-river-segment {
+  stroke: #0b58b4;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.coastline-river-bezier-guide {
+  fill: none;
+  stroke: rgba(11, 88, 180, 0.78);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coastline-final-river-path {
+  fill: none;
+  stroke: #0b58b4;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .coastline-midpoint circle {
   fill: #0b58b4;
 }

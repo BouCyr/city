@@ -77,6 +77,12 @@ function drawFrame(geometry) {
       points: toSvgPoints(cell.polygon),
     }));
   });
+  (selectedDataset.riverPaths || []).forEach((riverPath) => {
+    layer.append(createElement("polyline", {
+      class: "coastline-river-path",
+      points: toSvgPoints(riverPath),
+    }));
+  });
   (geometry.lots || []).forEach((lot) => {
     layer.append(createElement("polygon", {
       class: lot.features.sea ? "coastline-final-sea-lot" : "coastline-final-land-lot",
@@ -90,12 +96,22 @@ function drawFrame(geometry) {
     layer.append(createLine(
       segment.from,
       segment.to,
-      segment.features.coast ? "coastline-final-coast-segment" : "coastline-final-segment",
+      segment.features.river
+        ? "coastline-final-river-segment"
+        : segment.features.coast
+          ? "coastline-final-coast-segment"
+          : "coastline-final-segment",
     ));
   });
   (geometry.curves || []).forEach((curve) => {
     layer.append(createElement("polyline", {
       class: curve.className || "coastline-bezier-guide",
+      points: toSvgPoints(curve.points),
+    }));
+  });
+  (geometry.riverCurves || []).forEach((curve) => {
+    layer.append(createElement("polyline", {
+      class: curve.className || "coastline-river-bezier-guide",
       points: toSvgPoints(curve.points),
     }));
   });

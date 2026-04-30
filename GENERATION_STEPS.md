@@ -456,7 +456,9 @@ Rules:
 Source: `src/generator/1-11-add-rivers-to-lot-geometry/1-11-add-rivers-to-lot-geometry.js`
 
 Rules:
-- River paths are sampled into segment geometry.
+- River path bends are smoothed with the same midpoint-control-point Bezier-style construction used for coastline corners.
+- River source, outlet, and tributary merge vertices are pinned exactly so tributaries and primary rivers share the same merge vertex.
+- Smoothed river paths are sampled into segment geometry.
 - Lots crossed by rivers are split.
 - River-derived segments and their vertices receive `features.riverside`.
 - River segments are canonical `segments`; they are not stored again in a river-specific output field.

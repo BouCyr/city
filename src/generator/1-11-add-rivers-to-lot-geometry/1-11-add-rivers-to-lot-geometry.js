@@ -68,6 +68,7 @@ function buildRiverSegmentModel(rivers) {
   });
 
   const mergePointByRiverId = new Map();
+  const pinnedPointKeys = new Set();
   rivers.forEach((river) => {
     if (river.mergeCellId === null || river.mergeCellId === undefined) {
       return;
@@ -81,6 +82,17 @@ function buildRiverSegmentModel(rivers) {
     const pointIndex = river.points.length - 1;
     if (pointIndex >= 0) {
       mergePointByRiverId.set(river.id, clonePoint(river.points[pointIndex]));
+      pinnedPointKeys.add(pointKey(river.points[pointIndex]));
+    }
+  });
+  rivers.forEach((river) => {
+    if (river.widthMergeCellId === null || river.widthMergeCellId === undefined) {
+      return;
+    }
+
+    const mergePointIndex = findPrimaryMergePointIndex(river);
+    if (mergePointIndex !== null && river.points[mergePointIndex]) {
+      pinnedPointKeys.add(pointKey(river.points[mergePointIndex]));
     }
   });
 
@@ -91,20 +103,19 @@ function buildRiverSegmentModel(rivers) {
     }
 
     const mergeIndex = findPrimaryMergePointIndex(river);
+    const smoothedPoints = smoothRiverPolyline(points, pinnedPointKeys);
     let segmentCursor = 0;
 
-    for (let index = 0; index < points.length - 1; index += 1) {
-      const spanPoints = resampleSpan(points[index], points[index + 1]);
-      for (let sampleIndex = 0; sampleIndex < spanPoints.length - 1; sampleIndex += 1) {
-        const fromPoint = spanPoints[sampleIndex];
-        const toPoint = spanPoints[sampleIndex + 1];
+    for (let index = 0; index < smoothedPoints.length - 1; index += 1) {
+        const fromPoint = smoothedPoints[index];
+        const toPoint = smoothedPoints[index + 1];
         const fromNodeId = getOrCreateNode(nodes, nodeByKey, fromPoint);
         const toNodeId = getOrCreateNode(nodes, nodeByKey, toPoint);
         if (fromNodeId === toNodeId) {
           continue;
         }
 
-        const samplePosition = index + (sampleIndex / Math.max(1, spanPoints.length - 1));
+        const samplePosition = mapSmoothedRiverSamplePosition(points, smoothedPoints, index);
         const branchType = resolveRiverBranchType(river, samplePosition, mergeIndex, riverBranchByRiverId.get(river.id));
         segments.push({
           id: `river:${river.id}:${segmentCursor}`,
@@ -118,7 +129,6 @@ function buildRiverSegmentModel(rivers) {
           length: pointDistance(nodes[fromNodeId], nodes[toNodeId]),
         });
         segmentCursor += 1;
-      }
     }
   });
 
@@ -126,6 +136,130 @@ function buildRiverSegmentModel(rivers) {
     nodes,
     segments: dedupeRiverSegments(segments),
   };
+}
+
+function smoothRiverPolyline(points, pinnedPointKeys, targetLength = DEFAULT_SEGMENT_LENGTH) {
+  if (points.length < 3) {
+    return resamplePolyline(points, Math.max(1, Math.ceil(polylineLength(points) / targetLength)));
+  }
+
+  const segmentPaths = Array.from({ length: points.length - 1 }, () => ({
+    fromToMidpoint: null,
+    midpointToTo: null,
+  }));
+
+  for (let index = 0; index < points.length; index += 1) {
+    const control = points[index];
+    const previousMidpoint = index > 0 ? midpointBetween(points[index - 1], control) : null;
+    const nextMidpoint = index < points.length - 1 ? midpointBetween(control, points[index + 1]) : null;
+    const isPinned = index === 0 || index === points.length - 1 || pinnedPointKeys.has(pointKey(control));
+    const start = previousMidpoint || mirrorPoint(nextMidpoint, control);
+    const end = nextMidpoint || mirrorPoint(previousMidpoint, control);
+    const curve = sampleQuadraticBezier(start, control, end, targetLength);
+    const splitIndex = isPinned ? findClosestPointIndex(curve, control) : findClosestPointIndex(curve, control);
+    const splitPoint = isPinned ? clonePoint(control) : clonePoint(curve[splitIndex]);
+
+    if (index > 0) {
+      segmentPaths[index - 1].midpointToTo = dedupeConsecutivePoints([
+        ...curve.slice(0, splitIndex),
+        splitPoint,
+      ]);
+    }
+    if (index < points.length - 1) {
+      segmentPaths[index].fromToMidpoint = dedupeConsecutivePoints([
+        splitPoint,
+        ...curve.slice(splitIndex + 1),
+      ]);
+    }
+  }
+
+  const smoothed = [];
+  segmentPaths.forEach((entry, index) => {
+    const fallback = resamplePolyline([points[index], points[index + 1]], Math.max(1, Math.ceil(pointDistance(points[index], points[index + 1]) / targetLength)));
+    const path = entry.fromToMidpoint && entry.midpointToTo
+      ? dedupeConsecutivePoints([...entry.fromToMidpoint, ...entry.midpointToTo.slice(1)])
+      : fallback;
+    appendPath(smoothed, path);
+  });
+
+  return dedupeConsecutivePoints(smoothed);
+}
+
+function mapSmoothedRiverSamplePosition(originalPoints, smoothedPoints, sampleIndex) {
+  const midpoint = midpointBetween(smoothedPoints[sampleIndex], smoothedPoints[sampleIndex + 1]);
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+
+  for (let index = 0; index < originalPoints.length - 1; index += 1) {
+    const distance = pointDistanceToSegment(midpoint, originalPoints[index], originalPoints[index + 1]);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
+}
+
+function sampleQuadraticBezier(start, control, end, targetLength) {
+  const approximateLength = pointDistance(start, control) + pointDistance(control, end);
+  const segmentCount = Math.max(2, Math.ceil(approximateLength / Math.max(EPSILON, targetLength)));
+  const points = [];
+  for (let index = 0; index <= segmentCount; index += 1) {
+    const t = index / segmentCount;
+    const inverse = 1 - t;
+    points.push({
+      x: (inverse * inverse * start.x) + (2 * inverse * t * control.x) + (t * t * end.x),
+      y: (inverse * inverse * start.y) + (2 * inverse * t * control.y) + (t * t * end.y),
+    });
+  }
+  return dedupeConsecutivePoints(points);
+}
+
+function findClosestPointIndex(points, target) {
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+  points.forEach((point, index) => {
+    const distance = pointDistance(point, target);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
+}
+
+function pointDistanceToSegment(point, from, to) {
+  const length = pointDistance(from, to);
+  if (length <= EPSILON) {
+    return pointDistance(point, from);
+  }
+  const along = Math.max(0, Math.min(1, ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / (length ** 2)));
+  return pointDistance(point, pointAlongSegment(from, to, along));
+}
+
+function mirrorPoint(point, origin) {
+  return {
+    x: (origin.x * 2) - point.x,
+    y: (origin.y * 2) - point.y,
+  };
+}
+
+function polylineLength(points) {
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    length += pointDistance(points[index - 1], points[index]);
+  }
+  return length;
+}
+
+function appendPath(target, path) {
+  path.forEach((point) => {
+    const previous = target[target.length - 1];
+    if (!previous || !pointsMatch(previous, point)) {
+      target.push(clonePoint(point));
+    }
+  });
 }
 
 function splitLotsByRiverGraph(map, riverGraph) {
@@ -384,60 +518,75 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     edgeKey(segment.from, segment.to),
     edgeKey(segment.to, segment.from),
   ]));
-  const segmentMap = new Map();
+  const rawSegmentMap = new Map();
 
   normalizedLots.forEach((lot) => {
     for (let index = 0; index < lot.polygon.length; index += 1) {
       const from = lot.polygon[index];
       const to = lot.polygon[(index + 1) % lot.polygon.length];
-      const edgeNodes = resampleSpan(from, to);
-      for (let sampleIndex = 0; sampleIndex < edgeNodes.length - 1; sampleIndex += 1) {
-        const sampleFrom = edgeNodes[sampleIndex];
-        const sampleTo = edgeNodes[sampleIndex + 1];
-        const canonical = canonicalEdge(sampleFrom, sampleTo);
-        const key = edgeKey(canonical.from, canonical.to);
-        const existing = segmentMap.get(key);
-        if (!existing) {
-          const side = pointSide(canonical.from, canonical.to, lot.centroid);
-          segmentMap.set(key, {
-            id: null,
-            from: canonical.from,
-            to: canonical.to,
-            midpoint: midpointBetween(canonical.from, canonical.to),
-            length: pointDistance(canonical.from, canonical.to),
-            leftLotId: side >= 0 ? lot.id : null,
-            rightLotId: side < 0 ? lot.id : null,
-            features: {
-              boundary: false,
-              coast: false,
-              land: false,
-              sea: false,
-              river: riverEdgeKeys.has(edgeKey(sampleFrom, sampleTo)),
-              riverside: riverEdgeKeys.has(edgeKey(sampleFrom, sampleTo)),
-            },
-          });
-          continue;
-        }
+      const canonical = canonicalEdge(from, to);
+      const key = edgeKey(canonical.from, canonical.to);
+      const isRiver = riverEdgeKeys.has(edgeKey(from, to)) || riverEdgeKeys.has(edgeKey(to, from));
+      const existing = rawSegmentMap.get(key);
+      if (!existing) {
+        const side = pointSide(canonical.from, canonical.to, lot.centroid);
+        rawSegmentMap.set(key, {
+          id: null,
+          from: canonical.from,
+          to: canonical.to,
+          midpoint: midpointBetween(canonical.from, canonical.to),
+          length: pointDistance(canonical.from, canonical.to),
+          leftLotId: side >= 0 ? lot.id : null,
+          rightLotId: side < 0 ? lot.id : null,
+          features: {
+            boundary: false,
+            coast: false,
+            land: false,
+            sea: false,
+            river: isRiver,
+            riverside: isRiver,
+          },
+        });
+        continue;
+      }
 
-        const side = pointSide(existing.from, existing.to, lot.centroid);
-        if (side >= 0) {
-          existing.leftLotId = lot.id;
-        } else {
-          existing.rightLotId = lot.id;
-        }
+      existing.features.river = existing.features.river || isRiver;
+      existing.features.riverside = existing.features.riverside || isRiver;
+      const side = pointSide(existing.from, existing.to, lot.centroid);
+      if (side >= 0) {
+        existing.leftLotId = lot.id;
+      } else {
+        existing.rightLotId = lot.id;
       }
     }
   });
 
-  const segments = Array.from(segmentMap.values()).map((segment, index) => ({
-    ...segment,
-    id: `segment:${index}`,
-    features: {
+  const segments = [];
+  Array.from(rawSegmentMap.values()).forEach((segment) => {
+    const features = {
       ...segment.features,
       boundary: segment.leftLotId === null || segment.rightLotId === null,
       ...buildSegmentSurfaceFeatures(segment, lotById),
-    },
-  }));
+    };
+    const preserveAsIs = features.river || features.coast || features.sea;
+    const sampledPoints = preserveAsIs
+      ? [segment.from, segment.to]
+      : resampleSpan(segment.from, segment.to, DEFAULT_SEGMENT_LENGTH * 2);
+
+    for (let index = 0; index < sampledPoints.length - 1; index += 1) {
+      const from = sampledPoints[index];
+      const to = sampledPoints[index + 1];
+      segments.push({
+        ...segment,
+        id: `segment:${segments.length}`,
+        from,
+        to,
+        midpoint: midpointBetween(from, to),
+        length: pointDistance(from, to),
+        features,
+      });
+    }
+  });
 
   segments.forEach((segment) => {
     if (segment.leftLotId !== null) {
@@ -662,9 +811,9 @@ function clipRiverSegmentToConvexPolygon(segment, polygon) {
   return null;
 }
 
-function resampleSpan(from, to) {
+function resampleSpan(from, to, targetLength = DEFAULT_SEGMENT_LENGTH) {
   const spanLength = pointDistance(from, to);
-  const segmentCount = Math.max(1, Math.round(spanLength / DEFAULT_SEGMENT_LENGTH));
+  const segmentCount = Math.max(1, Math.ceil(spanLength / targetLength));
   return resamplePolyline([from, to], segmentCount);
 }
 
