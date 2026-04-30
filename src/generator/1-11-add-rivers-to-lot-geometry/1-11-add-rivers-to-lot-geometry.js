@@ -518,6 +518,7 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     edgeKey(segment.from, segment.to),
     edgeKey(segment.to, segment.from),
   ]));
+  const riverSpatialIndex = buildSegmentSpatialIndex(riverGraph.segments);
   const rawSegmentMap = new Map();
 
   normalizedLots.forEach((lot) => {
@@ -526,7 +527,7 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
       const to = lot.polygon[(index + 1) % lot.polygon.length];
       const canonical = canonicalEdge(from, to);
       const key = edgeKey(canonical.from, canonical.to);
-      const isRiver = riverEdgeKeys.has(edgeKey(from, to)) || riverEdgeKeys.has(edgeKey(to, from));
+      const isRiver = spanIsRiver(from, to, riverEdgeKeys, riverSpatialIndex);
       const existing = rawSegmentMap.get(key);
       if (!existing) {
         const side = pointSide(canonical.from, canonical.to, lot.centroid);
@@ -639,6 +640,47 @@ function buildSegmentSurfaceFeatures(segment, lotById) {
     sea: Boolean(leftSea && rightSea),
     riverside: Boolean(segment.features.river),
   };
+}
+
+function spanIsRiver(from, to, riverEdgeKeys, riverSpatialIndex) {
+  if (riverEdgeKeys.has(edgeKey(from, to)) || riverEdgeKeys.has(edgeKey(to, from))) {
+    return true;
+  }
+
+  const bounds = expandBounds(computeBounds([from, to]), GRAPH_NODE_EPSILON);
+  return querySpatialIndex(riverSpatialIndex, bounds).some((riverSegment) => spanLiesOnRiverSegment(from, to, riverSegment));
+}
+
+function spanLiesOnRiverSegment(from, to, riverSegment) {
+  if (pointDistance(from, to) <= EPSILON) {
+    return false;
+  }
+
+  const midpoint = midpointBetween(from, to);
+  return pointLiesOnSegmentInclusive(from, riverSegment.from, riverSegment.to)
+    && pointLiesOnSegmentInclusive(to, riverSegment.from, riverSegment.to)
+    && pointDistanceToSegment(midpoint, riverSegment.from, riverSegment.to) <= GRAPH_NODE_EPSILON;
+}
+
+function pointLiesOnSegmentInclusive(point, from, to, epsilon = GRAPH_NODE_EPSILON) {
+  const segmentLength = pointDistance(from, to);
+  if (segmentLength <= EPSILON) {
+    return pointDistance(point, from) <= epsilon;
+  }
+
+  const along = pointProjectionParameter(point, from, to);
+  return along >= -epsilon / segmentLength
+    && along <= 1 + (epsilon / segmentLength)
+    && pointDistanceToSegment(point, from, to) <= epsilon;
+}
+
+function pointProjectionParameter(point, from, to) {
+  const segmentLength = pointDistance(from, to);
+  if (segmentLength <= EPSILON) {
+    return 0;
+  }
+
+  return ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / (segmentLength ** 2);
 }
 
 function rebuildLotVertices(lots, segments) {
