@@ -178,7 +178,7 @@ export function convertCellGeometryToLotGeometry(map, segmentLength = DEFAULT_SE
   });
 }
 
-export function convertCellGeometryToCoastlineLotGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH / 2) {
+export function convertCellGeometryToCoastlineLotGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
   if (Array.isArray(map.lots) && Array.isArray(map.segments) && !map.cells?.length && !map.edges?.length) {
     return map;
   }
@@ -192,8 +192,7 @@ export function convertCellGeometryToCoastlineLotGeometry(map, segmentLength = D
 
     const from = coastlineTrace.replacementPointByVertexKey.get(pointKey(edge.from)) || edge.from;
     const to = coastlineTrace.replacementPointByVertexKey.get(pointKey(edge.to)) || edge.to;
-    const path = normalizePolyline(edge.path?.length ? edge.path : [from, to]);
-    return resamplePolyline(path, Math.max(1, Math.round(edgeLength / segmentLength)));
+    return normalizePolyline(edge.path?.length ? edge.path : [from, to]);
   });
 }
 
@@ -219,7 +218,7 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
     const keepAsIs = Boolean(segment.features?.coast) || Boolean(segment.features?.sea);
     const sampledPoints = keepAsIs
       ? path
-      : resamplePolyline(path, Math.max(1, Math.round(polylineLength(path) / segmentLength)));
+      : resamplePolyline(path, Math.max(1, Math.ceil(polylineLength(path) / segmentLength)));
     segmentPathById.set(segment.id, sampledPoints);
 
     for (let index = 0; index < sampledPoints.length - 1; index += 1) {

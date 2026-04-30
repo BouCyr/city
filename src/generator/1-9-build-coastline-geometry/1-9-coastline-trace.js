@@ -4,8 +4,10 @@
  * WHY: The tutorial should explain the actual step 1.9 behavior without a separate drawing-only algorithm.
  */
 
-import { DEFAULT_SEGMENT_LENGTH } from "../map-model.js";
+import { convertCellGeometryToCoastlineLotGeometry } from "../map-model.js";
 import { buildCoastlineTrace } from "../coastline-model.js";
+
+const TUTORIAL_SEGMENT_LENGTH = 70;
 
 export const COASTLINE_TUTORIAL_DATASETS = {
   threeCellIsland: buildThreeCellIslandDataset(),
@@ -16,8 +18,9 @@ export const DEFAULT_COASTLINE_DATASET = COASTLINE_TUTORIAL_DATASETS.threeCellIs
 
 export function buildCoastlineTutorialTrace(dataset = DEFAULT_COASTLINE_DATASET) {
   const trace = buildCoastlineTrace(dataset.map, {
-    segmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
+    segmentLength: TUTORIAL_SEGMENT_LENGTH,
   });
+  const finalMap = convertCellGeometryToCoastlineLotGeometry(dataset.map, TUTORIAL_SEGMENT_LENGTH);
   const finalPaths = Array.from(trace.edgePathById.entries()).map(([edgeId, points]) => ({
     edgeId,
     points,
@@ -57,7 +60,7 @@ export function buildCoastlineTutorialTrace(dataset = DEFAULT_COASTLINE_DATASET)
         curves: trace.curves.map((curve) => ({ points: curve.points, className: "coastline-bezier-guide" })),
         points: uniqueControlPoints(trace.curves).map((point) => ({ point, label: "C", className: "coastline-control-point" })),
       }),
-      frame("Sample short segments", "The Bezier curves are sampled into short points at half the default segment length. These sampled points are the only geometry emitted downstream.", {
+      frame("Sample short segments", `The Bezier curves are sampled into points using the same scale as the bisection tutorial (${TUTORIAL_SEGMENT_LENGTH}px). These sampled points are the only geometry emitted downstream.`, {
         cells: dataset.cells,
         curves: trace.curves.map((curve) => ({ points: curve.points, className: "coastline-bezier-guide" })),
         points: trace.curves.flatMap((curve) => curve.points.map((point) => ({ point, className: "coastline-sample-point" }))),
@@ -66,6 +69,10 @@ export function buildCoastlineTutorialTrace(dataset = DEFAULT_COASTLINE_DATASET)
         cells: dataset.cells,
         curves: finalPaths,
         points: Array.from(trace.replacementPointByVertexKey.values()).map((point) => ({ point, className: "coastline-reconnect-point" })),
+      }),
+      frame("Rebuilt lot geometry", "This is the actual modified step output: lots are rebuilt against the sampled coastline, and the final coastline is ordinary shared segment geometry.", {
+        lots: finalMap.lots,
+        segments: finalMap.segments,
       }),
     ],
   };
@@ -184,6 +191,7 @@ function seaCell(id, polygon) {
 function tutorialCell(id, polygon, features) {
   return {
     id,
+    site: centroid(polygon),
     polygon,
     centroid: centroid(polygon),
     boundarySides: [],

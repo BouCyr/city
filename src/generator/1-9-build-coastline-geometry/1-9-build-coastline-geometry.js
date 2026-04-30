@@ -7,7 +7,7 @@
 import { DEFAULT_SEGMENT_LENGTH, convertCellGeometryToCoastlineLotGeometry } from "../map-model.js";
 
 export function runBuildCoastlineGeometryStep(map) {
-  const nextMap = convertCellGeometryToCoastlineLotGeometry(map, DEFAULT_SEGMENT_LENGTH * 0.5);
+  const nextMap = convertCellGeometryToCoastlineLotGeometry(map, DEFAULT_SEGMENT_LENGTH);
 
   return {
     map: nextMap,

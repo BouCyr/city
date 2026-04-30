@@ -193,7 +193,7 @@ function buildChainBezierPaths(chain, coastEdgeById, segmentLength, chainIndex, 
 
 function sampleQuadraticBezier(start, control, end, segmentLength) {
   const approximateLength = pointDistance(start, control) + pointDistance(control, end);
-  const segmentCount = Math.max(2, Math.round(approximateLength / Math.max(EPSILON, segmentLength)));
+  const segmentCount = Math.max(2, Math.ceil(approximateLength / Math.max(EPSILON, segmentLength)));
   const points = [];
   for (let index = 0; index <= segmentCount; index += 1) {
     const t = index / segmentCount;

@@ -165,11 +165,11 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 8:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 9:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
+        segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
       };
     case 10:
       return {

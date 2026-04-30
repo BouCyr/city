@@ -11,7 +11,7 @@ import {
 } from "./generator/1-9-build-coastline-geometry/1-9-coastline-trace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const VIEWBOX_PADDING = 70;
+const VIEWBOX_PADDING = 0;
 
 const datasetSelect = document.querySelector("#datasetSelect");
 const previousButton = document.querySelector("#previousStepButton");
@@ -60,21 +60,38 @@ function render() {
 
 function drawFrame(geometry) {
   svg.replaceChildren();
-  const bounds = computeBounds([
-    ...selectedDataset.cells.flatMap((cell) => cell.polygon),
-    ...selectedDataset.edges.flatMap((edge) => [edge.from, edge.to]),
-  ]);
-  svg.setAttribute("viewBox", `${bounds.minX - VIEWBOX_PADDING} ${bounds.minY - VIEWBOX_PADDING} ${bounds.width + (VIEWBOX_PADDING * 2)} ${bounds.height + (VIEWBOX_PADDING * 2)}`);
+  const size = selectedDataset.map.meta.size;
+  svg.setAttribute("viewBox", `${-VIEWBOX_PADDING} ${-VIEWBOX_PADDING} ${size + (VIEWBOX_PADDING * 2)} ${size + (VIEWBOX_PADDING * 2)}`);
 
   const layer = createElement("g", { class: "tutorial-svg-layer" });
+  layer.append(createElement("rect", {
+    class: "coastline-map-background",
+    x: 0,
+    y: 0,
+    width: size,
+    height: size,
+  }));
   (geometry.cells || []).forEach((cell) => {
     layer.append(createElement("polygon", {
       class: cell.features.sea ? "coastline-sea-cell" : "coastline-land-cell",
       points: toSvgPoints(cell.polygon),
     }));
   });
+  (geometry.lots || []).forEach((lot) => {
+    layer.append(createElement("polygon", {
+      class: lot.features.sea ? "coastline-final-sea-lot" : "coastline-final-land-lot",
+      points: toSvgPoints(lot.polygon),
+    }));
+  });
   (geometry.edges || []).forEach((edge) => {
     layer.append(createLine(edge.from, edge.to, edge.className || "coastline-raw-edge"));
+  });
+  (geometry.segments || []).forEach((segment) => {
+    layer.append(createLine(
+      segment.from,
+      segment.to,
+      segment.features.coast ? "coastline-final-coast-segment" : "coastline-final-segment",
+    ));
   });
   (geometry.curves || []).forEach((curve) => {
     layer.append(createElement("polyline", {
@@ -115,20 +132,6 @@ function createPoint({ point, label, className }) {
     group.append(text);
   }
   return group;
-}
-
-function computeBounds(points) {
-  const bounds = points.reduce((result, point) => ({
-    minX: Math.min(result.minX, point.x),
-    minY: Math.min(result.minY, point.y),
-    maxX: Math.max(result.maxX, point.x),
-    maxY: Math.max(result.maxY, point.y),
-  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-  return {
-    ...bounds,
-    width: Math.max(1, bounds.maxX - bounds.minX),
-    height: Math.max(1, bounds.maxY - bounds.minY),
-  };
 }
 
 function createElement(tagName, attributes = {}) {

@@ -7,7 +7,7 @@
 import { DEFAULT_SEGMENT_LENGTH, convertLotGeometryToLandEdgeGeometry } from "../map-model.js";
 
 export function runBuildLandEdgeGeometryStep(map) {
-  const nextMap = convertLotGeometryToLandEdgeGeometry(map, DEFAULT_SEGMENT_LENGTH);
+  const nextMap = convertLotGeometryToLandEdgeGeometry(map, DEFAULT_SEGMENT_LENGTH * 2);
 
   return {
     map: nextMap,

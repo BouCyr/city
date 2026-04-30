@@ -153,6 +153,12 @@
   height: min(640px, calc(100vh - 150px));
 }
 
+.coastline-map-background {
+  fill: rgba(126, 187, 212, 0.36);
+  stroke: rgba(24, 33, 38, 0.34);
+  stroke-width: 3;
+}
+
 .coastline-land-cell {
   fill: rgba(197, 220, 206, 0.72);
   stroke: rgba(24, 33, 38, 0.18);
@@ -204,6 +210,32 @@
   stroke-width: 7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.coastline-final-land-lot {
+  fill: rgba(197, 220, 206, 0.72);
+  stroke: rgba(24, 33, 38, 0.18);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.coastline-final-sea-lot {
+  fill: rgba(126, 187, 212, 0.3);
+  stroke: rgba(31, 78, 114, 0.12);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.coastline-final-segment {
+  stroke: rgba(24, 33, 38, 0.36);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.coastline-final-coast-segment {
+  stroke: #182126;
+  stroke-width: 6;
+  stroke-linecap: round;
 }
 
 .coastline-midpoint circle {

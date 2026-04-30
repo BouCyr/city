@@ -413,7 +413,7 @@ Rules:
 - Cells become lots and coastline chains are traced from land/sea edges.
 - Coastline corners become quadratic Bezier curves from the previous coast-edge midpoint to the next coast-edge midpoint, controlled by the shared Voronoi vertex.
 - Boundary-ending coastline chains synthesize the missing exterior midpoint by mirroring the adjacent midpoint across the endpoint.
-- Bezier curves are sampled at half the default segment length and emitted only as ordinary vertices and segments.
+- Bezier curves are sampled at the default segment length and emitted only as ordinary vertices and segments.
 - Non-coast edges that touched an original coast vertex reconnect to the sampled curve point nearest that original vertex.
 - Lots inherit source cell features, except temporary hill and hillside features are cleared before this step.
 - Segment and vertex features are limited to lot-stage surface data such as `coast`, `land`, `sea`, and later `riverside`.
@@ -448,7 +448,7 @@ Function output:
 Rules:
 - Coastline segments from step 1.9 are preserved.
 - Pure sea segments are preserved as single unchanged segments.
-- Remaining non-sea land and boundary edges are resampled as straight segments at the default segment length.
+- Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
 - Lot adjacency, vertex dedupe, and segment ownership are rebuilt from the normalized geometry.
 
 ## 1.11 Add Rivers To Lot Geometry
