@@ -4,24 +4,30 @@
  * WHY: The page explains the actual tessellation algorithms without depending on the full map UI.
  */
 
-import { buildBisectionTutorialTrace, TUTORIAL_LOT } from "./generator/1-11-tessellate-lots/1-11-bisection-trace.js";
+import { buildBisectionTutorialTrace, TUTORIAL_LOT, TUTORIAL_LOTS } from "./generator/1-11-tessellate-lots/1-11-bisection-trace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEWBOX_PADDING = 80;
-const FIXED_BOUNDS = computeBounds(TUTORIAL_LOT.polygon);
 
 const algorithmSelect = document.querySelector("#algorithmSelect");
+const lotSelect = document.querySelector("#lotSelect");
 const previousButton = document.querySelector("#previousStepButton");
 const nextButton = document.querySelector("#nextStepButton");
 const stepCounter = document.querySelector("#stepCounter");
 const stepTitle = document.querySelector("#stepTitle");
 const stepBody = document.querySelector("#stepBody");
+const lotKicker = document.querySelector("#lotKicker");
 const svg = document.querySelector("#bissectionSvg");
 
 let trace = null;
 let stepIndex = 0;
+let selectedLot = TUTORIAL_LOT;
 
 algorithmSelect.addEventListener("change", () => {
+  rebuildTrace();
+});
+lotSelect.addEventListener("change", () => {
+  selectedLot = TUTORIAL_LOTS[lotSelect.value] || TUTORIAL_LOT;
   rebuildTrace();
 });
 previousButton.addEventListener("click", () => {
@@ -38,7 +44,7 @@ rebuildTrace();
 function rebuildTrace() {
   trace = buildBisectionTutorialTrace({
     algorithm: algorithmSelect.value,
-    lot: TUTORIAL_LOT,
+    lot: selectedLot,
   });
   stepIndex = 0;
   render();
@@ -46,6 +52,9 @@ function rebuildTrace() {
 
 function render() {
   const current = trace.frames[stepIndex];
+  if (lotKicker instanceof HTMLElement) {
+    lotKicker.textContent = `${selectedLot.name || "Lot"} / Lot #${selectedLot.id}`;
+  }
   stepTitle.textContent = current.title;
   stepBody.textContent = current.body;
   stepCounter.textContent = `${stepIndex + 1} / ${trace.frames.length}`;
@@ -56,11 +65,11 @@ function render() {
 
 function drawFrame(geometry) {
   svg.replaceChildren();
-  const bbox = FIXED_BOUNDS;
+  const bbox = computeBounds(selectedLot.polygon);
   svg.setAttribute("viewBox", `${bbox.minX - VIEWBOX_PADDING} ${bbox.minY - VIEWBOX_PADDING} ${bbox.width + (VIEWBOX_PADDING * 2)} ${bbox.height + (VIEWBOX_PADDING * 2)}`);
 
   const layer = createElement("g", { class: "tutorial-svg-layer" });
-  const basePolygon = geometry.basePolygon || TUTORIAL_LOT.polygon;
+  const basePolygon = geometry.basePolygon || selectedLot.polygon;
   layer.append(createElement("polygon", {
     class: "tutorial-base-lot",
     points: toSvgPoints(basePolygon),

@@ -16,8 +16,17 @@
         <span class="field-title">Algorithm</span>
         <select id="algorithmSelect">
           <option value="straight_bisection">Straight bisection</option>
-          <option value="curved_bisection">Curved bisection</option>
+          <option value="curved_bisection" selected>Curved bisection</option>
           <option value="poisson_voronoi">Poisson Voronoi</option>
+        </select>
+      </label>
+      <label class="tutorial-control">
+        <span class="field-title">Cell shape</span>
+        <select id="lotSelect">
+          <option value="potato">Potato</option>
+          <option value="concave">Concave</option>
+          <option value="elongated">Elongated</option>
+          <option value="parallelTangents">Parallel tangents</option>
         </select>
       </label>
       <div class="tutorial-navigation">
@@ -33,7 +42,7 @@
         <svg id="bissectionSvg" class="tutorial-svg" role="img" aria-label="Bisection process diagram"></svg>
       </section>
       <aside class="tutorial-text-panel panel">
-        <p class="tutorial-kicker">Lot #436</p>
+        <p id="lotKicker" class="tutorial-kicker">Potato / Lot #436</p>
         <h1 id="stepTitle">Bissection process</h1>
         <p id="stepBody">Choose an algorithm to inspect the process.</p>
       </aside>

@@ -17,23 +17,68 @@ const POISSON_CANDIDATE_ATTEMPTS = 120;
 const POISSON_BBOX_PADDING = 0.001;
 const EDGE_SEGMENT_LENGTH = 70;
 
-export const TUTORIAL_LOT = {
-  id: 436,
-  polygon: [
-    { x: 110, y: 210 },
-    { x: 270, y: 130 },
-    { x: 505, y: 105 },
-    { x: 700, y: 190 },
-    { x: 775, y: 360 },
-    { x: 695, y: 535 },
-    { x: 455, y: 650 },
-    { x: 235, y: 600 },
-    { x: 85, y: 420 },
-  ],
+export const TUTORIAL_LOTS = {
+  potato: {
+    id: 436,
+    name: "Potato",
+    polygon: [
+      { x: 110, y: 210 },
+      { x: 270, y: 130 },
+      { x: 505, y: 105 },
+      { x: 700, y: 190 },
+      { x: 775, y: 360 },
+      { x: 695, y: 535 },
+      { x: 455, y: 650 },
+      { x: 235, y: 600 },
+      { x: 85, y: 420 },
+    ],
+  },
+  concave: {
+    id: 437,
+    name: "Concave",
+    polygon: [
+      { x: 110, y: 190 },
+      { x: 330, y: 120 },
+      { x: 610, y: 150 },
+      { x: 760, y: 315 },
+      { x: 610, y: 500 },
+      { x: 445, y: 395 },
+      { x: 280, y: 615 },
+      { x: 95, y: 470 },
+    ],
+  },
+  elongated: {
+    id: 438,
+    name: "Elongated",
+    polygon: [
+      { x: 70, y: 330 },
+      { x: 170, y: 235 },
+      { x: 390, y: 185 },
+      { x: 660, y: 215 },
+      { x: 800, y: 330 },
+      { x: 710, y: 445 },
+      { x: 445, y: 505 },
+      { x: 185, y: 470 },
+    ],
+  },
+  parallelTangents: {
+    id: 439,
+    name: "Parallel tangents",
+    polygon: [
+      { x: 120, y: 170 },
+      { x: 700, y: 170 },
+      { x: 790, y: 260 },
+      { x: 700, y: 350 },
+      { x: 120, y: 350 },
+      { x: 30, y: 260 },
+    ],
+  },
 };
 
-const TUTORIAL_LOT_SEGMENTED = {
-  id: TUTORIAL_LOT.id,
+export const TUTORIAL_LOT = TUTORIAL_LOTS.potato;
+
+const FALLBACK_SEGMENTED_LOT = {
+  id: 436,
   polygon: splitPolygonEdgesIntoSegments(normalizePolygon(TUTORIAL_LOT.polygon), EDGE_SEGMENT_LENGTH),
 };
 
@@ -46,8 +91,9 @@ export function buildBisectionTutorialTrace({
 } = {}) {
   const originalPolygon = normalizePolygon(lot.polygon);
   const polygon = splitPolygonEdgesIntoSegments(originalPolygon, EDGE_SEGMENT_LENGTH);
+  const segmentedLot = { id: lot.id, polygon };
   const frames = [
-    frame("Original fixed lot", "The tutorial starts from one fixed lot. It is drawn as one polygon before the bisection code prepares its working vertices.", {
+    frame("Original fixed lot", `The tutorial starts from the ${lot.name || "selected"} lot. It is drawn as one polygon before the bisection code prepares its working vertices.`, {
       basePolygon: originalPolygon,
       polygons: [{ points: originalPolygon, className: "tutorial-active-area" }],
       points: labelVertices(originalPolygon),
@@ -68,7 +114,7 @@ export function buildBisectionTutorialTrace({
   }
 
   const leaves = splitLotPolygonRecursively(polygon, segmentLength, algorithm, curveAmplitude, [], (event) => {
-    appendBisectionEventFrame(frames, event, algorithm, curveAmplitude, segmentLength);
+    appendBisectionEventFrame(frames, event, algorithm, curveAmplitude, segmentLength, segmentedLot);
   });
 
   frames.push(frame("Finished bisection tree", `The recursion stops with ${leaves.length} leaf sublots. Each remaining polygon is too small to split safely or has no valid balanced split left.`, {
@@ -79,9 +125,9 @@ export function buildBisectionTutorialTrace({
   return { lot, algorithm, frames };
 }
 
-function appendBisectionEventFrame(frames, event, algorithm, curveAmplitude, segmentLength) {
+function appendBisectionEventFrame(frames, event, algorithm, curveAmplitude, segmentLength, segmentedLot = FALLBACK_SEGMENTED_LOT) {
   const common = {
-    basePolygon: TUTORIAL_LOT_SEGMENTED.polygon,
+    basePolygon: segmentedLot.polygon,
     activePolygon: event.polygon,
     partition: buildPartitionLayers(event.partition || [event.polygon], event.polygon),
     polygons: [{ points: event.polygon, className: "tutorial-active-area" }],
@@ -142,7 +188,7 @@ function appendBisectionEventFrame(frames, event, algorithm, curveAmplitude, seg
 
   if (event.type === "children") {
     frames.push(frame("Create two child lots", `The real split path is inserted into the boundary in both directions. This produces child areas of ${event.pieces.map((piece) => Math.abs(computeSignedArea(piece)).toFixed(0)).join(" and ")}.`, {
-      basePolygon: TUTORIAL_LOT_SEGMENTED.polygon,
+      basePolygon: segmentedLot.polygon,
       partition: buildPartitionLayers(event.partition || event.pieces, null),
       polygons: event.pieces.map((points, index) => ({ points, className: `tutorial-piece piece-${index}` })),
       splitPath: event.splitPath,
