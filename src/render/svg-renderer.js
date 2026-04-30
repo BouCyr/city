@@ -10,7 +10,11 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
 const EDGE_STROKE_WIDTH = 2.55;
 const SEGMENT_ENDPOINT_RADIUS = 3.0;
-const RIVER_ENDPOINT_RADIUS = 7.05;
+const RIVER_SEGMENT_SIZE_BONUS = 6;
+const RIVER_OUTER_WIDTH_BONUS = 6;
+const RIVER_OUTER_WIDTH_OFFSET = -2;
+const RIVER_INNER_WIDTH_REDUCTION = 4;
+const RIVER_LOT_GEOMETRY_STEP_INDEX = 10;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -22,7 +26,6 @@ const COLORS = {
   edge: "#1a2026",
   seaFill: "#7ebbd4",
   seaEdge: "#1f4e72",
-  riverEndpoint: "#5f97b0",
   riverHit: "rgba(0, 0, 0, 0)",
   tessellation: "rgba(42, 30, 20, 0.36)",
 };
@@ -107,12 +110,13 @@ function createGrid(size) {
 
 function createMapLayer(map) {
   const { lots, segments } = getMapGeometry(map);
+  const useCanonicalRiverGeometry = (map.meta?.stepIndex ?? -1) >= RIVER_LOT_GEOMETRY_STEP_INDEX;
   const layer = createElement("g");
   layer.append(
     createLotsGroup(lots),
-    createSegmentsGroup(segments),
     createTessellationGroup(map.tessellation, map),
-    createRiversGroup(map.rivers || [], segments),
+    createSegmentsGroup(segments),
+    useCanonicalRiverGeometry ? createElement("g") : createRiversGroup(map.rivers || [], segments),
   );
 
   if (!lots.length) {
@@ -160,50 +164,72 @@ function createSegmentsGroup(segments) {
     "stroke-linecap": "round",
     "stroke-width": EDGE_STROKE_WIDTH,
   });
+  const riverLineGroup = createElement("g", {
+    fill: "none",
+    "stroke-linecap": "round",
+  });
   const dotGroup = createElement("g");
+  const riverDotGroup = createElement("g");
 
   segments.forEach((segment) => {
     const leftId = segment.leftLotId ?? segment.leftCellId ?? "";
     const rightId = segment.rightLotId ?? segment.rightCellId ?? "";
-    const stroke = segment.features.river
-      ? COLORS.seaFill
-      : segment.features.sea
+    const isRiver = Boolean(segment.features.river);
+    const stroke = segment.features.sea
         ? COLORS.seaEdge
         : COLORS.edge;
 
-    lineGroup.append(
-      createElement("line", {
-        x1: segment.from.x,
-        y1: segment.from.y,
-        x2: segment.to.x,
-        y2: segment.to.y,
-        stroke,
-        "data-segment-id": segment.id,
-        "data-edge-id": segment.id,
-        "data-left-lot-id": leftId,
-        "data-right-lot-id": rightId,
-        "data-left-cell-id": leftId,
-        "data-right-cell-id": rightId,
-      }),
-    );
+    if (isRiver) {
+      riverLineGroup.append(
+        createSegmentLine(segment, COLORS.seaEdge, EDGE_STROKE_WIDTH*3, leftId, rightId),
+        createSegmentLine(segment, COLORS.seaFill, EDGE_STROKE_WIDTH, leftId, rightId),
+      );
+      riverDotGroup.append(
+        createSegmentDot(segment.from, COLORS.seaFill, 3*EDGE_STROKE_WIDTH / 2, COLORS.seaEdge),
+        createSegmentDot(segment.to, COLORS.seaFill, 3*EDGE_STROKE_WIDTH / 2, COLORS.seaEdge),
+      );
+      return;
+    }
 
-    dotGroup.append(
-      createElement("circle", {
-        cx: segment.from.x,
-        cy: segment.from.y,
-        r: SEGMENT_ENDPOINT_RADIUS,
-        fill: stroke,
-      }),
-      createElement("circle", {
-        cx: segment.to.x,
-        cy: segment.to.y,
-        r: SEGMENT_ENDPOINT_RADIUS,
-        fill: stroke,
-      }),
-    );
+    const line = createSegmentLine(segment, stroke, EDGE_STROKE_WIDTH, leftId, rightId);
+    const fromDot = createSegmentDot(segment.from, stroke, SEGMENT_ENDPOINT_RADIUS);
+    const toDot = createSegmentDot(segment.to, stroke, SEGMENT_ENDPOINT_RADIUS);
+    lineGroup.append(line);
+    dotGroup.append(fromDot, toDot);
   });
-  group.append(lineGroup, dotGroup);
+  group.append(lineGroup, dotGroup, riverLineGroup, riverDotGroup);
   return group;
+}
+
+function createSegmentLine(segment, stroke, strokeWidth, leftId, rightId) {
+  return createElement("line", {
+    x1: segment.from.x,
+    y1: segment.from.y,
+    x2: segment.to.x,
+    y2: segment.to.y,
+    stroke,
+    "stroke-width": strokeWidth,
+    "data-segment-id": segment.id,
+    "data-edge-id": segment.id,
+    "data-left-lot-id": leftId,
+    "data-right-lot-id": rightId,
+    "data-left-cell-id": leftId,
+    "data-right-cell-id": rightId,
+  });
+}
+
+function createSegmentDot(point, fill, radius, stroke = null) {
+  const attributes = {
+    cx: point.x,
+    cy: point.y,
+    r: radius,
+    fill,
+  };
+  if (stroke) {
+    attributes.stroke = stroke;
+    attributes["stroke-width"] = 2;
+  }
+  return createElement("circle", attributes);
 }
 
 function createTessellationGroup(tessellation, map) {
@@ -333,11 +359,6 @@ function createRiversGroup(rivers, segments) {
     );
   });
 
-  const endpointGroup = createRiverEndpointGroup(segments);
-  if (endpointGroup) {
-    group.append(endpointGroup);
-  }
-
   return group;
 }
 
@@ -397,43 +418,6 @@ function createRiverHitStroke(riverId, points, width) {
     "stroke-linejoin": "round",
     "data-river-id": riverId,
   });
-}
-
-function createRiverEndpointGroup(segments) {
-  const canonicalRiverSegments = Array.isArray(segments)
-    ? segments.filter((segment) => segment.features?.river)
-    : [];
-  if (!canonicalRiverSegments.length) {
-    return null;
-  }
-
-  const group = createElement("g", {
-    "pointer-events": "none",
-  });
-  const seen = new Set();
-
-  canonicalRiverSegments.forEach((segment) => {
-    [segment.from, segment.to].forEach((point) => {
-      const key = `${point.x.toFixed(3)},${point.y.toFixed(3)}`;
-      if (seen.has(key)) {
-        return;
-      }
-      seen.add(key);
-      group.append(
-        createElement("circle", {
-          cx: point.x,
-          cy: point.y,
-          r: RIVER_ENDPOINT_RADIUS,
-          fill: COLORS.riverEndpoint,
-          stroke: COLORS.seaEdge,
-          "stroke-width": 1.35,
-          "data-river-endpoint": "true",
-        }),
-      );
-    });
-  });
-
-  return group;
 }
 
 function toSvgPoints(points) {

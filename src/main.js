@@ -791,7 +791,7 @@ function renderHoveredGeometry(hoverTarget) {
   hoveredRiverId = null;
   syncActiveRiverSummaryState();
   clearRiverOverlay();
-  drawNeighborOverlay(item, kind);
+  clearNeighborOverlay();
   const previewRiverPath = kind === "Cell" && shouldShowRiverPreview() ? computeCenterSeaFlowPath(item.id) : null;
 
   hoveredCellData.className = "cell-data";
