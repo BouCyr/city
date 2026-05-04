@@ -46,17 +46,11 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 6:
       return stableSignature({
-        riverTurnAngle: options.riverTurnAngle,
-        maxSeaDistance: options.maxSeaDistance,
         primaryRiverWidth: options.primaryRiverWidth,
       });
     case 7:
       return stableSignature({
-        riverTurnAngle: options.riverTurnAngle,
-        maxSeaDistance: options.maxSeaDistance,
         primaryRiverWidth: options.primaryRiverWidth,
-        tributarySourceRiverDistance: options.tributarySourceRiverDistance,
-        tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
       });

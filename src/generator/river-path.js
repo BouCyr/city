@@ -1,7 +1,7 @@
 /*
- * WHAT: Share segmented land-path search used by hover previews and river generation.
- * HOW: Build a real edge lookup, run shortest-cell BFS with segmented-length tiebreaks, and emit polyline points.
- * WHY: Step 5 previews and the committed first river must follow the exact same routing rules.
+ * WHAT: Share sea-distance river mouth selection and inland path enumeration.
+ * HOW: Build coast mouth candidates, carry river drift state through bounded DFS, and emit centroid/edge-midpoint polylines.
+ * WHY: Primary rivers, tributaries, and hover previews should follow the same deterministic routing rules.
  */
 
 function buildEdgeLookup(edges) {
@@ -16,6 +16,12 @@ function buildEdgeLookup(edges) {
   });
   return lookup;
 }
+
+const CENTRAL_BOUNDARY_MIN_RATIO = 0.25;
+const CENTRAL_BOUNDARY_MAX_RATIO = 0.75;
+const MAX_RIVER_EXPANDED_STATES = 5000;
+const MAX_RIVER_COMPLETED_PATHS = 500;
+const MIN_RIVER_TURN_ANGLE_DEGREES = 90;
 
 export function computeSeaDistances(cells) {
   const distances = Array.from({ length: cells.length }, () => Infinity);
@@ -50,231 +56,99 @@ export function computeSeaDistances(cells) {
   return distances;
 }
 
-function findCenterSeaCellId(cells, size) {
-  let bestCellId = null;
-  let bestDistance = Infinity;
+export function findRiverMouthCandidates(map) {
+  const boundarySides = activeWaterBoundarySides(map);
+  const selectedSeaCellIds = new Set(
+    map.cells
+      .filter((cell) =>
+        cell.features.sea
+        && cell.neighborCellIds.filter((neighborId) => map.cells[neighborId]?.features.land).length > 1
+        && isCentralBoundaryCell(cell, map.meta.size, boundarySides)
+      )
+      .map((cell) => cell.id),
+  );
+  const edgeLookup = buildEdgeLookup(map.edges);
 
-  cells.forEach((cell) => {
-    if (!cell.features.sea) {
-      return;
-    }
-
-    const dx = cell.centroid.x - size / 2;
-    const dy = cell.centroid.y - size / 2;
-    const distance = Math.hypot(dx, dy);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestCellId = cell.id;
-    }
-  });
-
-  return bestCellId;
-}
-
-export function isCoastCell(cells, cell) {
-  return Boolean(cell?.features.land && cell.neighborCellIds.some((neighborId) => cells[neighborId]?.features.sea));
-}
-
-export function findCenterSeaLandPath(cells, edges, startCellId, size, startEntryPoint = null, minTurnAngleDegrees = 90, maxSeaDistance = Infinity) {
-  const edgeLookup = buildEdgeLookup(edges);
-  const seaDistances = cells.some((cell) => cell.features.sea) ? computeSeaDistances(cells) : null;
-  if (seaDistances && Number.isFinite(maxSeaDistance)) {
-    const startDistance = seaDistances[startCellId];
-    if (!Number.isFinite(startDistance) || startDistance > maxSeaDistance) {
-      return null;
-    }
-  }
-
-  if (findCenterSeaCellId(cells, size) === null) {
-    const westOutlet = findWestOutlet(cells, edges, size);
-    if (!westOutlet) {
-      return null;
-    }
-
-    return findBestShortestPath(cells, edgeLookup, startCellId, {
-      isTarget: (cell) => cell.id === westOutlet.cellId,
-      targetExitPoint: () => westOutlet.point,
-      startEntryPoint,
-      minTurnAngleDegrees,
-      seaDistances,
-      maxSeaDistance,
-    });
-  }
-
-  const targetCoastCellIds = new Set(cells.filter((cell) => isCoastCell(cells, cell)).map((cell) => cell.id));
-  if (!targetCoastCellIds.size) {
-    return null;
-  }
-
-  return findBestShortestPath(cells, edgeLookup, startCellId, {
-    isTarget: (cell) => targetCoastCellIds.has(cell.id),
-    targetExitPoint: (cell) => {
-      const seaNeighborIds = cell.neighborCellIds.filter((neighborId) => cells[neighborId]?.features.sea);
-      const coastEdge = seaNeighborIds
-        .map((neighborId) => edgeLookup.get(edgeKey(cell.id, neighborId)))
-        .find(Boolean);
-      return coastEdge ? { x: coastEdge.midpoint.x, y: coastEdge.midpoint.y } : null;
-    },
-    startEntryPoint,
-    minTurnAngleDegrees,
-    seaDistances,
-    maxSeaDistance,
-  });
-}
-
-export function findLandPathToTargets(cells, edges, startCellId, {
-  isTarget,
-  targetExitPoint,
-  canTraverse,
-  startEntryPoint = null,
-  minTurnAngleDegrees = 90,
-  maxSeaDistance = Infinity,
-}) {
-  const edgeLookup = buildEdgeLookup(edges);
-  const seaDistances = cells.some((cell) => cell.features.sea) ? computeSeaDistances(cells) : null;
-  if (seaDistances && Number.isFinite(maxSeaDistance)) {
-    const startDistance = seaDistances[startCellId];
-    if (!Number.isFinite(startDistance) || startDistance > maxSeaDistance) {
-      return null;
-    }
-  }
-  return findBestShortestPath(cells, edgeLookup, startCellId, {
-    isTarget,
-    targetExitPoint,
-    canTraverse,
-    startEntryPoint,
-    minTurnAngleDegrees,
-    seaDistances,
-    maxSeaDistance,
-  });
-}
-
-function findBestShortestPath(cells, edgeLookup, startCellId, {
-  isTarget,
-  targetExitPoint,
-  canTraverse,
-  seaDistances,
-  startEntryPoint = null,
-  minTurnAngleDegrees = 90,
-  maxSeaDistance = Infinity,
-}) {
-  const startCell = cells.find((cell) => cell.id === startCellId);
-  if (!startCell || !(canTraverse ? canTraverse(startCell, null) : defaultTraversable(startCell))) {
-    return null;
-  }
-
-  const previousByCellId = new Map();
-  let currentLevel = [startCellId];
-  const visitedDepth = new Map([[startCellId, 0]]);
-  const bestLengthByCellId = new Map([[startCellId, 0]]);
-
-  for (let depth = 0; currentLevel.length > 0; depth += 1) {
-    const nextLevel = [];
-    const nextLevelSet = new Set();
-    const candidateStates = new Map();
-
-    for (const cellId of currentLevel) {
-      const cell = cells[cellId];
-      if (!cell) {
-        continue;
+  return map.cells
+    .filter((cell) => {
+      if (!cell.features.land) {
+        return false;
       }
 
-      for (const neighborId of cell.neighborCellIds) {
-        const neighbor = cells[neighborId];
-        if (!neighbor || !(canTraverse ? canTraverse(neighbor, cell) : defaultTraversable(neighbor))) {
-          continue;
+      const seaNeighborIds = cell.neighborCellIds.filter((neighborId) => map.cells[neighborId]?.features.sea);
+      return seaNeighborIds.length === 1 && selectedSeaCellIds.has(seaNeighborIds[0]);
+    })
+    .map((cell) => {
+      const seaCellId = cell.neighborCellIds.find((neighborId) => selectedSeaCellIds.has(neighborId));
+      const coastEdge = edgeLookup.get(edgeKey(cell.id, seaCellId));
+      return coastEdge
+        ? {
+          landCellId: cell.id,
+          seaCellId,
+          mouthPoint: { x: coastEdge.midpoint.x, y: coastEdge.midpoint.y },
         }
-        if (seaDistances && Number.isFinite(maxSeaDistance)) {
-          const nextDistance = seaDistances[neighborId];
-          if (!Number.isFinite(nextDistance) || nextDistance > maxSeaDistance) {
-            continue;
-          }
-        }
+        : null;
+    })
+    .filter(Boolean)
+    .sort((first, second) => first.seaCellId - second.seaCellId || first.landCellId - second.landCellId);
+}
 
-        const seenDepth = visitedDepth.get(neighborId);
-        if (seenDepth !== undefined && seenDepth < depth + 1) {
-          continue;
-        }
+export function findInlandRiverPaths(cells, seaDistances, startCellId, {
+  blockedCellIds = new Set(),
+  blockedAfterStartCellIds = blockedCellIds,
+  blockedAfterFirstStepCellIds = new Set(),
+  maxExpandedStates = MAX_RIVER_EXPANDED_STATES,
+  maxCompletedPaths = MAX_RIVER_COMPLETED_PATHS,
+} = {}) {
+  const startCell = cells[startCellId];
+  if (!startCell || !startCell.features.land || !Number.isFinite(seaDistances[startCellId])) {
+    return [];
+  }
 
-        const edge = edgeLookup.get(edgeKey(cellId, neighborId));
-        if (!edge) {
-          continue;
-        }
-        if (!allowsTurn(previousByCellId.get(cellId), cell, edge, edgeLookup, startEntryPoint, minTurnAngleDegrees)) {
-          continue;
-        }
+  const completed = [];
+  const stack = [{
+    cellIds: [startCellId],
+    closerSteps: 0,
+    sameDistanceSteps: 0,
+  }];
+  let expandedStates = 0;
 
-        const candidateLength = (bestLengthByCellId.get(cellId) || 0) + segmentLengthThroughEdge(cell, neighbor, edge);
-        const existingCandidate = candidateStates.get(neighborId);
-        if (!existingCandidate || candidateLength > existingCandidate.length) {
-          candidateStates.set(neighborId, {
-            previousCellId: cellId,
-            length: candidateLength,
-          });
-        }
+  while (stack.length && expandedStates < maxExpandedStates && completed.length < maxCompletedPaths) {
+    const state = stack.pop();
+    expandedStates += 1;
 
-        if (!nextLevelSet.has(neighborId) && seenDepth === undefined) {
-          nextLevelSet.add(neighborId);
-          nextLevel.push(neighborId);
-        }
-      }
+    const currentCellId = state.cellIds[state.cellIds.length - 1];
+    const currentCell = cells[currentCellId];
+    if (!currentCell) {
+      continue;
     }
 
-    if (candidateStates.size === 0) {
-      return null;
+    if (state.cellIds.length > 1 && currentCell.boundarySides.length > 0) {
+      completed.push({
+        cellIds: [...state.cellIds],
+      });
+      continue;
     }
 
-    candidateStates.forEach((candidate, cellId) => {
-      visitedDepth.set(cellId, depth + 1);
-      bestLengthByCellId.set(cellId, candidate.length);
-      previousByCellId.set(cellId, candidate.previousCellId);
-    });
-
-    const targetCandidates = Array.from(candidateStates.entries())
-      .filter(([cellId]) => isTarget(cells[cellId]))
-      .map(([cellId, state]) => {
-        const exitPoint = targetExitPoint?.(cells[cellId]) ?? null;
-        if (!allowsExitTurn(state.previousCellId, cells[cellId], exitPoint, edgeLookup, startEntryPoint, minTurnAngleDegrees)) {
-          return null;
-        }
-        return {
-          cellId,
-          state,
-          exitPoint,
-          totalLength: state.length + (exitPoint ? pointDistance(cells[cellId].centroid, exitPoint) : 0),
-        };
-      })
+    const nextStates = currentCell.neighborCellIds
+      .filter((neighborId) => canEnterRiverCell(cells, seaDistances, neighborId, state.cellIds, startCellId, blockedCellIds, blockedAfterStartCellIds, blockedAfterFirstStepCellIds))
+      .filter((neighborId) => allowsRiverTurn(cells, state.cellIds, neighborId))
+      .map((neighborId) => buildNextRiverState(state, seaDistances[currentCellId], seaDistances[neighborId], neighborId))
       .filter(Boolean)
-      .sort((first, second) => second.totalLength - first.totalLength);
-    if (targetCandidates.length) {
-      const target = targetCandidates[0];
-      return buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, target.cellId, target.exitPoint);
-    }
+      .sort(compareRiverSearchStates);
 
-    currentLevel = nextLevel;
+    for (let index = nextStates.length - 1; index >= 0; index -= 1) {
+      stack.push(nextStates[index]);
+    }
   }
 
-  return null;
+  return completed;
 }
 
-function buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCellId, targetExitPoint = null) {
-  const cellIds = [];
-  let cursor = endCellId;
-
-  while (cursor !== undefined) {
-    cellIds.push(cursor);
-    if (cursor === startCellId) {
-      break;
-    }
-    cursor = previousByCellId.get(cursor);
-  }
-
-  if (cellIds[cellIds.length - 1] !== startCellId) {
-    return null;
-  }
-
-  cellIds.reverse();
+export function buildRiverPathPoints(cells, edges, cellIds, finalPoint = null) {
+  const edgeLookup = buildEdgeLookup(edges);
   const points = [];
+
   cellIds.forEach((cellId, index) => {
     const cell = cells[cellId];
     if (!cell) {
@@ -293,66 +167,59 @@ function buildFlowPath(cells, edgeLookup, previousByCellId, startCellId, endCell
     }
   });
 
-  if (targetExitPoint !== null) {
-    points.push(targetExitPoint);
+  if (finalPoint) {
+    points.push({ x: finalPoint.x, y: finalPoint.y });
   }
 
-  return {
-    cellIds,
-    points,
-    length: pathLength(points),
-  };
+  return points;
 }
 
-function edgeKey(firstCellId, secondCellId) {
-  return firstCellId < secondCellId ? `${firstCellId}:${secondCellId}` : `${secondCellId}:${firstCellId}`;
+function activeWaterBoundarySides(map) {
+  const waterSides = map.water?.sides?.length
+    ? map.water.sides
+    : (map.init?.params?.waterSides || []).filter((side) => side.enabled).map((side) => side.name);
+  return waterSides.length ? waterSides : ["north", "east", "south", "west"];
 }
 
-function segmentLengthThroughEdge(firstCell, secondCell, edge) {
-  return pointDistance(firstCell.centroid, edge.midpoint) + pointDistance(edge.midpoint, secondCell.centroid);
+function isCentralBoundaryCell(cell, mapSize, boundarySides) {
+  return boundarySides.some((side) => {
+    const alongBoundaryRatio = side === "north" || side === "south"
+      ? cell.centroid.x / mapSize
+      : cell.centroid.y / mapSize;
+    return alongBoundaryRatio >= CENTRAL_BOUNDARY_MIN_RATIO && alongBoundaryRatio <= CENTRAL_BOUNDARY_MAX_RATIO;
+  });
 }
 
-function pathLength(points) {
-  let length = 0;
-  for (let index = 1; index < points.length; index += 1) {
-    length += pointDistance(points[index - 1], points[index]);
+function canEnterRiverCell(cells, seaDistances, cellId, currentPathCellIds, startCellId, blockedCellIds, blockedAfterStartCellIds, blockedAfterFirstStepCellIds) {
+  const cell = cells[cellId];
+  if (!cell || !cell.features.land || !Number.isFinite(seaDistances[cellId])) {
+    return false;
   }
-  return length;
+  if (currentPathCellIds.includes(cellId)) {
+    return false;
+  }
+  if (cellId === startCellId) {
+    return !blockedCellIds.has(cellId);
+  }
+  if (currentPathCellIds.length > 1 && blockedAfterFirstStepCellIds.has(cellId)) {
+    return false;
+  }
+  return !blockedAfterStartCellIds.has(cellId);
 }
 
-function pointDistance(firstPoint, secondPoint) {
-  return Math.hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y);
-}
-
-function allowsTurn(previousCellId, currentCell, nextEdge, edgeLookup, startEntryPoint, minTurnAngleDegrees) {
-  const incomingPoint = previousCellId === undefined
-    ? startEntryPoint
-    : getSharedEdgeMidpoint(previousCellId, currentCell.id, edgeLookup);
-  if (!incomingPoint) {
+function allowsRiverTurn(cells, currentPathCellIds, nextCellId) {
+  if (currentPathCellIds.length < 2) {
     return true;
   }
 
-  return angleDegreesBetween(incomingPoint, currentCell.centroid, nextEdge.midpoint) >= minTurnAngleDegrees;
-}
-
-function allowsExitTurn(previousCellId, currentCell, exitPoint, edgeLookup, startEntryPoint, minTurnAngleDegrees) {
-  if (!exitPoint) {
-    return true;
+  const previousCell = cells[currentPathCellIds[currentPathCellIds.length - 2]];
+  const currentCell = cells[currentPathCellIds[currentPathCellIds.length - 1]];
+  const nextCell = cells[nextCellId];
+  if (!previousCell || !currentCell || !nextCell) {
+    return false;
   }
 
-  const incomingPoint = previousCellId === undefined
-    ? startEntryPoint
-    : getSharedEdgeMidpoint(previousCellId, currentCell.id, edgeLookup);
-  if (!incomingPoint) {
-    return true;
-  }
-
-  return angleDegreesBetween(incomingPoint, currentCell.centroid, exitPoint) >= minTurnAngleDegrees;
-}
-
-function getSharedEdgeMidpoint(firstCellId, secondCellId, edgeLookup) {
-  const edge = edgeLookup.get(edgeKey(firstCellId, secondCellId));
-  return edge ? edge.midpoint : null;
+  return angleDegreesBetween(previousCell.centroid, currentCell.centroid, nextCell.centroid) >= MIN_RIVER_TURN_ANGLE_DEGREES;
 }
 
 function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
@@ -373,38 +240,53 @@ function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
   const cosine = (
     (firstVector.x * secondVector.x) + (firstVector.y * secondVector.y)
   ) / (firstLength * secondLength);
-  const clampedCosine = Math.min(1, Math.max(-1, cosine));
-  return Math.acos(clampedCosine) * (180 / Math.PI);
+  return Math.acos(Math.min(1, Math.max(-1, cosine))) * (180 / Math.PI);
 }
 
-function defaultTraversable(cell) {
-  return cell.features.land && !cell.features.hill && !cell.features.hillside;
+function buildNextRiverState(state, currentSeaDistance, nextSeaDistance, nextCellId) {
+  if (currentSeaDistance <= 3 && nextSeaDistance <= currentSeaDistance) {
+    return null;
+  }
+
+  if (nextSeaDistance > currentSeaDistance) {
+    return {
+      cellIds: [...state.cellIds, nextCellId],
+      closerSteps: 0,
+      sameDistanceSteps: 0,
+    };
+  }
+
+  if (currentSeaDistance <= 3) {
+    return null;
+  }
+
+  if (nextSeaDistance < currentSeaDistance) {
+    if (state.closerSteps >= 1) {
+      return null;
+    }
+    return {
+      cellIds: [...state.cellIds, nextCellId],
+      closerSteps: state.closerSteps + 1,
+      sameDistanceSteps: state.sameDistanceSteps,
+    };
+  }
+
+  if (state.sameDistanceSteps >= 2) {
+    return null;
+  }
+  return {
+    cellIds: [...state.cellIds, nextCellId],
+    closerSteps: state.closerSteps,
+    sameDistanceSteps: state.sameDistanceSteps + 1,
+  };
 }
 
-function findWestOutlet(cells, edges, size) {
-  const westTarget = { x: 0, y: size / 2 };
-  const westBoundaryEdges = edges.filter((edge) =>
-    edge.features.boundary
-    && Math.abs(edge.from.x) <= 2.25
-    && Math.abs(edge.to.x) <= 2.25,
-  );
+function compareRiverSearchStates(first, second) {
+  const firstCellId = first.cellIds[first.cellIds.length - 1];
+  const secondCellId = second.cellIds[second.cellIds.length - 1];
+  return second.cellIds.length - first.cellIds.length || firstCellId - secondCellId;
+}
 
-  const candidates = westBoundaryEdges
-    .map((edge) => {
-      const cellId = edge.leftCellId ?? edge.rightCellId;
-      const cell = cellId === null ? null : cells[cellId];
-      if (!cell || !cell.features.land || cell.features.hill || cell.features.hillside) {
-        return null;
-      }
-
-      return {
-        cellId,
-        point: { x: edge.midpoint.x, y: edge.midpoint.y },
-        distance: pointDistance(edge.midpoint, westTarget),
-      };
-    })
-    .filter(Boolean)
-    .sort((first, second) => first.distance - second.distance || first.cellId - second.cellId);
-
-  return candidates[0] || null;
+function edgeKey(firstCellId, secondCellId) {
+  return firstCellId < secondCellId ? `${firstCellId}:${secondCellId}` : `${secondCellId}:${firstCellId}`;
 }

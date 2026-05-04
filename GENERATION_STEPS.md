@@ -337,23 +337,23 @@ Function output:
 ```
 
 Rules:
-- The source is a one-side boundary land cell.
-- The source must be at least 3 cell steps from the nearest sea cell when the map has sea.
-- Hills and hillsides cannot be traversed.
-- Any coast cell, meaning a land cell adjacent to sea, is terminal. Once the river reaches coast, it exits into the sea and cannot continue inland.
-- The path alternates boundary vertex or edge midpoint, cell centroid, shared edge midpoint, next cell centroid, and outlet point.
-- Candidate paths are ranked by cell count, then segmented geometric length, then source cell id.
+- `seaDistance` is computed as the minimum neighbor-to-neighbor distance from each cell to any sea cell.
+- Primary routing starts from a river mouth candidate on the coast and searches inland.
+- Hills and hillsides are ignored.
+- The river must end on a land cell touching the map boundary.
+- The river cannot loop or revisit a cell already in its current path.
+- The river cannot turn sharper than 90 degrees at any cell centroid, measured from entrance cell centroid to current centroid to exit cell centroid.
+- Candidate paths are ranked by geometric polyline length, then cell count, then stable ids.
 
 Plain-language algorithm:
-- Start by measuring graph distance from every cell to the sea, if the map has sea cells.
-- Look at every land cell that touches exactly one map edge. Corner-like cells are skipped because they touch more than one side.
-- Keep only sources that are not hills, not hillsides, at least 3 cell steps from sea, and not farther from the sea than `maxSeaDistance`.
-- For each possible source, use the source boundary edge midpoint as the first river point.
-- From that source cell, search across neighboring land cells until the first reachable coast cell. If the map has no sea, fall back to the land cell nearest the west-side outlet.
-- During the search, hills and hillsides are blocked. Each turn must be at least `riverTurnAngle`, measured through the current cell centroid, so the river avoids tight zigzags.
-- The path stores a visible polyline: source boundary midpoint, source cell centroid, shared edge midpoint, next cell centroid, and so on, ending at the coast or fallback outlet.
-- Among all valid source paths, choose the longest path by number of crossed cells. If tied, choose the longer geometric path. If still tied, choose the lower source cell id.
-- Save that selected river as `river.primary` and `rivers[0]`, mark its cells with `features.river`, assign a seeded name, and give it `primaryRiverWidth`.
+- Select sea cells that touch more than one land cell and sit on the central 50% of an enabled water boundary side. North/south use the cell centroid `x`; east/west use centroid `y`.
+- Select mouth land cells that touch one selected sea cell and exactly one sea cell total.
+- For each mouth land cell, enumerate bounded inland paths across land neighbors.
+- If the current river head has `seaDistance <= 3`, the next cell must have strictly greater `seaDistance`.
+- If the current river head has `seaDistance > 3`, the route may move closer to sea once before the next strict increase, or keep the same sea distance twice before the next strict increase.
+- Stop a candidate path when it reaches a land map-boundary cell.
+- Build the stored river in source-to-mouth order: boundary source point, cell centroids, shared edge midpoints, mouth cell centroid, then the coast edge midpoint.
+- Save the selected path as `river.primary` and `rivers[0]`, mark its cells with `features.river`, assign a seeded name, and give it `primaryRiverWidth`.
 
 ## 1.8 Trace The First Tributary
 
@@ -390,31 +390,30 @@ Function output:
 ```
 
 Rules:
-- The tributary source is a one-side boundary land cell.
-- The tributary source must be at least 3 cell steps from the nearest sea cell when the map has sea.
-- It cannot cross hills, hillsides, or existing river cells.
-- It cannot cross coast cells. A river that reaches coast must end in the sea, so a tributary path that would need to pass through coast is invalid.
-- It must merge into a valid primary river cell.
+- Tributary routing starts from valid primary river merge cells and searches inland.
+- A primary river cell is merge-eligible when its `seaDistance` is at least 5.
+- Hills and hillsides are ignored.
+- It cannot loop or revisit a cell already in its current path.
+- It cannot enter existing primary river cells after leaving the merge cell.
+- After leaving the merge and first tributary cell, it cannot enter any cell neighboring a primary river cell.
+- It cannot turn sharper than 90 degrees at any cell centroid, using the same angle rule as the primary river.
+- It must end on a land cell touching the map boundary.
 - The primary river width is increased downstream of the merge cell.
 
 Plain-language algorithm:
 - If there is no primary river, no tributary is created.
-- First, inspect the existing primary river and decide which of its cells can accept a tributary. A merge cell must be far enough from the sea, controlled by `tributaryMergeSeaDistance`, and it must have at least one neighboring land cell that is not hill, hillside, coast, or already river.
-- For each possible neighbor entry cell, find the shared edge midpoint where the tributary would enter the primary river. The entry angle into the downstream part of the primary river must be at least `riverTurnAngle`, so the branch joins like a real feeder instead of folding back sharply.
-- If several primary cells could be reached from the same neighboring entry cell, keep the one farther upstream on the primary river.
-- Next, look at every one-side boundary land cell as a possible tributary source. It must not be hill, hillside, sea, or already river; it must be at least 3 cell steps from sea; it must be within `maxSeaDistance` of the sea when sea exists; and it must be at least `tributarySourceRiverDistance` cell steps away from the primary river.
-- Search from each candidate source to one of the prequalified merge-entry cells. The route can only traverse land that is not hill, hillside, coast, or existing river, and it uses the same minimum turn-angle rule as the primary river.
-- The tributary path is drawn from the boundary source midpoint, through cell centroids and shared edge midpoints, to the selected merge edge, then into the primary merge cell centroid.
-- Candidate tributaries are ranked the same way as the primary river: longest by cell count, then longest by geometric length, then lowest source cell id.
+- Inspect the primary river and use every primary cell with `seaDistance >= 5` as a possible merge start.
+- From each merge cell, enumerate bounded inland paths with the same sea-distance movement rules as the primary river.
+- Stop a candidate path when it reaches a land map-boundary cell.
+- Score each tributary as tributary polyline length plus Euclidean distance between the tributary boundary source point and the primary boundary source point.
+- Choose the highest score, then tie-break by tributary length, endpoint distance, merge cell id, and source cell id.
 - Save the selected branch as `river.secondary` and `rivers[1]`, set `mergedIntoRiverId` and `mergeCellId`, mark its cells as river cells, and give it `primaryRiverWidth * tributaryWidthRatio`.
 - Update the primary river width metadata so rendering can draw it narrower before the merge and wider downstream: `strokeWidthBeforeMerge` stays at the base width, `strokeWidthAfterMerge` adds `primaryMergeWidthGain`, and `widthMergeCellId` records where that change starts.
 
 Primary vs tributary:
-- The primary river finds a route from the map boundary to the sea or west fallback outlet; the tributary finds a route from the map boundary to the already selected primary river.
-- The primary may traverse any land that is not hill or hillside; the tributary also treats existing river cells as blocked until the final approved merge.
-- The primary stops as soon as it reaches any coast cell. The tributary cannot use coast cells at all because reaching coast would force it to end in the sea instead of merging into the primary.
-- Both primary and tributary sources must begin at least 3 cell steps from sea, so rivers do not begin directly on the coast.
-- The primary chooses a dominant drainage line by looking for the longest valid boundary-to-sea path. The tributary chooses the longest valid feeder path that stays separated from the primary and joins it upstream.
+- The primary starts from a selected sea mouth and searches inland to a boundary source. The tributary starts from a primary merge cell and searches inland to its own boundary source.
+- Both use the same sea-distance movement rules and both ignore hills.
+- The primary chooses the longest geometric path. The tributary chooses the highest branch-length plus endpoint-separation score.
 - The primary owns the base river width. The tributary is narrower, and its merge increases the primary width only downstream of the merge cell.
 
 ## 1.9 Build Coastline Geometry

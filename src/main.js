@@ -6,7 +6,7 @@
 
 import { readFormState, bindFormInteractions } from "./ui/form-controller.js";
 import { createStepTracker } from "./ui/step-tracker.js";
-import { findCenterSeaLandPath } from "./generator/river-path.js";
+import { buildRiverPathPoints, computeSeaDistances, findInlandRiverPaths } from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 import { GENERATION_STEPS } from "./generator/steps.js";
 import { getMapLots } from "./generator/map-model.js";
@@ -84,11 +84,7 @@ const CONTROL_HELP_TEXT = {
   hillCount: "Number of inland cells flagged as hill sources.",
   hillSeaDistance: "Minimum graph distance from sea required for a cell to qualify as a hill.",
   hillsideRadius: "How many neighbor rings around each hill are marked as hillside.",
-  riverTurnAngle: "Minimum turn angle constraint while tracing rivers. Larger values enforce smoother paths.",
-  maxSeaDistance: "Maximum geometric distance from sea that river routing is allowed to reach. Lower values keep rivers coastal; higher values let them wander farther inland.",
   primaryRiverWidth: "Base render width for the primary river in meters before tributary merge adjustments.",
-  tributarySourceRiverDistance: "Minimum distance between tributary source candidates and the primary river.",
-  tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
   primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
   tessellateAlgorithm: "Choose how step 2.1 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
@@ -793,7 +789,7 @@ function renderHoveredGeometry(hoverTarget) {
   syncActiveRiverSummaryState();
   clearRiverOverlay();
   clearNeighborOverlay();
-  const previewRiverPath = kind === "Cell" && shouldShowRiverPreview() ? computeCenterSeaFlowPath(item.id) : null;
+  const previewRiverPath = kind === "Cell" && shouldShowRiverPreview() ? computeInlandRiverPreviewPath(item.id) : null;
 
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
@@ -841,7 +837,7 @@ function createCellDataRow(label, value) {
   `;
 }
 
-function computeCenterSeaFlowPath(startCellId) {
+function computeInlandRiverPreviewPath(startCellId) {
   if (!currentFrame || currentFrame.type !== "map") {
     return null;
   }
@@ -849,14 +845,19 @@ function computeCenterSeaFlowPath(startCellId) {
   if (!shouldShowRiverPreview()) {
     return null;
   }
-  return findCenterSeaLandPath(
-    currentFrame.map.cells,
-    currentFrame.map.edges,
-    startCellId,
-    currentFrame.map.meta.size,
-    null,
-    currentFrame.map.init?.params?.riverTurnAngle ?? 90,
-  );
+  if (!currentFrame.map.cells?.some((cell) => cell.features?.sea)) {
+    return null;
+  }
+
+  const seaDistances = computeSeaDistances(currentFrame.map.cells);
+  const paths = findInlandRiverPaths(currentFrame.map.cells, seaDistances, startCellId);
+  const bestPath = paths
+    .map((path) => ({
+      ...path,
+      points: buildRiverPathPoints(currentFrame.map.cells, currentFrame.map.edges, path.cellIds),
+    }))
+    .sort((first, second) => pathLength(second.points) - pathLength(first.points) || second.cellIds.length - first.cellIds.length)[0];
+  return bestPath || null;
 }
 
 function describeFlowPath(flowPath) {
@@ -879,6 +880,14 @@ function drawFlowOverlay(flowPath) {
 
   appendFlowPolyline(overlay, flowPath, FLOW_STROKE);
   svg.append(overlay);
+}
+
+function pathLength(points) {
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
+  }
+  return length;
 }
 
 function clearFlowOverlay() {

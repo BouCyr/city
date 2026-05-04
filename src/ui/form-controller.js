@@ -19,11 +19,7 @@ const RANGE_FIELDS = [
   "hillCount",
   "hillSeaDistance",
   "hillsideRadius",
-  "riverTurnAngle",
-  "maxSeaDistance",
   "primaryRiverWidth",
-  "tributarySourceRiverDistance",
-  "tributaryMergeSeaDistance",
   "tributaryWidthRatio",
   "primaryMergeWidthGain",
 ];
@@ -47,11 +43,7 @@ const DEFAULT_RELAX_PADDING_RATIO = 0.04;
 const DEFAULT_HILL_COUNT = 9;
 const DEFAULT_HILL_SEA_DISTANCE = 4;
 const DEFAULT_HILLSIDE_RADIUS = 1;
-const DEFAULT_RIVER_TURN_ANGLE = 90;
-const DEFAULT_MAX_SEA_DISTANCE = 50;
 const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
-const DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE = 6;
-const DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
 
@@ -135,17 +127,13 @@ export function readFormState(form) {
     hillCount: normalizeNonNegativeCount(Number(data.get("hillCount") || DEFAULT_HILL_COUNT)),
     hillSeaDistance: normalizeInteger(Number(data.get("hillSeaDistance") || DEFAULT_HILL_SEA_DISTANCE), 0, 12),
     hillsideRadius: normalizeInteger(Number(data.get("hillsideRadius") || DEFAULT_HILLSIDE_RADIUS), 0, 6),
-    riverTurnAngle: normalizeBoundedCount(Number(data.get("riverTurnAngle") || DEFAULT_RIVER_TURN_ANGLE), 0, 120),
-    maxSeaDistance: normalizeInteger(Number((data.get("maxSeaDistance") ?? DEFAULT_MAX_SEA_DISTANCE)), 0, 500),
     primaryRiverWidth: normalizeDecimal(Number(data.get("primaryRiverWidth") || DEFAULT_PRIMARY_RIVER_WIDTH), 6, 36),
-    tributarySourceRiverDistance: normalizeInteger(Number(data.get("tributarySourceRiverDistance") || DEFAULT_TRIBUTARY_SOURCE_RIVER_DISTANCE), 0, 20),
     waterReachRatio: normalizeDecimal(Number(data.get("waterReachRatio") || DEFAULT_WATER_REACH_RATIO), 0, 0.5),
     waterExpansionBase: normalizeDecimal(Number(data.get("waterExpansionBase") || DEFAULT_WATER_EXPANSION_BASE), 0, 1),
     waterExpansionEdgeWeight: normalizeDecimal(Number(data.get("waterExpansionEdgeWeight") || DEFAULT_WATER_EXPANSION_EDGE_WEIGHT), 0, 1),
     waterPressureRangeRatio: normalizeDecimal(Number(data.get("waterPressureRangeRatio") || DEFAULT_WATER_PRESSURE_RANGE_RATIO), 0.1, 1),
     waterCenterBiasRadiusRatio: normalizeDecimal(Number(data.get("waterCenterBiasRadiusRatio") || DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO), 0, 1),
     relaxPaddingRatio: normalizeDecimal(Number(data.get("relaxPaddingRatio") || DEFAULT_RELAX_PADDING_RATIO), 0, 0.15),
-    tributaryMergeSeaDistance: normalizeInteger(Number(data.get("tributaryMergeSeaDistance") || DEFAULT_TRIBUTARY_MERGE_SEA_DISTANCE), 0, 20),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 12),
     waterSides,

@@ -1,13 +1,11 @@
 /*
- * WHAT: Commit one first river using the longest valid center-sea drainage path from a non-corner boundary cell.
- * HOW: Evaluate all eligible one-side boundary land cells with the shared center-sea path search, then keep the longest result.
- * WHY: The first river should feel like the dominant drainage line of the map rather than an arbitrary source.
+ * WHAT: Commit one primary river by selecting a valid mouth and tracing the longest inland route.
+ * HOW: Build sea-distance gradients, evaluate central coast mouths, enumerate bounded inland paths, then keep the longest geometry.
+ * WHY: Rivers should enter the sea at plausible mouths and grow inland without hill constraints.
  */
 
-import { computeSeaDistances, findCenterSeaLandPath } from "../river-path.js";
+import { buildRiverPathPoints, computeSeaDistances, findInlandRiverPaths, findRiverMouthCandidates } from "../river-path.js";
 import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
-
-const MIN_RIVER_SOURCE_SEA_DISTANCE = 3;
 
 export function runFirstRiverStep(map, { rng }) {
   const river = chooseFirstRiver(map, rng);
@@ -28,50 +26,19 @@ export function runFirstRiverStep(map, { rng }) {
 }
 
 function chooseFirstRiver(map, rng) {
-  const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
-  const maxSeaDistance = map.init.params.maxSeaDistance ?? 50;
-  const seaDistances = map.cells.some((cell) => cell.features.sea) ? computeSeaDistances(map.cells) : null;
-  const eligibleCells = map.cells.filter((cell) =>
-    cell.features.land
-    && !cell.features.hill
-    && !cell.features.hillside
-    && cell.boundarySides.length === 1
-    && (!seaDistances || (seaDistances[cell.id] >= MIN_RIVER_SOURCE_SEA_DISTANCE && seaDistances[cell.id] <= maxSeaDistance)),
-  );
+  if (!map.cells.some((cell) => cell.features.sea)) {
+    return null;
+  }
 
-  const candidates = eligibleCells
-    .map((cell) => ({
-      cell,
-      sourcePoint: findSourceBoundaryMidpoint(map, cell),
-    }))
-    .map((candidate) => ({
-      ...candidate,
-      path: candidate.sourcePoint
-        ? findCenterSeaLandPath(
-          map.cells,
-          map.edges,
-          candidate.cell.id,
-          map.meta.size,
-          candidate.sourcePoint,
-          minTurnAngleDegrees,
-          maxSeaDistance,
-        )
-        : null,
-    }))
-    .filter((candidate) => candidate.path && candidate.path.points.length >= 2 && candidate.sourcePoint)
-    .sort((first, second) => {
-      const stepDelta = second.path.cellIds.length - first.path.cellIds.length;
-      if (stepDelta !== 0) {
-        return stepDelta;
-      }
-
-      const lengthDelta = buildRiverLength(second.sourcePoint, second.path.points) - buildRiverLength(first.sourcePoint, first.path.points);
-      if (Math.abs(lengthDelta) > 0.001) {
-        return lengthDelta;
-      }
-
-      return first.cell.id - second.cell.id;
-    });
+  const seaDistances = computeSeaDistances(map.cells);
+  const mouthCandidates = findRiverMouthCandidates(map);
+  const candidates = mouthCandidates
+    .flatMap((mouth) => {
+      const paths = findInlandRiverPaths(map.cells, seaDistances, mouth.landCellId);
+      return paths.map((path) => buildPrimaryCandidate(map, mouth, path));
+    })
+    .filter(Boolean)
+    .sort(comparePrimaryCandidates);
 
   if (!candidates.length) {
     return null;
@@ -79,15 +46,14 @@ function chooseFirstRiver(map, rng) {
 
   const selected = candidates[0];
   const riverName = chooseRiverName(rng);
-  const points = [selected.sourcePoint, ...selected.path.points];
   return {
     id: 0,
     name: riverName,
-    sourceCellId: selected.cell.id,
-    targetSeaCellId: inferTargetSeaCellId(map.cells, selected.path),
-    cellIds: selected.path.cellIds,
-    points,
-    length: buildRiverLength(selected.sourcePoint, selected.path.points),
+    sourceCellId: selected.sourceCellId,
+    targetSeaCellId: selected.targetSeaCellId,
+    cellIds: selected.cellIds,
+    points: selected.points,
+    length: selected.length,
     strokeWidth: map.init.params.primaryRiverWidth ?? 6,
     strokeWidthBeforeMerge: map.init.params.primaryRiverWidth ?? 6,
     strokeWidthAfterMerge: map.init.params.primaryRiverWidth ?? 6,
@@ -95,12 +61,37 @@ function chooseFirstRiver(map, rng) {
   };
 }
 
-function inferTargetSeaCellId(cells, path) {
-  const endCellId = path.cellIds[path.cellIds.length - 1];
-  const endCell = cells[endCellId];
-  if (!endCell) {
+function buildPrimaryCandidate(map, mouth, mouthToBoundaryPath) {
+  const sourceToMouthCellIds = [...mouthToBoundaryPath.cellIds].reverse();
+  const sourceCell = map.cells[sourceToMouthCellIds[0]];
+  if (!sourceCell) {
     return null;
   }
 
-  return endCell.neighborCellIds.find((neighborId) => cells[neighborId]?.features.sea) ?? null;
+  const sourcePoint = findSourceBoundaryMidpoint(map, sourceCell);
+  if (!sourcePoint) {
+    return null;
+  }
+
+  const pathPoints = buildRiverPathPoints(map.cells, map.edges, sourceToMouthCellIds, mouth.mouthPoint);
+  return {
+    sourceCellId: sourceCell.id,
+    targetSeaCellId: mouth.seaCellId,
+    mouthLandCellId: mouth.landCellId,
+    cellIds: sourceToMouthCellIds,
+    points: [sourcePoint, ...pathPoints],
+    length: buildRiverLength(sourcePoint, pathPoints),
+  };
+}
+
+function comparePrimaryCandidates(first, second) {
+  const lengthDelta = second.length - first.length;
+  if (Math.abs(lengthDelta) > 0.001) {
+    return lengthDelta;
+  }
+
+  return second.cellIds.length - first.cellIds.length
+    || first.targetSeaCellId - second.targetSeaCellId
+    || first.mouthLandCellId - second.mouthLandCellId
+    || first.sourceCellId - second.sourceCellId;
 }

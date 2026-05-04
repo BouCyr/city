@@ -7,7 +7,7 @@
 import { generateCity, generateCityThroughStep } from "./city-generator.js";
 import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
 
-const RIVER_EVALUATION_STEP_INDEX = 8;
+const RIVER_EVALUATION_STEP_INDEX = 7;
 
 self.addEventListener("message", async (event) => {
   const message = event.data;
@@ -151,17 +151,11 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 6:
       return {
-        riverTurnAngle: options.riverTurnAngle,
-        maxSeaDistance: options.maxSeaDistance,
         primaryRiverWidth: options.primaryRiverWidth,
       };
     case 7:
       return {
-        riverTurnAngle: options.riverTurnAngle,
-        maxSeaDistance: options.maxSeaDistance,
         primaryRiverWidth: options.primaryRiverWidth,
-        tributarySourceRiverDistance: options.tributarySourceRiverDistance,
-        tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
       };
