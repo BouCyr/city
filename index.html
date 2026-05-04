@@ -11,7 +11,7 @@
 </head>
 <body>
   <div class="page-shell">
-       <main class="layout">
+    <main class="layout">
       <section class="panel">
         <form id="generatorForm" class="controls-grid">
           <label>
@@ -35,179 +35,189 @@
               <h3>Control Help</h3>
               <p id="controlHelpText">Click a control help button to see its purpose and effect.</p>
             </section>
-            <ol id="stepsList" class="steps-list">
-              <li data-step-index="0">
-                <button class="step-select" type="button">1.1 Scatter pseudo-random points</button>
-                <div class="step-controls">
-                  <fieldset class="algorithm-choice">
-                    <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="scatterAlgorithm" aria-label="Scatter algorithm help">?</button></legend>
-                    <label><input type="radio" name="scatterAlgorithm" value="random_scattering" checked>Random scattering</label>
-                    <label><input type="radio" name="scatterAlgorithm" value="poisson_disk">Poisson disk distribution</label>
-                    <label><input type="radio" name="scatterAlgorithm" value="square_grid">Square grid</label>
-                  </fieldset>
-                  <label>
-                    <span class="field-title">Point Count <button class="control-help-trigger" type="button" data-help-key="pointCount" aria-label="Point Count help">?</button></span>
-                    <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500">
-                    <output for="pointCount" id="pointCountValue">500</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Scatter Padding Ratio <button class="control-help-trigger" type="button" data-help-key="scatterPaddingRatio" aria-label="Scatter Padding Ratio help">?</button></span>
-                    <input id="scatterPaddingRatio" name="scatterPaddingRatio" type="range" min="0" max="0.1" step="0.005" value="0.01">
-                    <output for="scatterPaddingRatio" id="scatterPaddingRatioValue">0.01</output>
-                  </label>
-                  <section id="poissonControlsPanel" class="algorithm-secondary-controls">
-                    <label>
-                      <span class="field-title">Poisson Spacing Ratio <button class="control-help-trigger" type="button" data-help-key="poissonSpacingRatio" aria-label="Poisson spacing ratio help">?</button></span>
-                      <input id="poissonSpacingRatio" name="poissonSpacingRatio" type="range" min="0.4" max="2.4" step="0.05" value="1.15">
-                      <output for="poissonSpacingRatio" id="poissonSpacingRatioValue">1.15</output>
-                    </label>
-                    <label>
-                      <span class="field-title">Poisson Max Attempts <button class="control-help-trigger" type="button" data-help-key="poissonMaxAttempts" aria-label="Poisson max attempts help">?</button></span>
-                      <input id="poissonMaxAttempts" name="poissonMaxAttempts" type="range" min="4" max="80" step="1" value="30">
-                      <output for="poissonMaxAttempts" id="poissonMaxAttemptsValue">30</output>
-                    </label>
-                    <label>
-                      <span class="field-title">Poisson Padding Ratio <button class="control-help-trigger" type="button" data-help-key="poissonPaddingRatio" aria-label="Poisson padding ratio help">?</button></span>
-                      <input id="poissonPaddingRatio" name="poissonPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.01">
-                      <output for="poissonPaddingRatio" id="poissonPaddingRatioValue">0.01</output>
-                    </label>
-                  </section>
-                </div>
-              </li>
-              <li data-step-index="1">
-                <button class="step-select" type="button">1.2 Compute Voronoi cells and edges</button>
-              </li>
-              <li data-step-index="2">
-                <button class="step-select" type="button">1.3 Apply one Lloyd relaxation pass</button>
-                <div class="step-controls">
-                  <label>
-                    <span class="field-title">Relax Padding Ratio <button class="control-help-trigger" type="button" data-help-key="relaxPaddingRatio" aria-label="Relax Padding Ratio help">?</button></span>
-                    <input id="relaxPaddingRatio" name="relaxPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.04">
-                    <output for="relaxPaddingRatio" id="relaxPaddingRatioValue">0.04</output>
-                  </label>
-                </div>
-              </li>
-              <li data-step-index="3">
-                <button class="step-select" type="button">1.4 Collapse short edges</button>
-              </li>
-              <li data-step-index="4">
-                <button class="step-select" type="button">1.5 Select and paint sea areas</button>
-                <div class="step-controls">
-                  <fieldset class="water-sides">
-                    <legend>Water Sides <button class="control-help-trigger" type="button" data-help-key="waterSides" aria-label="Water Sides help">?</button></legend>
-                    <label><input type="checkbox" name="waterSides" value="north">North</label>
-                    <label><input type="checkbox" name="waterSides" value="east">East</label>
-                    <label><input type="checkbox" name="waterSides" value="south" checked>South</label>
-                    <label><input type="checkbox" name="waterSides" value="west" checked>West</label>
-                  </fieldset>
-                  <label>
-                    <span class="field-title">Water Reach Ratio <button class="control-help-trigger" type="button" data-help-key="waterReachRatio" aria-label="Water Reach Ratio help">?</button></span>
-                    <input id="waterReachRatio" name="waterReachRatio" type="range" min="0" max="0.5" step="0.01" value="0.2">
-                    <output for="waterReachRatio" id="waterReachRatioValue">0.2</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Water Expansion Base <button class="control-help-trigger" type="button" data-help-key="waterExpansionBase" aria-label="Water Expansion Base help">?</button></span>
-                    <input id="waterExpansionBase" name="waterExpansionBase" type="range" min="0" max="1" step="0.01" value="0.14">
-                    <output for="waterExpansionBase" id="waterExpansionBaseValue">0.14</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Water Edge Weight <button class="control-help-trigger" type="button" data-help-key="waterExpansionEdgeWeight" aria-label="Water Edge Weight help">?</button></span>
-                    <input id="waterExpansionEdgeWeight" name="waterExpansionEdgeWeight" type="range" min="0" max="1" step="0.01" value="0.52">
-                    <output for="waterExpansionEdgeWeight" id="waterExpansionEdgeWeightValue">0.52</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Water Pressure Range <button class="control-help-trigger" type="button" data-help-key="waterPressureRangeRatio" aria-label="Water Pressure Range help">?</button></span>
-                    <input id="waterPressureRangeRatio" name="waterPressureRangeRatio" type="range" min="0.1" max="1" step="0.01" value="0.42">
-                    <output for="waterPressureRangeRatio" id="waterPressureRangeRatioValue">0.42</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Water Center Bias Radius <button class="control-help-trigger" type="button" data-help-key="waterCenterBiasRadiusRatio" aria-label="Water Center Bias Radius help">?</button></span>
-                    <input id="waterCenterBiasRadiusRatio" name="waterCenterBiasRadiusRatio" type="range" min="0" max="1" step="0.01" value="0.68">
-                    <output for="waterCenterBiasRadiusRatio" id="waterCenterBiasRadiusRatioValue">0.68</output>
-                  </label>
-                </div>
-              </li>
-              <li data-step-index="5">
-                <button class="step-select" type="button">1.6 Flag inland hill cells</button>
-                <div class="step-controls">
-                  <label>
-                    <span class="field-title">Hills <button class="control-help-trigger" type="button" data-help-key="hillCount" aria-label="Hills help">?</button></span>
-                    <input id="hillCount" name="hillCount" type="range" min="0" max="40" value="9">
-                    <output for="hillCount" id="hillCountValue">9</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Hill Sea Distance <button class="control-help-trigger" type="button" data-help-key="hillSeaDistance" aria-label="Hill Sea Distance help">?</button></span>
-                    <input id="hillSeaDistance" name="hillSeaDistance" type="range" min="0" max="12" step="1" value="4">
-                    <output for="hillSeaDistance" id="hillSeaDistanceValue">4</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Hillside Radius <button class="control-help-trigger" type="button" data-help-key="hillsideRadius" aria-label="Hillside Radius help">?</button></span>
-                    <input id="hillsideRadius" name="hillsideRadius" type="range" min="0" max="6" step="1" value="2">
-                    <output for="hillsideRadius" id="hillsideRadiusValue">1</output>
-                  </label>
-                </div>
-              </li>
-              <li data-step-index="6">
-                <button class="step-select" type="button">1.7 Trace the first river</button>
-                <div class="step-controls">
-                  <label>
-                    <span class="field-title">River Turn Angle <button class="control-help-trigger" type="button" data-help-key="riverTurnAngle" aria-label="River Turn Angle help">?</button></span>
-                    <input id="riverTurnAngle" name="riverTurnAngle" type="range" min="0" max="120" value="90">
-                    <output for="riverTurnAngle" id="riverTurnAngleValue">90</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Primary River Width <button class="control-help-trigger" type="button" data-help-key="primaryRiverWidth" aria-label="Primary River Width help">?</button></span>
-                    <input id="primaryRiverWidth" name="primaryRiverWidth" type="range" min="6" max="36" step="1.5" value="18">
-                    <output for="primaryRiverWidth" id="primaryRiverWidthValue">18</output>
-                  </label>
-                </div>
-              </li>
-              <li data-step-index="7">
-                <button class="step-select" type="button">1.8 Trace the first tributary</button>
-                <div class="step-controls">
-                  <label>
-                    <span class="field-title">Tributary Source Distance <button class="control-help-trigger" type="button" data-help-key="tributarySourceRiverDistance" aria-label="Tributary Source Distance help">?</button></span>
-                    <input id="tributarySourceRiverDistance" name="tributarySourceRiverDistance" type="range" min="0" max="20" step="1" value="6">
-                    <output for="tributarySourceRiverDistance" id="tributarySourceRiverDistanceValue">6</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Tributary Merge Distance <button class="control-help-trigger" type="button" data-help-key="tributaryMergeSeaDistance" aria-label="Tributary Merge Distance help">?</button></span>
-                    <input id="tributaryMergeSeaDistance" name="tributaryMergeSeaDistance" type="range" min="0" max="20" step="1" value="5">
-                    <output for="tributaryMergeSeaDistance" id="tributaryMergeSeaDistanceValue">5</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Tributary Width Ratio <button class="control-help-trigger" type="button" data-help-key="tributaryWidthRatio" aria-label="Tributary Width Ratio help">?</button></span>
-                    <input id="tributaryWidthRatio" name="tributaryWidthRatio" type="range" min="0.3" max="1" step="0.02" value="0.72">
-                    <output for="tributaryWidthRatio" id="tributaryWidthRatioValue">0.72</output>
-                  </label>
-                  <label>
-                    <span class="field-title">Merge Width Gain <button class="control-help-trigger" type="button" data-help-key="primaryMergeWidthGain" aria-label="Merge Width Gain help">?</button></span>
-                    <input id="primaryMergeWidthGain" name="primaryMergeWidthGain" type="range" min="0" max="12" step="0.3" value="3.6">
-                    <output for="primaryMergeWidthGain" id="primaryMergeWidthGainValue">3.6</output>
-                  </label>
-                </div>
-              </li>
-              <li data-step-index="8">
-                <button class="step-select" type="button">1.9 Build coastline geometry</button>
-              </li>
-              <li data-step-index="9">
-                <button class="step-select" type="button">1.10 Build land-edge geometry</button>
-              </li>
-              <li data-step-index="10">
-                <button class="step-select" type="button">1.11 Add rivers to lot geometry</button>
-              </li>
-              <li data-step-index="11">
-                <button class="step-select" type="button">1.12 Tessellate lot geometry</button>
-                <div class="step-controls">
-                  <fieldset class="algorithm-choice">
-                    <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="tessellateAlgorithm" aria-label="Tessellation algorithm help">?</button></legend>
-                    <label><input type="radio" name="tessellateAlgorithm" value="straight_bisection">Straight bisection</label>
-                    <label><input type="radio" name="tessellateAlgorithm" value="curved_bisection" checked>Curved bisection</label>
-                    <label><input type="radio" name="tessellateAlgorithm" value="poisson_voronoi">Poisson Voronoi</label>
-                  </fieldset>
-                </div>
-              </li>
-            </ol>
+            <div id="stepsList" class="steps-tree">
+              <section class="step-group">
+                <h3 class="step-group-title">1 Geographical features</h3>
+                <ol class="steps-list">
+                  <li data-step-index="0">
+                    <button class="step-select" type="button">1.1 Point cloud</button>
+                    <div class="step-controls">
+                      <fieldset class="algorithm-choice">
+                        <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="scatterAlgorithm" aria-label="Scatter algorithm help">?</button></legend>
+                        <label><input type="radio" name="scatterAlgorithm" value="random_scattering" checked>Random scattering</label>
+                        <label><input type="radio" name="scatterAlgorithm" value="poisson_disk">Poisson disk distribution</label>
+                        <label><input type="radio" name="scatterAlgorithm" value="square_grid">Square grid</label>
+                      </fieldset>
+                      <label>
+                        <span class="field-title">Point Count <button class="control-help-trigger" type="button" data-help-key="pointCount" aria-label="Point Count help">?</button></span>
+                        <input id="pointCount" name="pointCount" type="range" min="50" max="1200" value="500">
+                        <output for="pointCount" id="pointCountValue">500</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Scatter Padding Ratio <button class="control-help-trigger" type="button" data-help-key="scatterPaddingRatio" aria-label="Scatter Padding Ratio help">?</button></span>
+                        <input id="scatterPaddingRatio" name="scatterPaddingRatio" type="range" min="0" max="0.1" step="0.005" value="0.01">
+                        <output for="scatterPaddingRatio" id="scatterPaddingRatioValue">0.01</output>
+                      </label>
+                      <section id="poissonControlsPanel" class="algorithm-secondary-controls">
+                        <label>
+                          <span class="field-title">Poisson Spacing Ratio <button class="control-help-trigger" type="button" data-help-key="poissonSpacingRatio" aria-label="Poisson spacing ratio help">?</button></span>
+                          <input id="poissonSpacingRatio" name="poissonSpacingRatio" type="range" min="0.4" max="2.4" step="0.05" value="1.15">
+                          <output for="poissonSpacingRatio" id="poissonSpacingRatioValue">1.15</output>
+                        </label>
+                        <label>
+                          <span class="field-title">Poisson Max Attempts <button class="control-help-trigger" type="button" data-help-key="poissonMaxAttempts" aria-label="Poisson max attempts help">?</button></span>
+                          <input id="poissonMaxAttempts" name="poissonMaxAttempts" type="range" min="4" max="80" step="1" value="30">
+                          <output for="poissonMaxAttempts" id="poissonMaxAttemptsValue">30</output>
+                        </label>
+                        <label>
+                          <span class="field-title">Poisson Padding Ratio <button class="control-help-trigger" type="button" data-help-key="poissonPaddingRatio" aria-label="Poisson padding ratio help">?</button></span>
+                          <input id="poissonPaddingRatio" name="poissonPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.01">
+                          <output for="poissonPaddingRatio" id="poissonPaddingRatioValue">0.01</output>
+                        </label>
+                      </section>
+                    </div>
+                  </li>
+                  <li data-step-index="1">
+                    <button class="step-select" type="button">1.2 Voronoi cells</button>
+                  </li>
+                  <li data-step-index="2">
+                    <button class="step-select" type="button">1.3 Relaxed cells</button>
+                    <div class="step-controls">
+                      <label>
+                        <span class="field-title">Relax Padding Ratio <button class="control-help-trigger" type="button" data-help-key="relaxPaddingRatio" aria-label="Relax Padding Ratio help">?</button></span>
+                        <input id="relaxPaddingRatio" name="relaxPaddingRatio" type="range" min="0" max="0.15" step="0.005" value="0.04">
+                        <output for="relaxPaddingRatio" id="relaxPaddingRatioValue">0.04</output>
+                      </label>
+                    </div>
+                  </li>
+                  <li data-step-index="3">
+                    <button class="step-select" type="button">1.4 Collapsed edges</button>
+                  </li>
+                  <li data-step-index="4">
+                    <button class="step-select" type="button">1.5 Sea mask</button>
+                    <div class="step-controls">
+                      <fieldset class="water-sides">
+                        <legend>Water Sides <button class="control-help-trigger" type="button" data-help-key="waterSides" aria-label="Water Sides help">?</button></legend>
+                        <label><input type="checkbox" name="waterSides" value="north">North</label>
+                        <label><input type="checkbox" name="waterSides" value="east">East</label>
+                        <label><input type="checkbox" name="waterSides" value="south" checked>South</label>
+                        <label><input type="checkbox" name="waterSides" value="west" checked>West</label>
+                      </fieldset>
+                      <label>
+                        <span class="field-title">Water Reach Ratio <button class="control-help-trigger" type="button" data-help-key="waterReachRatio" aria-label="Water Reach Ratio help">?</button></span>
+                        <input id="waterReachRatio" name="waterReachRatio" type="range" min="0" max="0.5" step="0.01" value="0.2">
+                        <output for="waterReachRatio" id="waterReachRatioValue">0.2</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Water Expansion Base <button class="control-help-trigger" type="button" data-help-key="waterExpansionBase" aria-label="Water Expansion Base help">?</button></span>
+                        <input id="waterExpansionBase" name="waterExpansionBase" type="range" min="0" max="1" step="0.01" value="0.14">
+                        <output for="waterExpansionBase" id="waterExpansionBaseValue">0.14</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Water Edge Weight <button class="control-help-trigger" type="button" data-help-key="waterExpansionEdgeWeight" aria-label="Water Edge Weight help">?</button></span>
+                        <input id="waterExpansionEdgeWeight" name="waterExpansionEdgeWeight" type="range" min="0" max="1" step="0.01" value="0.52">
+                        <output for="waterExpansionEdgeWeight" id="waterExpansionEdgeWeightValue">0.52</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Water Pressure Range <button class="control-help-trigger" type="button" data-help-key="waterPressureRangeRatio" aria-label="Water Pressure Range help">?</button></span>
+                        <input id="waterPressureRangeRatio" name="waterPressureRangeRatio" type="range" min="0.1" max="1" step="0.01" value="0.42">
+                        <output for="waterPressureRangeRatio" id="waterPressureRangeRatioValue">0.42</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Water Center Bias Radius <button class="control-help-trigger" type="button" data-help-key="waterCenterBiasRadiusRatio" aria-label="Water Center Bias Radius help">?</button></span>
+                        <input id="waterCenterBiasRadiusRatio" name="waterCenterBiasRadiusRatio" type="range" min="0" max="1" step="0.01" value="0.68">
+                        <output for="waterCenterBiasRadiusRatio" id="waterCenterBiasRadiusValue">0.68</output>
+                      </label>
+                    </div>
+                  </li>
+                  <li data-step-index="5">
+                    <button class="step-select" type="button">1.6 Hill mask</button>
+                    <div class="step-controls">
+                      <label>
+                        <span class="field-title">Hills <button class="control-help-trigger" type="button" data-help-key="hillCount" aria-label="Hills help">?</button></span>
+                        <input id="hillCount" name="hillCount" type="range" min="0" max="40" value="9">
+                        <output for="hillCount" id="hillCountValue">9</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Hill Sea Distance <button class="control-help-trigger" type="button" data-help-key="hillSeaDistance" aria-label="Hill Sea Distance help">?</button></span>
+                        <input id="hillSeaDistance" name="hillSeaDistance" type="range" min="0" max="12" step="1" value="4">
+                        <output for="hillSeaDistance" id="hillSeaDistanceValue">4</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Hillside Radius <button class="control-help-trigger" type="button" data-help-key="hillsideRadius" aria-label="Hillside Radius help">?</button></span>
+                        <input id="hillsideRadius" name="hillsideRadius" type="range" min="0" max="6" step="1" value="2">
+                        <output for="hillsideRadius" id="hillsideRadiusValue">1</output>
+                      </label>
+                    </div>
+                  </li>
+                  <li data-step-index="6">
+                    <button class="step-select" type="button">1.7 Primary river</button>
+                    <div class="step-controls">
+                      <label>
+                        <span class="field-title">River Turn Angle <button class="control-help-trigger" type="button" data-help-key="riverTurnAngle" aria-label="River Turn Angle help">?</button></span>
+                        <input id="riverTurnAngle" name="riverTurnAngle" type="range" min="0" max="120" value="90">
+                        <output for="riverTurnAngle" id="riverTurnAngleValue">90</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Primary River Width <button class="control-help-trigger" type="button" data-help-key="primaryRiverWidth" aria-label="Primary River Width help">?</button></span>
+                        <input id="primaryRiverWidth" name="primaryRiverWidth" type="range" min="6" max="36" step="1.5" value="18">
+                        <output for="primaryRiverWidth" id="primaryRiverWidthValue">18</output>
+                      </label>
+                    </div>
+                  </li>
+                  <li data-step-index="7">
+                    <button class="step-select" type="button">1.8 River branch</button>
+                    <div class="step-controls">
+                      <label>
+                        <span class="field-title">Tributary Source Distance <button class="control-help-trigger" type="button" data-help-key="tributarySourceRiverDistance" aria-label="Tributary Source Distance help">?</button></span>
+                        <input id="tributarySourceRiverDistance" name="tributarySourceRiverDistance" type="range" min="0" max="20" step="1" value="6">
+                        <output for="tributarySourceRiverDistance" id="tributarySourceRiverDistanceValue">6</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Tributary Merge Distance <button class="control-help-trigger" type="button" data-help-key="tributaryMergeSeaDistance" aria-label="Tributary Merge Distance help">?</button></span>
+                        <input id="tributaryMergeSeaDistance" name="tributaryMergeSeaDistance" type="range" min="0" max="20" step="1" value="5">
+                        <output for="tributaryMergeSeaDistance" id="tributaryMergeSeaDistanceValue">5</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Tributary Width Ratio <button class="control-help-trigger" type="button" data-help-key="tributaryWidthRatio" aria-label="Tributary Width Ratio help">?</button></span>
+                        <input id="tributaryWidthRatio" name="tributaryWidthRatio" type="range" min="0.3" max="1" step="0.02" value="0.72">
+                        <output for="tributaryWidthRatio" id="tributaryWidthRatioValue">0.72</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Merge Width Gain <button class="control-help-trigger" type="button" data-help-key="primaryMergeWidthGain" aria-label="Merge Width Gain help">?</button></span>
+                        <input id="primaryMergeWidthGain" name="primaryMergeWidthGain" type="range" min="0" max="12" step="0.3" value="3.6">
+                        <output for="primaryMergeWidthGain" id="primaryMergeWidthGainValue">3.6</output>
+                      </label>
+                    </div>
+                  </li>
+                  <li data-step-index="8">
+                    <button class="step-select" type="button">1.9 Coastline mesh</button>
+                  </li>
+                  <li data-step-index="9">
+                    <button class="step-select" type="button">1.10 Land edges</button>
+                  </li>
+                  <li data-step-index="10">
+                    <button class="step-select" type="button">1.11 River splits</button>
+                  </li>
+                </ol>
+              </section>
+              <section class="step-group">
+                <h3 class="step-group-title">2 Human occupation</h3>
+                <ol class="steps-list">
+                  <li data-step-index="11">
+                    <button class="step-select" type="button">2.1 Lot tessellation</button>
+                    <div class="step-controls">
+                      <fieldset class="algorithm-choice">
+                        <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="tessellateAlgorithm" aria-label="Tessellation algorithm help">?</button></legend>
+                        <label><input type="radio" name="tessellateAlgorithm" value="straight_bisection">Straight bisection</label>
+                        <label><input type="radio" name="tessellateAlgorithm" value="curved_bisection" checked>Curved bisection</label>
+                        <label><input type="radio" name="tessellateAlgorithm" value="poisson_voronoi">Poisson Voronoi</label>
+                      </fieldset>
+                    </div>
+                  </li>
+                </ol>
+              </section>
+            </div>
           </section>
         </form>
       </section>

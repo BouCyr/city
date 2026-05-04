@@ -90,7 +90,7 @@ const CONTROL_HELP_TEXT = {
   tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
   primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
-  tessellateAlgorithm: "Choose how step 1.12 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
+  tessellateAlgorithm: "Choose how step 2.1 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
 };
 
 bindFormInteractions(form);
@@ -155,7 +155,7 @@ setupScatterAlgorithmControls();
 form.requestSubmit();
 
 function setupStepControlPanels() {
-  const stepItems = Array.from(document.querySelectorAll("#stepsList > li"));
+  const stepItems = Array.from(document.querySelectorAll("#stepsList [data-step-index]"));
   stepItems.forEach((item) => {
     const stepButton = item.querySelector(".step-select");
     const controls = item.querySelector(".step-controls");

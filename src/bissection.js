@@ -1,10 +1,10 @@
 /*
  * WHAT: Drive the standalone bisection tutorial page.
- * HOW: Build trace frames from the shared step 1.12 trace helper and render the selected frame into SVG.
+ * HOW: Build trace frames from the shared step 2.1 trace helper and render the selected frame into SVG.
  * WHY: The page explains the actual tessellation algorithms without depending on the full map UI.
  */
 
-import { buildBisectionTutorialTrace, TUTORIAL_LOT, TUTORIAL_LOTS } from "./generator/1-12-tessellate-lots/1-12-bisection-trace.js";
+import { buildBisectionTutorialTrace, TUTORIAL_LOT, TUTORIAL_LOTS } from "./generator/2-1-tessellate-lots/2-1-bisection-trace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEWBOX_PADDING = 80;

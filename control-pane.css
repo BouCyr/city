@@ -31,13 +31,16 @@ legend { padding: 0 4px; font-weight: 700; font-size: 0.9rem; }
 output { font-size: 0.85rem; color: var(--muted); }
 .steps-box { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .steps-header { display: flex; justify-content: space-between; align-items: center; }
+.steps-tree { margin-top: 10px; display: grid; gap: 12px; }
+.step-group { display: grid; gap: 8px; }
+.step-group-title { margin: 0; color: var(--muted); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .control-help-block { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.48); }
 .control-help-block h3 { margin: 0 0 6px; font-size: 0.86rem; }
 .control-help-block p { margin: 0; font-size: 0.8rem; color: var(--muted); }
 .status-badge {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(16, 37, 48, 0.08); color: var(--muted); font-size: 0.78rem;
 }
-.steps-list { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--muted); font-size: 0.86rem; }
+.steps-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--muted); font-size: 0.86rem; }
 .steps-list li.active .step-select, .steps-list li.current .step-select { color: var(--ink); }
 .steps-list li.current .step-select { font-weight: 700; }
 .steps-list li.complete .step-select { color: #1b6d4c; }

@@ -12,7 +12,7 @@ export function runApplyWaterStep(map, { rng }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.5 / Water classification",
+        label: "Step 1.5 / Sea mask",
         map: nextMap,
       },
     ],

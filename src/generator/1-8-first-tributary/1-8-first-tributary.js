@@ -21,7 +21,7 @@ export function runFirstTributaryStep(map, { rng }) {
     map: nextMap,
     frameEntries: [
       {
-        label: tributary ? "Step 1.8 / First tributary" : "Step 1.8 / No tributary",
+        label: tributary ? "Step 1.8 / River branch" : "Step 1.8 / No tributary",
         map: nextMap,
       },
     ],

@@ -13,7 +13,7 @@ export function runBuildCoastlineGeometryStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.9 / Build coastline geometry",
+        label: "Step 1.9 / Coastline mesh",
         map: nextMap,
       },
     ],

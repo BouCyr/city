@@ -5,27 +5,27 @@
  */
 
 export const GENERATION_STEPS = [
-  "Scatter pseudo-random points",
-  "Compute Voronoi cells and edges",
-  "Apply one Lloyd relaxation pass",
-  "Collapse short edges",
-  "Select and paint sea areas",
-  "Flag inland hill cells",
-  "Trace the first river",
-  "Trace the first tributary",
-  "Build coastline geometry",
-  "Build land-edge geometry",
-  "Add rivers to lot geometry",
-  "Tessellate lot geometry",
+  "Point cloud",
+  "Voronoi cells",
+  "Relaxed cells",
+  "Collapsed edges",
+  "Sea mask",
+  "Hill mask",
+  "Primary river",
+  "River branch",
+  "Coastline mesh",
+  "Land edges",
+  "River splits",
+  "Lot tessellation",
 ];
 
 export const GENERATION_STEP_TREE = [
   {
-    label: "Geographical feature",
-    stepIndices: GENERATION_STEPS.map((_, index) => index),
+    label: "Geographical features",
+    stepIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
   },
   {
-    label: "Human usage",
-    stepIndices: [],
+    label: "Human occupation",
+    stepIndices: [11],
   },
 ];

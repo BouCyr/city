@@ -14,7 +14,7 @@ import { runFirstTributaryStep } from "./1-8-first-tributary/1-8-first-tributary
 import { runBuildCoastlineGeometryStep } from "./1-9-build-coastline-geometry/1-9-build-coastline-geometry.js";
 import { runBuildLandEdgeGeometryStep } from "./1-10-build-land-edge-geometry/1-10-build-land-edge-geometry.js";
 import { runAddRiversToLotGeometryStep } from "./1-11-add-rivers-to-lot-geometry/1-11-add-rivers-to-lot-geometry.js";
-import { runTessellateLotsStep } from "./1-12-tessellate-lots/1-12-tessellate-lots.js";
+import { runTessellateLotsStep } from "./2-1-tessellate-lots/2-1-tessellate-lots.js";
 import { runRelaxPointsStep } from "./1-3-relax-points/1-3-relax-points.js";
 import { runScatterPointsStep } from "./1-1-scatter-points/1-1-scatter-points.js";
 import { runCollapseShortEdgesStep } from "./1-4-collapse-short-edges/1-4-collapse-short-edges.js";

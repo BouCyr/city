@@ -6,22 +6,21 @@ Each step is a simple function. Its input is exactly the previous step output, e
 
 ## Canonical Order
 
-1. Geographical feature
-1.1 Scatter pseudo-random points
-1.2 Compute Voronoi cells and edges
-1.3 Apply one Lloyd relaxation pass
-1.4 Collapse short edges
-1.5 Select and paint sea areas
-1.6 Flag inland hill cells
-1.7 Trace the first river
-1.8 Trace the first tributary
-1.9 Build coastline geometry
-1.10 Build land-edge geometry
-1.11 Add rivers to lot geometry
-1.12 Tessellate lot geometry
-2. Human usage
+1. Geographical features
+1.1 Point cloud
+1.2 Voronoi cells
+1.3 Relaxed cells
+1.4 Collapsed edges
+1.5 Sea mask
+1.6 Hill mask
+1.7 Primary river
+1.8 River branch
+1.9 Coastline mesh
+1.10 Land edges
+1.11 River splits
+2. Human occupation
 
-`Human usage` is reserved and has no implemented child steps yet.
+`Human occupation` is reserved and has no implemented child steps yet.
 
 ## Geometry Rules
 
@@ -29,7 +28,7 @@ Through step 1.8 the map is cell geometry:
 
 ```js
 {
-  meta: { size: 3000, stepIndex: 6, stepLabel: "Trace the first river" },
+  meta: { size: 3000, stepIndex: 6, stepLabel: "Primary river" },
   points: [{ id: 0, x: 120, y: 240 }, ...],
   vertices: [{ id: 0, x: 10, y: 20, edgeIds: ["0-1-..."] }, ...],
   edges: [{
@@ -464,9 +463,9 @@ Rules:
 - River segments are canonical `segments`; they are not stored again in a river-specific output field.
 - Lot adjacency and segment ownership are rebuilt from the new polygons.
 
-## 1.12 Tessellate Lot Geometry
+## 2.1 Lot Tessellation
 
-Source: `src/generator/1-12-tessellate-lots/1-12-tessellate-lots.js`
+Source: `src/generator/2-1-tessellate-lots/2-1-tessellate-lots.js`
 
 Function input:
 

@@ -38,7 +38,7 @@ export function runRelaxPointsStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.3 / Lloyd-smoothed map",
+        label: "Step 1.3 / Relaxed cells",
         map: nextMap,
       },
     ],

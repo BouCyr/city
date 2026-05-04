@@ -13,7 +13,7 @@ export function runBuildLandEdgeGeometryStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.10 / Build land-edge geometry",
+        label: "Step 1.10 / Land edges",
         map: nextMap,
       },
     ],
