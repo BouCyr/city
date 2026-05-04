@@ -165,6 +165,11 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 10:
       return {
+        parishAlgorithm: options.stepAlgorithms?.parishClustering || "euclidean_centroids",
+        parishCount: options.parishCount,
+      };
+    case 11:
+      return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,
         curvedSplitCurve: "circular arc tangent to boundary-vertex bisectors",

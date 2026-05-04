@@ -18,8 +18,8 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.10 Land edges
 1.11 River splits
 2. Human occupation
-
-`Human occupation` is reserved and has no implemented child steps yet.
+2.1 Parish clustering
+2.2 Lot tessellation
 
 ## Geometry Rules
 
@@ -471,9 +471,39 @@ Rules:
 - River segments are canonical `segments`; they are not stored again in a river-specific output field.
 - Lot adjacency and segment ownership are rebuilt from the new polygons.
 
-## 2.1 Lot Tessellation
+## 2.1 Parish Clustering
 
-Source: `src/generator/2-1-tessellate-lots/2-1-tessellate-lots.js`
+Source: `src/generator/2-1-group-lots/2-1-group-lots.js`
+
+Function input:
+
+```js
+{
+  lots: [{ id: 0, centroid: { x: 100, y: 100 }, features: { land: true, sea: false }, ... }, ...],
+  segments: [{ id: "segment:0", leftLotId: 0, rightLotId: 1, features: { river: false }, ... }, ...],
+  init: { params: { parishCount: 10, stepAlgorithms: { parishClustering: "euclidean_centroids" } } }
+}
+```
+
+Function output:
+
+```js
+{
+  lots: [{ id: 0, parishId: 3, ... }, ...],
+  parishColors: ["hsla(0, 60%, 70%, 0.4)", ...]
+}
+```
+
+Rules:
+- Land lots are grouped into exactly `parishCount` clusters (if enough lots exist).
+- `euclidean_centroids` uses standard k-means on lot centroids.
+- `graph_edge_length` uses k-medoids on the lot adjacency graph. Edge weights are distances from centroids to shared boundary midpoints.
+- `graph_river_penalty` doubles the edge weight if the lots are separated by a river.
+- Parishes are colored greedily to avoid adjacent parishes sharing the same color index from the generated HSL palette.
+
+## 2.2 Lot Tessellation
+
+Source: `src/generator/2-2-tessellate-lots/2-2-tessellate-lots.js`
 
 Function input:
 
@@ -504,7 +534,8 @@ Function output:
 
 Rules:
 - The step output shape is identical regardless of the selected tessellation algorithm.
-- `straight_bisection` starts recursive sublotting for each land lot when a valid split exists.
+- Only the 15 land lots with the highest area that are not touching the map boundaries are selected for tessellation.
+- `straight_bisection` starts recursive sublotting for each selected land lot when a valid split exists.
 - In `straight_bisection`, each branch tries the shortest valid straight bisection and the smaller child must keep at least 40% of the parent branch area.
 - In `curved_bisection`, the same recursive split selection is used, but the inserted split edge is a cubic Hermite curve instead of a straight chord.
 - In `curved_bisection`, each curve starts at the chosen boundary vertices and uses endpoint tangent directions derived from the inward half-angle bisectors of those vertices.

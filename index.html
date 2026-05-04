@@ -165,7 +165,23 @@
                 <h3 class="step-group-title">2 Human occupation</h3>
                 <ol class="steps-list">
                   <li data-step-index="10">
-                    <button class="step-select" type="button">2.1 Lot tessellation</button>
+                    <button class="step-select" type="button">2.1 Parish clustering</button>
+                    <div class="step-controls">
+                      <fieldset class="algorithm-choice">
+                        <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="parishAlgorithm" aria-label="Parish algorithm help">?</button></legend>
+                        <label><input type="radio" name="parishAlgorithm" value="euclidean_centroids" checked>Euclidean centroids</label>
+                        <label><input type="radio" name="parishAlgorithm" value="graph_edge_length">Graph edge length</label>
+                        <label><input type="radio" name="parishAlgorithm" value="graph_river_penalty">Graph river penalty</label>
+                      </fieldset>
+                      <label>
+                        <span class="field-title">Parish Count <button class="control-help-trigger" type="button" data-help-key="parishCount" aria-label="Parish Count help">?</button></span>
+                        <input id="parishCount" name="parishCount" type="range" min="3" max="25" value="10">
+                        <output for="parishCount" id="parishCountValue">10</output>
+                      </label>
+                    </div>
+                  </li>
+                  <li data-step-index="11">
+                    <button class="step-select" type="button">2.2 Lot tessellation</button>
                     <div class="step-controls">
                       <fieldset class="algorithm-choice">
                         <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="tessellateAlgorithm" aria-label="Tessellation algorithm help">?</button></legend>

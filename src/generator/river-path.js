@@ -24,11 +24,15 @@ const MAX_RIVER_COMPLETED_PATHS = 500;
 export const DEFAULT_RIVER_TURN_ANGLE_DEGREES = 30;
 
 export function computeSeaDistances(cells) {
+  if (!cells || cells.length === 0) {
+    return [];
+  }
+
   const distances = Array.from({ length: cells.length }, () => Infinity);
   const queue = [];
 
   cells.forEach((cell) => {
-    if (!cell.features.sea) {
+    if (!cell || !cell.features?.sea) {
       return;
     }
 
@@ -38,12 +42,13 @@ export function computeSeaDistances(cells) {
 
   for (let index = 0; index < queue.length; index += 1) {
     const cellId = queue[index];
-    const cell = cells[cellId];
+    const cell = cells.find(c => c && c.id === cellId);
     if (!cell) {
       continue;
     }
 
-    cell.neighborCellIds.forEach((neighborId) => {
+    const neighborIds = cell.neighborCellIds || cell.neighborLotIds || [];
+    neighborIds.forEach((neighborId) => {
       if (distances[cellId] + 1 >= distances[neighborId]) {
         return;
       }

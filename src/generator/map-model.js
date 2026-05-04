@@ -37,6 +37,7 @@ export function createInitialMap(options) {
         tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
+        parishCount: options.parishCount,
         waterSides: options.waterSides.map((side) => ({ ...side })),
         mapSize: options.mapSize,
       },

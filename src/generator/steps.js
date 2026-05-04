@@ -15,6 +15,7 @@ export const GENERATION_STEPS = [
   "Coastline mesh",
   "Land edges",
   "River splits",
+  "Parish clustering",
   "Lot tessellation",
 ];
 
@@ -25,6 +26,6 @@ export const GENERATION_STEP_TREE = [
   },
   {
     label: "Human occupation",
-    stepIndices: [10],
+    stepIndices: [10, 11],
   },
 ];

@@ -7,8 +7,8 @@
 import { Delaunay } from "../../lib/d3-delaunay/index.js";
 import { clonePoint, pointDistance } from "../map-model.js";
 import { createSeededRandom } from "../random.js";
-import { inspectCurvedBisection } from "./2-1-curved-bisection.js";
-import { splitLotPolygonRecursively } from "./2-1-tessellate-lots.js";
+import { inspectCurvedBisection } from "./2-2-curved-bisection.js";
+import { splitLotPolygonRecursively } from "./2-2-tessellate-lots.js";
 
 const EPSILON = 0.0001;
 const POISSON_SPACING_RATIO = 0.95;

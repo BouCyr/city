@@ -114,17 +114,18 @@ function createGrid(size) {
 function createMapLayer(map) {
   const { lots, segments } = getMapGeometry(map);
   const useCanonicalRiverGeometry = (map.meta?.stepIndex ?? -1) >= RIVER_LOT_GEOMETRY_STEP_INDEX;
-  const useRiverDistanceDebug = isRiverDistanceDebugStep(map);
+  const useRiverStrokeDebug = isRiverStrokeDebugStep(map);
   const layer = createElement("g");
   layer.append(
     createLotsGroup(lots, map),
     createTessellationGroup(map.tessellation, map),
     createSegmentsGroup(segments),
+    useRiverStrokeDebug
+      ? createRiverDistanceDebugGroup(map)
+      : createElement("g"),
     useCanonicalRiverGeometry
       ? createElement("g")
-      : useRiverDistanceDebug
-        ? createRiverDistanceDebugGroup(map)
-        : createRiversGroup(map.rivers || [], segments),
+      : createRiversGroup(map.rivers || [], segments),
   );
 
   if (!lots.length) {
@@ -136,32 +137,93 @@ function createMapLayer(map) {
 
 function createLotsGroup(lots, map) {
   const group = createElement("g");
-  const seaDistances = isRiverDistanceDebugStep(map) && Array.isArray(map.cells)
-    ? computeSeaDistances(map.cells)
+  const seaDistances = isRiverDistanceDebugStep(map) && (Array.isArray(map.cells) || Array.isArray(lots))
+    ? computeSeaDistances(Array.isArray(map.cells) && map.cells.length > 0 ? map.cells : lots)
     : null;
+  const baseItems = Array.isArray(map.cells) && map.cells.length > 0 ? map.cells : lots;
   const maxLandSeaDistance = seaDistances
-    ? Math.max(1, ...map.cells.filter((cell) => cell.features.land && Number.isFinite(seaDistances[cell.id])).map((cell) => seaDistances[cell.id]))
+    ? Math.max(1, ...baseItems.filter((item) => item.features.land && Number.isFinite(seaDistances[item.id])).map((item) => seaDistances[item.id]))
     : 1;
 
-  lots.forEach((lot) => {
-    if (lot.polygon.length < 3) {
-      return;
+  // Pre-calculate data for parish boundaries
+  const lotParishMap = new Map();
+  const parishLotsMap = new Map();
+  lots.forEach(l => {
+    if (l.parishId !== null && l.parishId !== undefined) {
+      lotParishMap.set(l.id, l.parishId);
+      if (!parishLotsMap.has(l.parishId)) parishLotsMap.set(l.parishId, []);
+      parishLotsMap.get(l.parishId).push(l);
     }
+  });
 
+  const { segments } = getMapGeometry(map);
+
+  const defs = createElement("defs");
+  group.append(defs);
+
+  // 1. Draw all lot polygons
+  lots.forEach((lot) => {
+    if (lot.polygon.length < 3) return;
     group.append(
       createElement("polygon", {
         points: toSvgPoints(lot.polygon),
-        fill: fillForLot(lot, seaDistances, maxLandSeaDistance),
+        fill: fillForLot(lot, seaDistances, maxLandSeaDistance, map),
         "data-lot-id": lot.id,
         "data-cell-id": lot.id,
       }),
     );
   });
 
+  // 2. Identify boundary segments per parish
+  const parishBoundarySegments = new Map(); // parishId -> Array of segments
+  segments.forEach(s => {
+    const lId = s.leftLotId ?? s.leftCellId;
+    const rId = s.rightLotId ?? s.rightCellId;
+    const lParish = lId !== null ? lotParishMap.get(lId) : null;
+    const rParish = rId !== null ? lotParishMap.get(rId) : null;
+
+    if (lParish !== null && lParish !== undefined && rParish !== null && rParish !== undefined && lParish !== rParish) {
+      if (!parishBoundarySegments.has(lParish)) parishBoundarySegments.set(lParish, []);
+      parishBoundarySegments.get(lParish).push(s);
+      if (!parishBoundarySegments.has(rParish)) parishBoundarySegments.set(rParish, []);
+      parishBoundarySegments.get(rParish).push(s);
+    }
+  });
+
+  // 3. Draw parish borders
+  parishBoundarySegments.forEach((boundarySegments, parishId) => {
+    const colorData = map.parishColors?.[parishId];
+    if (!colorData) return;
+
+    // Create a clipPath for the entire parish (union of its lots)
+    const clipId = `clip-parish-${parishId}`;
+    const clipPath = createElement("clipPath", { id: clipId });
+    parishLotsMap.get(parishId).forEach(lot => {
+      if (lot.polygon.length >= 3) {
+        clipPath.append(createElement("polygon", { points: toSvgPoints(lot.polygon) }));
+      }
+    });
+    defs.append(clipPath);
+
+    // Build the path data for the boundary
+    const d = buildParishPathData(boundarySegments);
+    if (d) {
+      group.append(createElement("path", {
+        d,
+        stroke: colorData.border,
+        "stroke-width": 60,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+        fill: "none",
+        "clip-path": `url(#${clipId})`
+      }));
+    }
+  });
+
   return group;
 }
 
-function fillForLot(lot, seaDistances, maxLandSeaDistance) {
+function fillForLot(lot, seaDistances, maxLandSeaDistance, map) {
   if (lot.features.sea) {
     return COLORS.seaFill;
   }
@@ -395,18 +457,19 @@ function createRiverDistanceDebugGroup(map) {
     "stroke-linejoin": "round",
     "pointer-events": "none",
   });
-  if (!Array.isArray(map.cells) || !map.cells.some((cell) => cell.features.sea)) {
+  const items = (Array.isArray(map.cells) && map.cells.length > 0) ? map.cells : (Array.isArray(map.lots) ? map.lots : []);
+  if (!items.length || !items.some((item) => item.features?.sea)) {
     return group;
   }
 
-  const seaDistances = computeSeaDistances(map.cells);
-  const cellById = new Map(map.cells.map((cell) => [cell.id, cell]));
+  const seaDistances = computeSeaDistances(items);
+  const itemById = new Map(items.map((item) => [item.id, item]));
   (map.rivers || []).forEach((river) => {
     if (!Array.isArray(river.cellIds) || !Array.isArray(river.points) || river.cellIds.length < 1 || river.points.length < 2) {
       return;
     }
 
-    createRiverDebugSegments(river, seaDistances, cellById).forEach((segment) => {
+    createRiverDebugSegments(river, seaDistances, itemById).forEach((segment) => {
       group.append(
         createElement("line", {
           x1: segment.from.x,
@@ -543,7 +606,12 @@ function findRiverMergePointIndex(river) {
 }
 
 function isRiverDistanceDebugStep(map) {
-  return map.meta?.stepIndex === PRIMARY_RIVER_STEP_INDEX || map.meta?.stepIndex === RIVER_BRANCH_STEP_INDEX;
+  return (map.meta?.stepIndex ?? -1) >= PRIMARY_RIVER_STEP_INDEX;
+}
+
+function isRiverStrokeDebugStep(map) {
+  const index = map.meta?.stepIndex ?? -1;
+  return index === PRIMARY_RIVER_STEP_INDEX || index === RIVER_BRANCH_STEP_INDEX;
 }
 
 function createRiverStroke(riverId, points, width) {
@@ -593,4 +661,85 @@ function createElement(tagName, attributes = {}) {
   });
 
   return element;
+}
+
+function buildParishPathData(segments) {
+  if (segments.length === 0) return null;
+
+  const getVKey = (v) => `${v.x.toFixed(3)},${v.y.toFixed(3)}`;
+  
+  const edges = segments.map((s, i) => ({
+    id: i,
+    v1: getVKey(s.from),
+    v2: getVKey(s.to),
+    p1: s.from,
+    p2: s.to,
+    used: false
+  }));
+  
+  const vToEdges = new Map();
+  edges.forEach(e => {
+    if (!vToEdges.has(e.v1)) vToEdges.set(e.v1, []);
+    if (!vToEdges.has(e.v2)) vToEdges.set(e.v2, []);
+    vToEdges.get(e.v1).push(e);
+    vToEdges.get(e.v2).push(e);
+  });
+
+  let d = "";
+
+  while (true) {
+    let startVKey = null;
+    // Prefer endpoints (degree 1 or odd) for starting a path
+    for (const [vKey, connected] of vToEdges.entries()) {
+      const unused = connected.filter(e => !e.used);
+      if (unused.length > 0 && unused.length % 2 !== 0) {
+        startVKey = vKey;
+        break;
+      }
+    }
+    // If no endpoints, pick any vertex with unused edges
+    if (startVKey === null) {
+      for (const [vKey, connected] of vToEdges.entries()) {
+        if (connected.some(e => !e.used)) {
+          startVKey = vKey;
+          break;
+        }
+      }
+    }
+
+    if (startVKey === null) break;
+
+    let currentVKey = startVKey;
+    let pts = [];
+    
+    while (true) {
+      const edge = vToEdges.get(currentVKey).find(e => !e.used);
+      if (!edge) break;
+
+      if (pts.length === 0) {
+        pts.push(edge.v1 === currentVKey ? edge.p1 : edge.p2);
+      }
+      
+      edge.used = true;
+      const nextVKey = edge.v1 === currentVKey ? edge.v2 : edge.v1;
+      const nextPt = edge.v1 === currentVKey ? edge.p2 : edge.p1;
+      pts.push(nextPt);
+      currentVKey = nextVKey;
+      
+      if (currentVKey === startVKey) break; // Loop closed
+    }
+
+    if (pts.length > 1) {
+      d += `M ${pts[0].x} ${pts[0].y} `;
+      for (let i = 1; i < pts.length; i++) {
+        d += `L ${pts[i].x} ${pts[i].y} `;
+      }
+      // "Close it if last vertex=first vertex"
+      if (getVKey(pts[pts.length - 1]) === getVKey(pts[0]) && pts.length > 2) {
+        d += "Z ";
+      }
+    }
+  }
+
+  return d.trim();
 }

@@ -11,20 +11,21 @@ import {
   clonePoint,
   pointDistance,
 } from "../map-model.js";
-import { buildCurvedBisectionSplitPath } from "./2-1-curved-bisection.js";
-import { buildStraightBisectionSplitPath } from "./2-1-straight-bisection.js";
+import { buildCurvedBisectionSplitPath } from "./2-2-curved-bisection.js";
+import { buildStraightBisectionSplitPath } from "./2-2-straight-bisection.js";
 
 export function runTessellateLotsStep(map, { rng, onProgress = null }) {
   if (!Array.isArray(map.lots) || !map.lots.length) {
-    return {
-      map,
-      frameEntries: [
-        {
-          label: "Step 2.1 / Lot tessellation",
+        const label = "Step 2.2 / Lot tessellation";
+        return {
           map,
-        },
-      ],
-    };
+          frameEntries: [
+            {
+              label,
+              map,
+            },
+          ],
+        };
   }
 
   const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "curved_bisection";
@@ -44,7 +45,7 @@ export function runTessellateLotsStep(map, { rng, onProgress = null }) {
       sublots: progress.sublots.map((sublot) => cloneSublot(sublot)),
     };
     onProgress({
-      label: `Step 2.1 / Lot tessellation (${progress.completed}/${progress.total})`,
+      label: `Step 2.2 / Lot tessellation (${progress.completed}/${progress.total})`,
       map: buildTessellatedMap(map, progressTessellation),
       progress: {
         completed: progress.completed,
@@ -58,7 +59,7 @@ export function runTessellateLotsStep(map, { rng, onProgress = null }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 2.1 / Lot tessellation",
+        label: "Step 2.2 / Lot tessellation",
         map: nextMap,
       },
     ],
@@ -85,14 +86,19 @@ function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude
   const vertices = [];
   const vertexByKey = new Map();
   const sublots = [];
-  const landLots = lots.filter((lot) => {
-    const polygon = normalizePolygon(lot.polygon || []);
-    return polygon.length >= 3 && Math.abs(computeSignedArea(polygon)) > EPSILON && isLandLot(lot);
-  });
+  const landLots = lots
+    .map((lot) => {
+      const polygon = normalizePolygon(lot.polygon || [])
+      const area = Math.abs(computeSignedArea(polygon))
+      return { lot, area, polygon }
+    })
+    .filter((item) => item.polygon.length >= 3 && item.area > EPSILON && isLandLot(item.lot) && !item.lot.features?.boundary)
+    .sort((a, b) => b.area - a.area)
+    .slice(0, 15)
+    .map((item) => item.lot)
   let completedLots = 0;
 
   landLots.forEach((lot) => {
-    const polygon = normalizePolygon(lot.polygon || []);
     const boundaryPoints = getBoundaryVertices(lot, segments);
     const pieces = algorithm === "poisson_voronoi"
       ? createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng)
