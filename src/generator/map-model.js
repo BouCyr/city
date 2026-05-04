@@ -32,9 +32,6 @@ export function createInitialMap(options) {
         waterPressureRangeRatio: options.waterPressureRangeRatio,
         waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
         relaxPaddingRatio: options.relaxPaddingRatio,
-        hillCount: options.hillCount,
-        hillSeaDistance: options.hillSeaDistance,
-        hillsideRadius: options.hillsideRadius,
         primaryRiverWidth: options.primaryRiverWidth,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
@@ -122,8 +119,6 @@ export function buildCanonicalGeometry(diagram) {
       features: {
         land: true,
         sea: false,
-        hill: false,
-        hillside: false,
         river: false,
         boundary: boundarySides.length > 0,
         cityCenter: false,
@@ -568,8 +563,7 @@ function buildLotBoundaryFeatures(edge, lotById) {
 }
 
 function lotFeaturesFromCell(cell) {
-  const { hill: _hill, hillside: _hillside, ...features } = cell.features || {};
-  return features;
+  return { ...(cell.features || {}) };
 }
 
 function applyVertexFeaturesFromSegments(vertices, segments) {

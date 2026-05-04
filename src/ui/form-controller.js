@@ -16,9 +16,6 @@ const RANGE_FIELDS = [
   "waterPressureRangeRatio",
   "waterCenterBiasRadiusRatio",
   "relaxPaddingRatio",
-  "hillCount",
-  "hillSeaDistance",
-  "hillsideRadius",
   "primaryRiverWidth",
   "tributaryWidthRatio",
   "primaryMergeWidthGain",
@@ -40,9 +37,6 @@ const DEFAULT_WATER_EXPANSION_EDGE_WEIGHT = 0.52;
 const DEFAULT_WATER_PRESSURE_RANGE_RATIO = 0.42;
 const DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO = 0.68;
 const DEFAULT_RELAX_PADDING_RATIO = 0.04;
-const DEFAULT_HILL_COUNT = 9;
-const DEFAULT_HILL_SEA_DISTANCE = 4;
-const DEFAULT_HILLSIDE_RADIUS = 1;
 const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
@@ -124,9 +118,6 @@ export function readFormState(form) {
     poissonSpacingRatio: normalizeDecimal(Number(data.get("poissonSpacingRatio") || DEFAULT_POISSON_SPACING_RATIO), 0.4, 2.4),
     poissonMaxAttempts: normalizeInteger(Number(data.get("poissonMaxAttempts") || DEFAULT_POISSON_MAX_ATTEMPTS), 4, 80),
     poissonPaddingRatio: normalizeDecimal(Number(data.get("poissonPaddingRatio") || DEFAULT_POISSON_PADDING_RATIO), 0, 0.15),
-    hillCount: normalizeNonNegativeCount(Number(data.get("hillCount") || DEFAULT_HILL_COUNT)),
-    hillSeaDistance: normalizeInteger(Number(data.get("hillSeaDistance") || DEFAULT_HILL_SEA_DISTANCE), 0, 12),
-    hillsideRadius: normalizeInteger(Number(data.get("hillsideRadius") || DEFAULT_HILLSIDE_RADIUS), 0, 6),
     primaryRiverWidth: normalizeDecimal(Number(data.get("primaryRiverWidth") || DEFAULT_PRIMARY_RIVER_WIDTH), 6, 36),
     waterReachRatio: normalizeDecimal(Number(data.get("waterReachRatio") || DEFAULT_WATER_REACH_RATIO), 0, 0.5),
     waterExpansionBase: normalizeDecimal(Number(data.get("waterExpansionBase") || DEFAULT_WATER_EXPANSION_BASE), 0, 1),

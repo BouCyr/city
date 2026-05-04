@@ -12,7 +12,6 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.3 Relaxed cells
 1.4 Collapsed edges
 1.5 Sea mask
-1.6 Hill mask
 1.7 Primary river
 1.8 River branch
 1.9 Coastline mesh
@@ -28,7 +27,7 @@ Through step 1.8 the map is cell geometry:
 
 ```js
 {
-  meta: { size: 3000, stepIndex: 6, stepLabel: "Primary river" },
+  meta: { size: 3000, stepIndex: 5, stepLabel: "Primary river" },
   points: [{ id: 0, x: 120, y: 240 }, ...],
   vertices: [{ id: 0, x: 10, y: 20, edgeIds: ["0-1-..."] }, ...],
   edges: [{
@@ -49,7 +48,7 @@ Through step 1.8 the map is cell geometry:
     edgeIds: ["0-1-...", ...],
     neighborCellIds: [1, 8, ...],
     boundarySides: [],
-    features: { land: true, sea: false, hill: false, hillside: false, river: false, boundary: false, cityCenter: false }
+    features: { land: true, sea: false, river: false, boundary: false, cityCenter: false }
   }, ...],
   river: { primary: null, secondary: null },
   rivers: []
@@ -159,7 +158,7 @@ Function output:
     vertexIds: [0, 1, 2, ...],
     edgeIds: ["0-1-...", ...],
     neighborCellIds: [1, 7, ...],
-    features: { land: true, sea: false, hill: false, hillside: false, river: false, boundary: false, cityCenter: false }
+    features: { land: true, sea: false, river: false, boundary: false, cityCenter: false }
   }, ...]
 }
 ```
@@ -272,33 +271,6 @@ Rules:
 - Cell `features.land` is the inverse of `features.sea`.
 - Edge `features.sea` is true only when both neighboring cells are sea.
 
-## 1.6 Flag Inland Hill Cells
-
-Source: `src/generator/1-6-flag-hills/1-6-flag-hills.js`
-
-Function input:
-
-```js
-{
-  cells: [{ id: 0, neighborCellIds: [1, ...], features: { land: true, sea: false, hill: false, hillside: false } }, ...],
-  init: { params: { hillCount: 9, hillSeaDistance: 4, hillsideRadius: 1 } }
-}
-```
-
-Function output:
-
-```js
-{
-  cells: [{ id: 0, features: { land: true, sea: false, hill: true, hillside: false, ... } }, ...]
-}
-```
-
-Rules:
-- Hill placement uses graph distance through cells.
-- A hill candidate must be land and at least `hillSeaDistance` steps from sea.
-- The first hill is random; later hills maximize distance from selected hills.
-- Hillside cells are land cells within `hillsideRadius` steps of a hill.
-
 ## 1.7 Trace The First River
 
 Source: `src/generator/1-7-first-river/1-7-first-river.js`
@@ -307,7 +279,7 @@ Function input:
 
 ```js
 {
-  cells: [{ id: 0, centroid: { ... }, neighborCellIds: [...], features: { land: true, hill: false, hillside: false } }, ...],
+  cells: [{ id: 0, centroid: { ... }, neighborCellIds: [...], features: { land: true, sea: false } }, ...],
   edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
   river: { primary: null, secondary: null },
   rivers: []
@@ -339,7 +311,6 @@ Function output:
 Rules:
 - `seaDistance` is computed as the minimum neighbor-to-neighbor distance from each cell to any sea cell.
 - Primary routing starts from a river mouth candidate on the coast and searches inland.
-- Hills and hillsides are ignored.
 - The river must end on a land cell touching the map boundary.
 - The river cannot loop or revisit a cell already in its current path.
 - The river cannot turn sharper than 90 degrees at any cell centroid, measured from entrance cell centroid to current centroid to exit cell centroid.
@@ -363,7 +334,7 @@ Function input:
 
 ```js
 {
-  cells: [{ id: 0, features: { land: true, river: false, hill: false, hillside: false }, ... }, ...],
+  cells: [{ id: 0, features: { land: true, river: false, sea: false }, ... }, ...],
   edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
   river: { primary: { id: 0, cellIds: [12, 18, 27, ...], ... }, secondary: null },
   rivers: [{ id: 0, ... }]
@@ -392,7 +363,6 @@ Function output:
 Rules:
 - Tributary routing starts from valid primary river merge cells and searches inland.
 - A primary river cell is merge-eligible when its `seaDistance` is at least 5.
-- Hills and hillsides are ignored.
 - It cannot loop or revisit a cell already in its current path.
 - It cannot enter existing primary river cells after leaving the merge cell.
 - After leaving the merge and first tributary cell, it cannot enter any cell neighboring a primary river cell.
@@ -412,7 +382,7 @@ Plain-language algorithm:
 
 Primary vs tributary:
 - The primary starts from a selected sea mouth and searches inland to a boundary source. The tributary starts from a primary merge cell and searches inland to its own boundary source.
-- Both use the same sea-distance movement rules and both ignore hills.
+- Both use the same sea-distance movement rules.
 - The primary chooses the longest geometric path. The tributary chooses the highest branch-length plus endpoint-separation score.
 - The primary owns the base river width. The tributary is narrower, and its merge increases the primary width only downstream of the merge cell.
 
@@ -424,7 +394,7 @@ Function input:
 
 ```js
 {
-  cells: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], edgeIds: [...], features: { land: true, hill: false, hillside: false, ... } }, ...],
+  cells: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], edgeIds: [...], features: { land: true, sea: false, ... } }, ...],
   edges: [{ id: "...", fromVertexId: 0, toVertexId: 1, leftCellId: 0, rightCellId: 1, features: { sea: false } }, ...],
   river: { primary: { ... }, secondary: { ... } }
 }
@@ -448,7 +418,7 @@ Rules:
 - Boundary-ending coastline chains synthesize the missing exterior midpoint by mirroring the adjacent midpoint across the endpoint.
 - Bezier curves are sampled at the default segment length and emitted only as ordinary vertices and segments.
 - Non-coast edges that touched an original coast vertex reconnect to the sampled curve point nearest that original vertex.
-- Lots inherit source cell features, except temporary hill and hillside features are cleared before this step.
+- Lots inherit source cell features.
 - Segment and vertex features are limited to lot-stage surface data such as `coast`, `land`, `sea`, and later `riverside`.
 - Cell geometry is removed from the output; later work uses lots only.
 

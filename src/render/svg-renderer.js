@@ -5,6 +5,7 @@
  */
 
 import { getMapGeometry } from "../generator/map-model.js";
+import { computeSeaDistances } from "../generator/river-path.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
@@ -14,13 +15,15 @@ const RIVER_SEGMENT_SIZE_BONUS = 6;
 const RIVER_OUTER_WIDTH_BONUS = 6;
 const RIVER_OUTER_WIDTH_OFFSET = -2;
 const RIVER_INNER_WIDTH_REDUCTION = 4;
-const RIVER_LOT_GEOMETRY_STEP_INDEX = 10;
+const PRIMARY_RIVER_STEP_INDEX = 5;
+const RIVER_BRANCH_STEP_INDEX = 6;
+const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
   landFill: "#c8ae89",
-  hillsideFill: "#b89263",
-  hillFill: "#9b774e",
+  seaDistanceNear: "#ead3ab",
+  seaDistanceFar: "#6d4529",
   centerFill: "#efc8c3",
   point: "#d6693c",
   edge: "#1a2026",
@@ -111,12 +114,17 @@ function createGrid(size) {
 function createMapLayer(map) {
   const { lots, segments } = getMapGeometry(map);
   const useCanonicalRiverGeometry = (map.meta?.stepIndex ?? -1) >= RIVER_LOT_GEOMETRY_STEP_INDEX;
+  const useRiverDistanceDebug = isRiverDistanceDebugStep(map);
   const layer = createElement("g");
   layer.append(
-    createLotsGroup(lots),
+    createLotsGroup(lots, map),
     createTessellationGroup(map.tessellation, map),
     createSegmentsGroup(segments),
-    useCanonicalRiverGeometry ? createElement("g") : createRiversGroup(map.rivers || [], segments),
+    useCanonicalRiverGeometry
+      ? createElement("g")
+      : useRiverDistanceDebug
+        ? createRiverDistanceDebugGroup(map)
+        : createRiversGroup(map.rivers || [], segments),
   );
 
   if (!lots.length) {
@@ -126,8 +134,14 @@ function createMapLayer(map) {
   return layer;
 }
 
-function createLotsGroup(lots) {
+function createLotsGroup(lots, map) {
   const group = createElement("g");
+  const seaDistances = isRiverDistanceDebugStep(map) && Array.isArray(map.cells)
+    ? computeSeaDistances(map.cells)
+    : null;
+  const maxLandSeaDistance = seaDistances
+    ? Math.max(1, ...map.cells.filter((cell) => cell.features.land && Number.isFinite(seaDistances[cell.id])).map((cell) => seaDistances[cell.id]))
+    : 1;
 
   lots.forEach((lot) => {
     if (lot.polygon.length < 3) {
@@ -137,15 +151,7 @@ function createLotsGroup(lots) {
     group.append(
       createElement("polygon", {
         points: toSvgPoints(lot.polygon),
-        fill: lot.features.sea
-          ? COLORS.seaFill
-          : lot.features.hill
-            ? COLORS.hillFill
-            : lot.features.hillside
-              ? COLORS.hillsideFill
-              : lot.features.cityCenter
-                ? COLORS.centerFill
-                : COLORS.landFill,
+        fill: fillForLot(lot, seaDistances, maxLandSeaDistance),
         "data-lot-id": lot.id,
         "data-cell-id": lot.id,
       }),
@@ -153,6 +159,26 @@ function createLotsGroup(lots) {
   });
 
   return group;
+}
+
+function fillForLot(lot, seaDistances, maxLandSeaDistance) {
+  if (lot.features.sea) {
+    return COLORS.seaFill;
+  }
+  if (seaDistances && lot.features.land && Number.isFinite(seaDistances[lot.id])) {
+    return seaDistanceFill(seaDistances[lot.id], maxLandSeaDistance);
+  }
+  if (lot.features.cityCenter) {
+    return COLORS.centerFill;
+  }
+  return COLORS.landFill;
+}
+
+function seaDistanceFill(seaDistance, maxLandSeaDistance) {
+  const ratio = maxLandSeaDistance <= 1
+    ? 0
+    : Math.min(1, Math.max(0, (seaDistance - 1) / (maxLandSeaDistance - 1)));
+  return mixHex(COLORS.seaDistanceNear, COLORS.seaDistanceFar, ratio);
 }
 
 function createSegmentsGroup(segments) {
@@ -362,6 +388,126 @@ function createRiversGroup(rivers, segments) {
   return group;
 }
 
+function createRiverDistanceDebugGroup(map) {
+  const group = createElement("g", {
+    fill: "none",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "pointer-events": "none",
+  });
+  if (!Array.isArray(map.cells) || !map.cells.some((cell) => cell.features.sea)) {
+    return group;
+  }
+
+  const seaDistances = computeSeaDistances(map.cells);
+  const cellById = new Map(map.cells.map((cell) => [cell.id, cell]));
+  (map.rivers || []).forEach((river) => {
+    if (!Array.isArray(river.cellIds) || !Array.isArray(river.points) || river.cellIds.length < 1 || river.points.length < 2) {
+      return;
+    }
+
+    createRiverDebugSegments(river, seaDistances, cellById).forEach((segment) => {
+      group.append(
+        createElement("line", {
+          x1: segment.from.x,
+          y1: segment.from.y,
+          x2: segment.to.x,
+          y2: segment.to.y,
+          stroke: segment.stroke,
+          "stroke-width": Math.max(8, (river.strokeWidth || 18) * 0.55),
+          "data-river-id": river.id,
+          "data-from-cell-id": segment.fromCellId ?? "",
+          "data-to-cell-id": segment.toCellId ?? "",
+        }),
+      );
+    });
+  });
+
+  return group;
+}
+
+function createRiverDebugSegments(river, seaDistances, cellById) {
+  const segments = [];
+  const points = river.points;
+  const cellIds = river.cellIds;
+  const firstCell = cellById.get(cellIds[0]);
+  if (!firstCell) {
+    return segments;
+  }
+
+  let pointIndex = 0;
+  if (!samePoint(points[0], firstCell.centroid)) {
+    segments.push({
+      from: points[0],
+      to: firstCell.centroid,
+      stroke: riverDownhillStroke(),
+      fromCellId: "",
+      toCellId: firstCell.id,
+    });
+    pointIndex = 1;
+  }
+
+  for (let cellIndex = 0; cellIndex < cellIds.length - 1; cellIndex += 1) {
+    const fromCell = cellById.get(cellIds[cellIndex]);
+    const toCell = cellById.get(cellIds[cellIndex + 1]);
+    const edgeMiddle = points[pointIndex + 1];
+    if (!fromCell || !toCell || !edgeMiddle) {
+      break;
+    }
+
+    const stroke = riverDirectionStroke(seaDistances[fromCell.id], seaDistances[toCell.id]);
+    segments.push(
+      {
+        from: fromCell.centroid,
+        to: edgeMiddle,
+        stroke,
+        fromCellId: fromCell.id,
+        toCellId: toCell.id,
+      },
+      {
+        from: edgeMiddle,
+        to: toCell.centroid,
+        stroke,
+        fromCellId: fromCell.id,
+        toCellId: toCell.id,
+      },
+    );
+    pointIndex += 2;
+  }
+
+  const lastCell = cellById.get(cellIds[cellIds.length - 1]);
+  const finalPoint = points[pointIndex + 1];
+  if (lastCell && finalPoint && !samePoint(finalPoint, lastCell.centroid)) {
+    segments.push({
+      from: lastCell.centroid,
+      to: finalPoint,
+      stroke: riverDownhillStroke(),
+      fromCellId: lastCell.id,
+      toCellId: "",
+    });
+  }
+
+  return segments;
+}
+
+function riverDirectionStroke(fromSeaDistance, toSeaDistance) {
+  if (toSeaDistance < fromSeaDistance) {
+    return riverDownhillStroke();
+  }
+  if (toSeaDistance === fromSeaDistance) {
+    return "#e58d27";
+  }
+  return "#d43f2f";
+}
+
+function riverDownhillStroke() {
+  return "#2e9a4b";
+}
+
+function samePoint(first, second) {
+  return Math.abs(first.x - second.x) < 0.001 && Math.abs(first.y - second.y) < 0.001;
+}
+
 function createRiverStrokes(river) {
   const widthBeforeMerge = river.strokeWidthBeforeMerge ?? river.strokeWidth ?? 18;
   const widthAfterMerge = river.strokeWidthAfterMerge ?? river.strokeWidth ?? widthBeforeMerge;
@@ -396,6 +542,10 @@ function findRiverMergePointIndex(river) {
   return 1 + (cellIndex * 2);
 }
 
+function isRiverDistanceDebugStep(map) {
+  return map.meta?.stepIndex === PRIMARY_RIVER_STEP_INDEX || map.meta?.stepIndex === RIVER_BRANCH_STEP_INDEX;
+}
+
 function createRiverStroke(riverId, points, width) {
   return createElement("polyline", {
     points: toSvgPoints(points),
@@ -422,6 +572,17 @@ function createRiverHitStroke(riverId, points, width) {
 
 function toSvgPoints(points) {
   return points.map((point) => `${point.x},${point.y}`).join(" ");
+}
+
+function mixHex(first, second, ratio) {
+  const firstRgb = hexToRgb(first);
+  const secondRgb = hexToRgb(second);
+  const mixed = firstRgb.map((value, index) => Math.round(value + (secondRgb[index] - value) * ratio));
+  return `#${mixed.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function hexToRgb(hex) {
+  return [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));
 }
 
 function createElement(tagName, attributes = {}) {

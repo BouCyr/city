@@ -1,7 +1,7 @@
 /*
  * WHAT: Share graph traversal helpers for cell-based generation steps.
  * HOW: Export small functions that operate on canonical cells and cell id lists.
- * WHY: Hill and river steps both need graph distances without owning traversal details.
+ * WHY: Terrain and river steps need graph distances without owning traversal details.
  */
 
 export function computeCellDistances(cells, sourceCellIds) {

@@ -40,19 +40,17 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 5:
       return stableSignature({
-        hillCount: options.hillCount,
-        hillSeaDistance: options.hillSeaDistance,
-        hillsideRadius: options.hillsideRadius,
+        primaryRiverWidth: options.primaryRiverWidth,
       });
     case 6:
       return stableSignature({
         primaryRiverWidth: options.primaryRiverWidth,
+        tributaryWidthRatio: options.tributaryWidthRatio,
+        primaryMergeWidthGain: options.primaryMergeWidthGain,
       });
     case 7:
       return stableSignature({
-        primaryRiverWidth: options.primaryRiverWidth,
-        tributaryWidthRatio: options.tributaryWidthRatio,
-        primaryMergeWidthGain: options.primaryMergeWidthGain,
+        segmentLength: "default",
       });
     case 8:
       return stableSignature({
@@ -63,10 +61,6 @@ export function buildGenerationStepSignature(stepIndex, options) {
         segmentLength: "default",
       });
     case 10:
-      return stableSignature({
-        segmentLength: "default",
-      });
-    case 11:
       return stableSignature({
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         splitSegmentLength: "default",

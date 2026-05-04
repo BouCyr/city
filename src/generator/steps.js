@@ -10,7 +10,6 @@ export const GENERATION_STEPS = [
   "Relaxed cells",
   "Collapsed edges",
   "Sea mask",
-  "Hill mask",
   "Primary river",
   "River branch",
   "Coastline mesh",
@@ -22,10 +21,10 @@ export const GENERATION_STEPS = [
 export const GENERATION_STEP_TREE = [
   {
     label: "Geographical features",
-    stepIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    stepIndices: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
   },
   {
     label: "Human occupation",
-    stepIndices: [11],
+    stepIndices: [10],
   },
 ];

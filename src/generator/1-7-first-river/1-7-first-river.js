@@ -1,7 +1,7 @@
 /*
  * WHAT: Commit one primary river by selecting a valid mouth and tracing the longest inland route.
  * HOW: Build sea-distance gradients, evaluate central coast mouths, enumerate bounded inland paths, then keep the longest geometry.
- * WHY: Rivers should enter the sea at plausible mouths and grow inland without hill constraints.
+ * WHY: Rivers should enter the sea at plausible mouths and grow inland from the coast.
  */
 
 import { buildRiverPathPoints, computeSeaDistances, findInlandRiverPaths, findRiverMouthCandidates } from "../river-path.js";

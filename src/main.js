@@ -26,7 +26,7 @@ const FLOW_STROKE = "#4f7cff";
 const FLOW_STROKE_WIDTH = 12;
 const RIVER_HOVER_STROKE = "#1e56c5";
 const RIVER_HOVER_GLOW = "rgba(255, 255, 255, 0.82)";
-const HILLS_STEP_INDEX = 5;
+const RIVER_PREVIEW_STEP_INDEX = 4;
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
@@ -81,9 +81,6 @@ const CONTROL_HELP_TEXT = {
   waterPressureRangeRatio: "Distance range where edge pressure meaningfully affects water spread.",
   waterCenterBiasRadiusRatio: "Bias against flooding the map center. Higher values keep center landier for longer.",
   relaxPaddingRatio: "Padding ratio applied during Lloyd relaxation to keep adjusted points away from map edges.",
-  hillCount: "Number of inland cells flagged as hill sources.",
-  hillSeaDistance: "Minimum graph distance from sea required for a cell to qualify as a hill.",
-  hillsideRadius: "How many neighbor rings around each hill are marked as hillside.",
   primaryRiverWidth: "Base render width for the primary river in meters before tributary merge adjustments.",
   tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
   primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
@@ -1077,7 +1074,7 @@ function appendFlowPolyline(overlay, flowPath, stroke) {
 }
 
 function shouldShowRiverPreview() {
-  return Boolean(currentFrame && currentFrame.type === "map" && currentFrame.stepIndex === HILLS_STEP_INDEX);
+  return Boolean(currentFrame && currentFrame.type === "map" && currentFrame.stepIndex === RIVER_PREVIEW_STEP_INDEX);
 }
 
 function formatRiverWidth(river) {
