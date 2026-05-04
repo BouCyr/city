@@ -7,6 +7,8 @@
 import { computeSeaDistances, findCenterSeaLandPath } from "../river-path.js";
 import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
+const MIN_RIVER_SOURCE_SEA_DISTANCE = 3;
+
 export function runFirstRiverStep(map, { rng }) {
   const river = chooseFirstRiver(map, rng);
   const nextMap = attachRiverData(map, {
@@ -34,7 +36,7 @@ function chooseFirstRiver(map, rng) {
     && !cell.features.hill
     && !cell.features.hillside
     && cell.boundarySides.length === 1
-    && (!seaDistances || seaDistances[cell.id] <= maxSeaDistance),
+    && (!seaDistances || (seaDistances[cell.id] >= MIN_RIVER_SOURCE_SEA_DISTANCE && seaDistances[cell.id] <= maxSeaDistance)),
   );
 
   const candidates = eligibleCells

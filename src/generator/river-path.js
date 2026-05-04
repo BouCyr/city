@@ -71,6 +71,10 @@ function findCenterSeaCellId(cells, size) {
   return bestCellId;
 }
 
+export function isCoastCell(cells, cell) {
+  return Boolean(cell?.features.land && cell.neighborCellIds.some((neighborId) => cells[neighborId]?.features.sea));
+}
+
 export function findCenterSeaLandPath(cells, edges, startCellId, size, startEntryPoint = null, minTurnAngleDegrees = 90, maxSeaDistance = Infinity) {
   const edgeLookup = buildEdgeLookup(edges);
   const seaDistances = cells.some((cell) => cell.features.sea) ? computeSeaDistances(cells) : null;
@@ -81,8 +85,7 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size, startEntr
     }
   }
 
-  const centerSeaCellId = findCenterSeaCellId(cells, size);
-  if (centerSeaCellId === null) {
+  if (findCenterSeaCellId(cells, size) === null) {
     const westOutlet = findWestOutlet(cells, edges, size);
     if (!westOutlet) {
       return null;
@@ -98,11 +101,7 @@ export function findCenterSeaLandPath(cells, edges, startCellId, size, startEntr
     });
   }
 
-  const targetCoastCellIds = new Set(
-    cells
-      .filter((cell) => cell.features.land && cell.neighborCellIds.some((neighborId) => neighborId === centerSeaCellId))
-      .map((cell) => cell.id),
-  );
+  const targetCoastCellIds = new Set(cells.filter((cell) => isCoastCell(cells, cell)).map((cell) => cell.id));
   if (!targetCoastCellIds.size) {
     return null;
   }

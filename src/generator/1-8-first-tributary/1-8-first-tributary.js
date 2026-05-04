@@ -9,6 +9,8 @@ import { computeCellDistances } from "../cell-graph.js";
 import { computeSeaDistances, findLandPathToTargets } from "../river-path.js";
 import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
+const MIN_RIVER_SOURCE_SEA_DISTANCE = 3;
+
 export function runFirstTributaryStep(map, { rng }) {
   const tributary = chooseFirstTributary(map, rng);
   const rivers = tributary ? applyRiverWidths(map, map.rivers, tributary) : map.rivers;
@@ -54,7 +56,7 @@ function chooseFirstTributary(map, rng) {
     && !cell.features.river
     && riverDistances[cell.id] >= minSourceRiverDistance
     && cell.boundarySides.length === 1
-    && (!seaDistances || seaDistances[cell.id] <= maxSeaDistance),
+    && (!seaDistances || (seaDistances[cell.id] >= MIN_RIVER_SOURCE_SEA_DISTANCE && seaDistances[cell.id] <= maxSeaDistance)),
   );
 
   const candidates = eligibleCells
@@ -80,7 +82,8 @@ function chooseFirstTributary(map, rng) {
             targetCell.features.land
             && !targetCell.features.hill
             && !targetCell.features.hillside
-            && !targetCell.features.river,
+            && !targetCell.features.river
+            && (!seaDistances || seaDistances[targetCell.id] > 1),
           startEntryPoint: candidate.sourcePoint,
           minTurnAngleDegrees,
           maxSeaDistance,
@@ -145,6 +148,9 @@ function buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance, minTurnAngl
     mergeCell.neighborCellIds.forEach((neighborId) => {
       const neighbor = map.cells[neighborId];
       if (!neighbor || !neighbor.features.land || neighbor.features.hill || neighbor.features.hillside || neighbor.features.river) {
+        return;
+      }
+      if (seaDistances && seaDistances[neighbor.id] <= 1) {
         return;
       }
 

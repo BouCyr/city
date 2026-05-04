@@ -49,12 +49,10 @@ const GRAPH_NODE_EPSILON = 0.05;
 const RIVER_SPAN_EPSILON = 0.5;
 const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
 const TRIBUTARY_MERGE_DOWNSTREAM_RATIO = 0.33;
-const PRIMARY_OUTLET_INLAND_RATIO = 0.5;
 
 function buildRiverSegmentModel(rivers) {
   const nodes = [];
   const segments = [];
-  const outletAdjustments = [];
   const nodeByKey = new Map();
   const adjustedPointsByRiverId = buildAdjustedRiverPointMap(rivers);
   const riverBranchByRiverId = new Map();
@@ -110,11 +108,7 @@ function buildRiverSegmentModel(rivers) {
     }
 
     const mergeIndex = findPrimaryMergePointIndex(river);
-    const smoothedResult = adjustSmoothedRiverPoints(river, smoothRiverPolyline(points, pinnedPointKeys));
-    const smoothedPoints = smoothedResult.points;
-    if (smoothedResult.outletAdjustment) {
-      outletAdjustments.push(smoothedResult.outletAdjustment);
-    }
+    const smoothedPoints = smoothRiverPolyline(points, pinnedPointKeys);
     let segmentCursor = 0;
 
     for (let index = 0; index < smoothedPoints.length - 1; index += 1) {
@@ -146,7 +140,6 @@ function buildRiverSegmentModel(rivers) {
   return {
     nodes,
     segments: dedupeRiverSegments(segments),
-    outletAdjustments,
   };
 }
 
@@ -186,27 +179,6 @@ function buildAdjustedRiverPointMap(rivers) {
   });
 
   return pointsByRiverId;
-}
-
-function adjustSmoothedRiverPoints(river, points) {
-  if (isTributaryRiver(river) || points.length < 2) {
-    return {
-      points,
-      outletAdjustment: null,
-    };
-  }
-
-  const adjusted = points.map((point) => clonePoint(point));
-  const lastIndex = adjusted.length - 1;
-  const originalOutlet = clonePoint(adjusted[lastIndex]);
-  adjusted[lastIndex] = pointAlongSegment(adjusted[lastIndex - 1], adjusted[lastIndex], PRIMARY_OUTLET_INLAND_RATIO);
-  return {
-    points: dedupeConsecutivePoints(adjusted),
-    outletAdjustment: {
-      from: originalOutlet,
-      to: clonePoint(adjusted[lastIndex]),
-    },
-  };
 }
 
 function isTributaryRiver(river) {
@@ -338,14 +310,13 @@ function appendPath(target, path) {
 }
 
 function splitLotsByRiverGraph(map, riverGraph) {
-  const sourceLots = applyRiverOutletAdjustments(map.lots, riverGraph.outletAdjustments);
   const nextLotId = {
-    value: Math.max(-1, ...sourceLots.map((lot) => lot.id)) + 1,
+    value: Math.max(-1, ...map.lots.map((lot) => lot.id)) + 1,
   };
   const splitLots = [];
   const riverSpatialIndex = buildSegmentSpatialIndex(riverGraph.segments);
 
-  sourceLots.forEach((lot) => {
+  map.lots.forEach((lot) => {
     const splitPolygons = splitLotPolygon(lot, riverSpatialIndex);
     if (splitPolygons.length <= 1) {
       splitLots.push({
@@ -367,46 +338,6 @@ function splitLotsByRiverGraph(map, riverGraph) {
     lots: rebuilt.lots,
     segments: rebuilt.segments,
   };
-}
-
-function applyRiverOutletAdjustments(lots, outletAdjustments = []) {
-  if (!outletAdjustments.length) {
-    return lots;
-  }
-
-  return lots.map((lot) => ({
-    ...lot,
-    polygon: outletAdjustments.reduce(
-      (polygon, adjustment) => moveBoundaryPoint(polygon, adjustment.from, adjustment.to),
-      lot.polygon,
-    ),
-  }));
-}
-
-function moveBoundaryPoint(polygon, source, target) {
-  const normalized = normalizePolygon(polygon);
-  const moved = [];
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    const current = normalized[index];
-    const next = normalized[(index + 1) % normalized.length];
-    const currentMatches = pointsMatch(current, source, RIVER_SPAN_EPSILON);
-    const nextMatches = pointsMatch(next, source, RIVER_SPAN_EPSILON);
-    appendBoundaryPoint(moved, currentMatches ? target : current);
-
-    if (!currentMatches && !nextMatches && pointLiesOnSegmentInclusive(source, current, next, RIVER_SPAN_EPSILON)) {
-      appendBoundaryPoint(moved, target);
-    }
-  }
-
-  return normalizePolygon(moved);
-}
-
-function appendBoundaryPoint(points, point) {
-  const previous = points[points.length - 1];
-  if (!previous || !pointsMatch(previous, point)) {
-    points.push(clonePoint(point));
-  }
 }
 
 function splitLotPolygon(lot, riverSpatialIndex) {

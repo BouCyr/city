@@ -3,6 +3,7 @@
   height: 100%;
   display: block;
   user-select: none;
+  filter: sepia(0.40);
 }
 
 .tutorial-svg {
