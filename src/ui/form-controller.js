@@ -16,9 +16,8 @@ const RANGE_FIELDS = [
   "waterPressureRangeRatio",
   "waterCenterBiasRadiusRatio",
   "relaxPaddingRatio",
-  "primaryRiverWidth",
-  "tributaryWidthRatio",
-  "primaryMergeWidthGain",
+  "primaryRiverTurnAngleDegrees",
+  "tributaryRiverTurnAngleDegrees",
 ];
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
@@ -37,6 +36,8 @@ const DEFAULT_WATER_EXPANSION_EDGE_WEIGHT = 0.52;
 const DEFAULT_WATER_PRESSURE_RANGE_RATIO = 0.42;
 const DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO = 0.68;
 const DEFAULT_RELAX_PADDING_RATIO = 0.04;
+const DEFAULT_PRIMARY_RIVER_TURN_ANGLE_DEGREES = 30;
+const DEFAULT_TRIBUTARY_RIVER_TURN_ANGLE_DEGREES = 30;
 const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
@@ -55,7 +56,7 @@ export function bindFormInteractions(form) {
     }
 
     const sync = () => {
-      const suffix = name === "primaryRiverWidth" || name === "primaryMergeWidthGain" ? " m" : "";
+      const suffix = name.endsWith("RiverTurnAngleDegrees") ? "°" : "";
       output.value = `${field.value}${suffix}`;
       output.textContent = `${field.value}${suffix}`;
     };
@@ -125,6 +126,8 @@ export function readFormState(form) {
     waterPressureRangeRatio: normalizeDecimal(Number(data.get("waterPressureRangeRatio") || DEFAULT_WATER_PRESSURE_RANGE_RATIO), 0.1, 1),
     waterCenterBiasRadiusRatio: normalizeDecimal(Number(data.get("waterCenterBiasRadiusRatio") || DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO), 0, 1),
     relaxPaddingRatio: normalizeDecimal(Number(data.get("relaxPaddingRatio") || DEFAULT_RELAX_PADDING_RATIO), 0, 0.15),
+    primaryRiverTurnAngleDegrees: normalizeDecimal(Number(data.get("primaryRiverTurnAngleDegrees") || DEFAULT_PRIMARY_RIVER_TURN_ANGLE_DEGREES), 30, 180),
+    tributaryRiverTurnAngleDegrees: normalizeDecimal(Number(data.get("tributaryRiverTurnAngleDegrees") || DEFAULT_TRIBUTARY_RIVER_TURN_ANGLE_DEGREES), 30, 180),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 12),
     waterSides,

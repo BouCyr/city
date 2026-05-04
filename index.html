@@ -134,9 +134,9 @@
                     <button class="step-select" type="button">1.7 Primary river</button>
                     <div class="step-controls">
                       <label>
-                        <span class="field-title">Primary River Width <button class="control-help-trigger" type="button" data-help-key="primaryRiverWidth" aria-label="Primary River Width help">?</button></span>
-                        <input id="primaryRiverWidth" name="primaryRiverWidth" type="range" min="6" max="36" step="1.5" value="18">
-                        <output for="primaryRiverWidth" id="primaryRiverWidthValue">18</output>
+                        <span class="field-title">Primary River Turn Limit <button class="control-help-trigger" type="button" data-help-key="primaryRiverTurnAngleDegrees" aria-label="Primary River Turn Limit help">?</button></span>
+                        <input id="primaryRiverTurnAngleDegrees" name="primaryRiverTurnAngleDegrees" type="range" min="30" max="180" step="1" value="30">
+                        <output for="primaryRiverTurnAngleDegrees" id="primaryRiverTurnAngleDegreesValue">30°</output>
                       </label>
                     </div>
                   </li>
@@ -144,14 +144,9 @@
                     <button class="step-select" type="button">1.8 River branch</button>
                     <div class="step-controls">
                       <label>
-                        <span class="field-title">Tributary Width Ratio <button class="control-help-trigger" type="button" data-help-key="tributaryWidthRatio" aria-label="Tributary Width Ratio help">?</button></span>
-                        <input id="tributaryWidthRatio" name="tributaryWidthRatio" type="range" min="0.3" max="1" step="0.02" value="0.72">
-                        <output for="tributaryWidthRatio" id="tributaryWidthRatioValue">0.72</output>
-                      </label>
-                      <label>
-                        <span class="field-title">Merge Width Gain <button class="control-help-trigger" type="button" data-help-key="primaryMergeWidthGain" aria-label="Merge Width Gain help">?</button></span>
-                        <input id="primaryMergeWidthGain" name="primaryMergeWidthGain" type="range" min="0" max="12" step="0.3" value="3.6">
-                        <output for="primaryMergeWidthGain" id="primaryMergeWidthGainValue">3.6</output>
+                        <span class="field-title">Tributary Turn Limit <button class="control-help-trigger" type="button" data-help-key="tributaryRiverTurnAngleDegrees" aria-label="Tributary Turn Limit help">?</button></span>
+                        <input id="tributaryRiverTurnAngleDegrees" name="tributaryRiverTurnAngleDegrees" type="range" min="30" max="180" step="1" value="30">
+                        <output for="tributaryRiverTurnAngleDegrees" id="tributaryRiverTurnAngleDegreesValue">30°</output>
                       </label>
                     </div>
                   </li>

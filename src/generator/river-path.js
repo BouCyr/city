@@ -21,7 +21,7 @@ const CENTRAL_BOUNDARY_MIN_RATIO = 0.25;
 const CENTRAL_BOUNDARY_MAX_RATIO = 0.75;
 const MAX_RIVER_EXPANDED_STATES = 5000;
 const MAX_RIVER_COMPLETED_PATHS = 500;
-const MIN_RIVER_TURN_ANGLE_DEGREES = 90;
+export const DEFAULT_RIVER_TURN_ANGLE_DEGREES = 30;
 
 export function computeSeaDistances(cells) {
   const distances = Array.from({ length: cells.length }, () => Infinity);
@@ -97,6 +97,7 @@ export function findInlandRiverPaths(cells, edges, seaDistances, startCellId, {
   blockedCellIds = new Set(),
   blockedAfterStartCellIds = blockedCellIds,
   blockedAfterFirstStepCellIds = new Set(),
+  minimumTurnAngleDegrees = DEFAULT_RIVER_TURN_ANGLE_DEGREES,
   maxExpandedStates = MAX_RIVER_EXPANDED_STATES,
   maxCompletedPaths = MAX_RIVER_COMPLETED_PATHS,
 } = {}) {
@@ -134,7 +135,7 @@ export function findInlandRiverPaths(cells, edges, seaDistances, startCellId, {
 
     const nextStates = currentCell.neighborCellIds
       .filter((neighborId) => canEnterRiverCell(cells, seaDistances, neighborId, state.cellIds, startCellId, blockedCellIds, blockedAfterStartCellIds, blockedAfterFirstStepCellIds))
-      .filter((neighborId) => allowsRiverTurn(cells, edgeLookup, state.cellIds, neighborId))
+      .filter((neighborId) => allowsRiverTurn(cells, edgeLookup, state.cellIds, neighborId, minimumTurnAngleDegrees))
       .map((neighborId) => buildNextRiverState(state, seaDistances[currentCellId], seaDistances[neighborId], neighborId))
       .filter(Boolean)
       .sort(compareRiverSearchStates);
@@ -206,10 +207,17 @@ function canEnterRiverCell(cells, seaDistances, cellId, currentPathCellIds, star
   if (currentPathCellIds.length > 1 && blockedAfterFirstStepCellIds.has(cellId)) {
     return false;
   }
+  if (currentPathCellIds.length > 1) {
+    const previousCellId = currentPathCellIds[currentPathCellIds.length - 2];
+    const previousCell = cells[previousCellId];
+    if (previousCell?.neighborCellIds.includes(cellId)) {
+      return false;
+    }
+  }
   return !blockedAfterStartCellIds.has(cellId);
 }
 
-function allowsRiverTurn(cells, edgeLookup, currentPathCellIds, nextCellId) {
+function allowsRiverTurn(cells, edgeLookup, currentPathCellIds, nextCellId, minimumTurnAngleDegrees) {
   const currentCellId = currentPathCellIds[currentPathCellIds.length - 1];
   const currentCell = cells[currentCellId];
   const nextCell = cells[nextCellId];
@@ -230,13 +238,13 @@ function allowsRiverTurn(cells, edgeLookup, currentPathCellIds, nextCellId) {
     }
 
     if (
-      angleDegreesBetween(previousToCurrentEdge.midpoint, currentCell.centroid, currentToNextEdge.midpoint) < MIN_RIVER_TURN_ANGLE_DEGREES
+      angleDegreesBetween(previousToCurrentEdge.midpoint, currentCell.centroid, currentToNextEdge.midpoint) < minimumTurnAngleDegrees
     ) {
       return false;
     }
   }
 
-  return angleDegreesBetween(currentCell.centroid, currentToNextEdge.midpoint, nextCell.centroid) >= MIN_RIVER_TURN_ANGLE_DEGREES;
+  return angleDegreesBetween(currentCell.centroid, currentToNextEdge.midpoint, nextCell.centroid) >= minimumTurnAngleDegrees;
 }
 
 function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {

@@ -41,12 +41,14 @@ export function buildGenerationStepSignature(stepIndex, options) {
     case 5:
       return stableSignature({
         primaryRiverWidth: options.primaryRiverWidth,
+        primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
       });
     case 6:
       return stableSignature({
         primaryRiverWidth: options.primaryRiverWidth,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
+        tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
       });
     case 7:
       return stableSignature({

@@ -4,7 +4,12 @@
  * WHY: Tributaries should read as long feeders that join the main stem away from the sea.
  */
 
-import { buildRiverPathPoints, computeSeaDistances, findInlandRiverPaths } from "../river-path.js";
+import {
+  DEFAULT_RIVER_TURN_ANGLE_DEGREES,
+  buildRiverPathPoints,
+  computeSeaDistances,
+  findInlandRiverPaths,
+} from "../river-path.js";
 import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
 const MIN_TRIBUTARY_MERGE_SEA_DISTANCE = 5;
@@ -47,6 +52,7 @@ function chooseFirstTributary(map, rng) {
       const paths = findInlandRiverPaths(map.cells, map.edges, seaDistances, mergeCellId, {
         blockedAfterStartCellIds: primaryCellIds,
         blockedAfterFirstStepCellIds: primaryNeighborCellIds,
+        minimumTurnAngleDegrees: map.init.params.tributaryRiverTurnAngleDegrees ?? DEFAULT_RIVER_TURN_ANGLE_DEGREES,
       });
       return paths.map((path) => buildTributaryCandidate(map, primaryRiver, primarySourcePoint, mergeCellId, path));
     })

@@ -6,7 +6,12 @@
 
 import { readFormState, bindFormInteractions } from "./ui/form-controller.js";
 import { createStepTracker } from "./ui/step-tracker.js";
-import { buildRiverPathPoints, computeSeaDistances, findInlandRiverPaths } from "./generator/river-path.js";
+import {
+  DEFAULT_RIVER_TURN_ANGLE_DEGREES,
+  buildRiverPathPoints,
+  computeSeaDistances,
+  findInlandRiverPaths,
+} from "./generator/river-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 import { GENERATION_STEPS } from "./generator/steps.js";
 import { getMapLots } from "./generator/map-model.js";
@@ -81,9 +86,8 @@ const CONTROL_HELP_TEXT = {
   waterPressureRangeRatio: "Distance range where edge pressure meaningfully affects water spread.",
   waterCenterBiasRadiusRatio: "Bias against flooding the map center. Higher values keep center landier for longer.",
   relaxPaddingRatio: "Padding ratio applied during Lloyd relaxation to keep adjusted points away from map edges.",
-  primaryRiverWidth: "Base render width for the primary river in meters before tributary merge adjustments.",
-  tributaryWidthRatio: "Relative tributary width compared to the primary river width.",
-  primaryMergeWidthGain: "Additional width in meters added to the primary river downstream after tributary merge.",
+  primaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the primary river route. Lower values allow sharper bends, higher values keep the river straighter.",
+  tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   tessellateAlgorithm: "Choose how step 2.1 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
 };
 
@@ -847,7 +851,9 @@ function computeInlandRiverPreviewPath(startCellId) {
   }
 
   const seaDistances = computeSeaDistances(currentFrame.map.cells);
-  const paths = findInlandRiverPaths(currentFrame.map.cells, currentFrame.map.edges, seaDistances, startCellId);
+  const paths = findInlandRiverPaths(currentFrame.map.cells, currentFrame.map.edges, seaDistances, startCellId, {
+    minimumTurnAngleDegrees: currentFrame.map.init?.params?.primaryRiverTurnAngleDegrees ?? DEFAULT_RIVER_TURN_ANGLE_DEGREES,
+  });
   const bestPath = paths
     .map((path) => ({
       ...path,

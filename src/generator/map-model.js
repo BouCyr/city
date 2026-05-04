@@ -33,6 +33,8 @@ export function createInitialMap(options) {
         waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
         relaxPaddingRatio: options.relaxPaddingRatio,
         primaryRiverWidth: options.primaryRiverWidth,
+        primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
+        tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
         waterSides: options.waterSides.map((side) => ({ ...side })),

@@ -281,6 +281,7 @@ Function input:
 {
   cells: [{ id: 0, centroid: { ... }, neighborCellIds: [...], features: { land: true, sea: false } }, ...],
   edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
+  primaryRiverTurnAngleDegrees: 30,
   river: { primary: null, secondary: null },
   rivers: []
 }
@@ -313,7 +314,8 @@ Rules:
 - Primary routing starts from a river mouth candidate on the coast and searches inland.
 - The river must end on a land cell touching the map boundary.
 - The river cannot loop or revisit a cell already in its current path.
-- The river cannot turn sharper than 90 degrees at any centroid turn or edge-midpoint turn in the stored river polyline.
+- The next candidate cell cannot be adjacent to the previous cell in the current path.
+- The river cannot turn sharper than the configured turn angle at any centroid turn or edge-midpoint turn in the stored river polyline.
 - Candidate paths are ranked by geometric polyline length, then cell count, then stable ids.
 
 Plain-language algorithm:
@@ -336,6 +338,7 @@ Function input:
 {
   cells: [{ id: 0, features: { land: true, river: false, sea: false }, ... }, ...],
   edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
+  tributaryRiverTurnAngleDegrees: 30,
   river: { primary: { id: 0, cellIds: [12, 18, 27, ...], ... }, secondary: null },
   rivers: [{ id: 0, ... }]
 }
@@ -366,7 +369,8 @@ Rules:
 - It cannot loop or revisit a cell already in its current path.
 - It cannot enter existing primary river cells after leaving the merge cell.
 - After leaving the merge and first tributary cell, it cannot enter any cell neighboring a primary river cell.
-- It cannot turn sharper than 90 degrees at any centroid turn or edge-midpoint turn, using the same angle rule as the primary river.
+- The next candidate cell cannot be adjacent to the previous cell in the current path.
+- It cannot turn sharper than the configured turn angle at any centroid turn or edge-midpoint turn, using the same angle rule as the primary river.
 - It must end on a land cell touching the map boundary.
 - The primary river width is increased downstream of the merge cell.
 

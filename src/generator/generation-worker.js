@@ -145,13 +145,11 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 5:
       return {
-        primaryRiverWidth: options.primaryRiverWidth,
+        primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
       };
     case 6:
       return {
-        primaryRiverWidth: options.primaryRiverWidth,
-        tributaryWidthRatio: options.tributaryWidthRatio,
-        primaryMergeWidthGain: options.primaryMergeWidthGain,
+        tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
       };
     case 7:
       return {

@@ -4,7 +4,13 @@
  * WHY: Rivers should enter the sea at plausible mouths and grow inland from the coast.
  */
 
-import { buildRiverPathPoints, computeSeaDistances, findInlandRiverPaths, findRiverMouthCandidates } from "../river-path.js";
+import {
+  DEFAULT_RIVER_TURN_ANGLE_DEGREES,
+  buildRiverPathPoints,
+  computeSeaDistances,
+  findInlandRiverPaths,
+  findRiverMouthCandidates,
+} from "../river-path.js";
 import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
 export function runFirstRiverStep(map, { rng }) {
@@ -34,7 +40,9 @@ function chooseFirstRiver(map, rng) {
   const mouthCandidates = findRiverMouthCandidates(map);
   const candidates = mouthCandidates
     .flatMap((mouth) => {
-      const paths = findInlandRiverPaths(map.cells, map.edges, seaDistances, mouth.landCellId);
+      const paths = findInlandRiverPaths(map.cells, map.edges, seaDistances, mouth.landCellId, {
+        minimumTurnAngleDegrees: map.init.params.primaryRiverTurnAngleDegrees ?? DEFAULT_RIVER_TURN_ANGLE_DEGREES,
+      });
       return paths.map((path) => buildPrimaryCandidate(map, mouth, path));
     })
     .filter(Boolean)
