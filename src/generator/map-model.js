@@ -8,7 +8,7 @@ import { cross } from "./geometry.js";
 import { buildCoastlineTrace } from "./coastline-model.js";
 
 export const BLANK_STEP_INDEX = -1;
-export const DEFAULT_SEGMENT_LENGTH = 30;
+export const DEFAULT_SEGMENT_LENGTH = 20;
 
 const SNAPSHOT_FALLBACK = (value) => JSON.parse(JSON.stringify(value));
 

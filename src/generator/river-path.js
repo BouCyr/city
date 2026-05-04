@@ -110,6 +110,7 @@ export function findInlandRiverPaths(cells, seaDistances, startCellId, {
     cellIds: [startCellId],
     closerSteps: 0,
     sameDistanceSteps: 0,
+    lastSegmentColor: null,
   }];
   let expandedStates = 0;
 
@@ -244,23 +245,28 @@ function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
 }
 
 function buildNextRiverState(state, currentSeaDistance, nextSeaDistance, nextCellId) {
+  const nextSegmentColor = classifyRiverSegmentColor(currentSeaDistance, nextSeaDistance);
+  if (state.lastSegmentColor === "red" && nextSegmentColor !== "green") {
+    return null;
+  }
+  if (state.lastSegmentColor === "orange" && nextSegmentColor === "red") {
+    return null;
+  }
+
   if (currentSeaDistance <= 3 && nextSeaDistance <= currentSeaDistance) {
     return null;
   }
 
-  if (nextSeaDistance > currentSeaDistance) {
+  if (nextSegmentColor === "green") {
     return {
       cellIds: [...state.cellIds, nextCellId],
       closerSteps: 0,
       sameDistanceSteps: 0,
+      lastSegmentColor: nextSegmentColor,
     };
   }
 
-  if (currentSeaDistance <= 3) {
-    return null;
-  }
-
-  if (nextSeaDistance < currentSeaDistance) {
+  if (nextSegmentColor === "red") {
     if (state.closerSteps >= 1) {
       return null;
     }
@@ -268,6 +274,7 @@ function buildNextRiverState(state, currentSeaDistance, nextSeaDistance, nextCel
       cellIds: [...state.cellIds, nextCellId],
       closerSteps: state.closerSteps + 1,
       sameDistanceSteps: state.sameDistanceSteps,
+      lastSegmentColor: nextSegmentColor,
     };
   }
 
@@ -278,7 +285,18 @@ function buildNextRiverState(state, currentSeaDistance, nextSeaDistance, nextCel
     cellIds: [...state.cellIds, nextCellId],
     closerSteps: state.closerSteps,
     sameDistanceSteps: state.sameDistanceSteps + 1,
+    lastSegmentColor: nextSegmentColor,
   };
+}
+
+function classifyRiverSegmentColor(currentSeaDistance, nextSeaDistance) {
+  if (nextSeaDistance < currentSeaDistance) {
+    return "red";
+  }
+  if (nextSeaDistance === currentSeaDistance) {
+    return "orange";
+  }
+  return "green";
 }
 
 function compareRiverSearchStates(first, second) {
