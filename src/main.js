@@ -847,7 +847,7 @@ function computeInlandRiverPreviewPath(startCellId) {
   }
 
   const seaDistances = computeSeaDistances(currentFrame.map.cells);
-  const paths = findInlandRiverPaths(currentFrame.map.cells, seaDistances, startCellId);
+  const paths = findInlandRiverPaths(currentFrame.map.cells, currentFrame.map.edges, seaDistances, startCellId);
   const bestPath = paths
     .map((path) => ({
       ...path,

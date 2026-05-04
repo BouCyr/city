@@ -313,7 +313,7 @@ Rules:
 - Primary routing starts from a river mouth candidate on the coast and searches inland.
 - The river must end on a land cell touching the map boundary.
 - The river cannot loop or revisit a cell already in its current path.
-- The river cannot turn sharper than 90 degrees at any cell centroid, measured from entrance cell centroid to current centroid to exit cell centroid.
+- The river cannot turn sharper than 90 degrees at any centroid turn or edge-midpoint turn in the stored river polyline.
 - Candidate paths are ranked by geometric polyline length, then cell count, then stable ids.
 
 Plain-language algorithm:
@@ -366,7 +366,7 @@ Rules:
 - It cannot loop or revisit a cell already in its current path.
 - It cannot enter existing primary river cells after leaving the merge cell.
 - After leaving the merge and first tributary cell, it cannot enter any cell neighboring a primary river cell.
-- It cannot turn sharper than 90 degrees at any cell centroid, using the same angle rule as the primary river.
+- It cannot turn sharper than 90 degrees at any centroid turn or edge-midpoint turn, using the same angle rule as the primary river.
 - It must end on a land cell touching the map boundary.
 - The primary river width is increased downstream of the merge cell.
 

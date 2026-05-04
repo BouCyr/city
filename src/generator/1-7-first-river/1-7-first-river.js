@@ -34,7 +34,7 @@ function chooseFirstRiver(map, rng) {
   const mouthCandidates = findRiverMouthCandidates(map);
   const candidates = mouthCandidates
     .flatMap((mouth) => {
-      const paths = findInlandRiverPaths(map.cells, seaDistances, mouth.landCellId);
+      const paths = findInlandRiverPaths(map.cells, map.edges, seaDistances, mouth.landCellId);
       return paths.map((path) => buildPrimaryCandidate(map, mouth, path));
     })
     .filter(Boolean)

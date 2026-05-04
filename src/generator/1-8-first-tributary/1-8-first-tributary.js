@@ -44,7 +44,7 @@ function chooseFirstTributary(map, rng) {
   const candidates = primaryRiver.cellIds
     .filter((cellId) => seaDistances[cellId] >= MIN_TRIBUTARY_MERGE_SEA_DISTANCE)
     .flatMap((mergeCellId) => {
-      const paths = findInlandRiverPaths(map.cells, seaDistances, mergeCellId, {
+      const paths = findInlandRiverPaths(map.cells, map.edges, seaDistances, mergeCellId, {
         blockedAfterStartCellIds: primaryCellIds,
         blockedAfterFirstStepCellIds: primaryNeighborCellIds,
       });

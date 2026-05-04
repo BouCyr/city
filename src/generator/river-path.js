@@ -93,7 +93,7 @@ export function findRiverMouthCandidates(map) {
     .sort((first, second) => first.seaCellId - second.seaCellId || first.landCellId - second.landCellId);
 }
 
-export function findInlandRiverPaths(cells, seaDistances, startCellId, {
+export function findInlandRiverPaths(cells, edges, seaDistances, startCellId, {
   blockedCellIds = new Set(),
   blockedAfterStartCellIds = blockedCellIds,
   blockedAfterFirstStepCellIds = new Set(),
@@ -106,6 +106,7 @@ export function findInlandRiverPaths(cells, seaDistances, startCellId, {
   }
 
   const completed = [];
+  const edgeLookup = buildEdgeLookup(edges);
   const stack = [{
     cellIds: [startCellId],
     closerSteps: 0,
@@ -133,7 +134,7 @@ export function findInlandRiverPaths(cells, seaDistances, startCellId, {
 
     const nextStates = currentCell.neighborCellIds
       .filter((neighborId) => canEnterRiverCell(cells, seaDistances, neighborId, state.cellIds, startCellId, blockedCellIds, blockedAfterStartCellIds, blockedAfterFirstStepCellIds))
-      .filter((neighborId) => allowsRiverTurn(cells, state.cellIds, neighborId))
+      .filter((neighborId) => allowsRiverTurn(cells, edgeLookup, state.cellIds, neighborId))
       .map((neighborId) => buildNextRiverState(state, seaDistances[currentCellId], seaDistances[neighborId], neighborId))
       .filter(Boolean)
       .sort(compareRiverSearchStates);
@@ -208,19 +209,34 @@ function canEnterRiverCell(cells, seaDistances, cellId, currentPathCellIds, star
   return !blockedAfterStartCellIds.has(cellId);
 }
 
-function allowsRiverTurn(cells, currentPathCellIds, nextCellId) {
-  if (currentPathCellIds.length < 2) {
-    return true;
-  }
-
-  const previousCell = cells[currentPathCellIds[currentPathCellIds.length - 2]];
-  const currentCell = cells[currentPathCellIds[currentPathCellIds.length - 1]];
+function allowsRiverTurn(cells, edgeLookup, currentPathCellIds, nextCellId) {
+  const currentCellId = currentPathCellIds[currentPathCellIds.length - 1];
+  const currentCell = cells[currentCellId];
   const nextCell = cells[nextCellId];
-  if (!previousCell || !currentCell || !nextCell) {
+  if (!currentCell || !nextCell) {
     return false;
   }
 
-  return angleDegreesBetween(previousCell.centroid, currentCell.centroid, nextCell.centroid) >= MIN_RIVER_TURN_ANGLE_DEGREES;
+  const currentToNextEdge = edgeLookup.get(edgeKey(currentCellId, nextCellId));
+  if (!currentToNextEdge) {
+    return false;
+  }
+
+  if (currentPathCellIds.length >= 2) {
+    const previousCellId = currentPathCellIds[currentPathCellIds.length - 2];
+    const previousToCurrentEdge = edgeLookup.get(edgeKey(previousCellId, currentCellId));
+    if (!previousToCurrentEdge) {
+      return false;
+    }
+
+    if (
+      angleDegreesBetween(previousToCurrentEdge.midpoint, currentCell.centroid, currentToNextEdge.midpoint) < MIN_RIVER_TURN_ANGLE_DEGREES
+    ) {
+      return false;
+    }
+  }
+
+  return angleDegreesBetween(currentCell.centroid, currentToNextEdge.midpoint, nextCell.centroid) >= MIN_RIVER_TURN_ANGLE_DEGREES;
 }
 
 function angleDegreesBetween(firstPoint, pivotPoint, secondPoint) {
