@@ -34,11 +34,13 @@ function chooseFirstTributary(map, rng) {
     return null;
   }
   const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
+  const maxSeaDistance = map.init.params.maxSeaDistance ?? 50;
   const primaryRiverWidth = map.init.params.primaryRiverWidth ?? 6;
   const tributaryWidthRatio = map.init.params.tributaryWidthRatio ?? 0.72;
   const minSourceRiverDistance = map.init.params.tributarySourceRiverDistance ?? 6;
   const minMergeSeaDistance = map.init.params.tributaryMergeSeaDistance ?? 5;
   const riverDistances = computeCellDistances(map.cells, primaryRiver.cellIds);
+  const seaDistances = map.cells.some((cell) => cell.features.sea) ? computeSeaDistances(map.cells) : null;
 
   const mergeTargets = buildMergeTargetMap(map, primaryRiver, minMergeSeaDistance, minTurnAngleDegrees);
   if (!mergeTargets.size) {
@@ -51,7 +53,8 @@ function chooseFirstTributary(map, rng) {
     && !cell.features.hillside
     && !cell.features.river
     && riverDistances[cell.id] >= minSourceRiverDistance
-    && cell.boundarySides.length === 1,
+    && cell.boundarySides.length === 1
+    && (!seaDistances || seaDistances[cell.id] <= maxSeaDistance),
   );
 
   const candidates = eligibleCells
@@ -80,6 +83,7 @@ function chooseFirstTributary(map, rng) {
             && !targetCell.features.river,
           startEntryPoint: candidate.sourcePoint,
           minTurnAngleDegrees,
+          maxSeaDistance,
         })
         : null,
     }))

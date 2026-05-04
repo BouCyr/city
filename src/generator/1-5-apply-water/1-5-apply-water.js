@@ -6,6 +6,8 @@
 
 import { centerBias, distanceToSide } from "../geometry.js";
 
+const SEA_BOUNDARY_VERTEX_MARGIN = 10;
+
 export function runApplyWaterStep(map, { rng }) {
   const nextMap = applyWaterClassification(map, rng);
   return {
@@ -62,6 +64,8 @@ export function applyWaterClassification(map, rng) {
       }
     });
   }
+
+  applySeaBoundaryVertexRule(map, selected, SEA_BOUNDARY_VERTEX_MARGIN, activeSides);
 
   const cells = map.cells.map((cell) => {
     const isSea = selected.has(cell.id);
@@ -120,4 +124,37 @@ function pressureFromSides(cell, map, waterPressureRangeRatio) {
 
   const nearest = Math.min(...distances);
   return 1 - Math.min(nearest / (map.meta.size * waterPressureRangeRatio), 1);
+}
+
+function applySeaBoundaryVertexRule(map, selected, margin, activeSides) {
+  const size = map.meta.size;
+  if (!Number.isFinite(size) || !Number.isFinite(margin) || margin <= 0 || !activeSides.length) {
+    return;
+  }
+
+  const sideSet = new Set(activeSides);
+
+  map.cells.forEach((cell) => {
+    if (selected.has(cell.id)) {
+      return;
+    }
+
+    const vertices = cell.polygon || [];
+    if (!vertices.length) {
+      return;
+    }
+
+    if (vertices.some((vertex) => isNearActiveSeaBoundary(vertex, size, margin, sideSet))) {
+      selected.add(cell.id);
+    }
+  });
+}
+
+function isNearActiveSeaBoundary(vertex, size, margin, activeSides) {
+  return (
+    (activeSides.has("west") && vertex.x < margin)
+    || (activeSides.has("east") && vertex.x > size - margin)
+    || (activeSides.has("north") && vertex.y < margin)
+    || (activeSides.has("south") && vertex.y > size - margin)
+  );
 }

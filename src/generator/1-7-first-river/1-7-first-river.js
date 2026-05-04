@@ -4,7 +4,7 @@
  * WHY: The first river should feel like the dominant drainage line of the map rather than an arbitrary source.
  */
 
-import { findCenterSeaLandPath } from "../river-path.js";
+import { computeSeaDistances, findCenterSeaLandPath } from "../river-path.js";
 import { attachRiverData, buildRiverLength, chooseRiverName, findSourceBoundaryMidpoint } from "../river-model.js";
 
 export function runFirstRiverStep(map, { rng }) {
@@ -27,11 +27,14 @@ export function runFirstRiverStep(map, { rng }) {
 
 function chooseFirstRiver(map, rng) {
   const minTurnAngleDegrees = map.init.params.riverTurnAngle ?? 90;
+  const maxSeaDistance = map.init.params.maxSeaDistance ?? 50;
+  const seaDistances = map.cells.some((cell) => cell.features.sea) ? computeSeaDistances(map.cells) : null;
   const eligibleCells = map.cells.filter((cell) =>
     cell.features.land
     && !cell.features.hill
     && !cell.features.hillside
-    && cell.boundarySides.length === 1,
+    && cell.boundarySides.length === 1
+    && (!seaDistances || seaDistances[cell.id] <= maxSeaDistance),
   );
 
   const candidates = eligibleCells
@@ -49,6 +52,7 @@ function chooseFirstRiver(map, rng) {
           map.meta.size,
           candidate.sourcePoint,
           minTurnAngleDegrees,
+          maxSeaDistance,
         )
         : null,
     }))

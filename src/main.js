@@ -85,6 +85,7 @@ const CONTROL_HELP_TEXT = {
   hillSeaDistance: "Minimum graph distance from sea required for a cell to qualify as a hill.",
   hillsideRadius: "How many neighbor rings around each hill are marked as hillside.",
   riverTurnAngle: "Minimum turn angle constraint while tracing rivers. Larger values enforce smoother paths.",
+  maxSeaDistance: "Maximum geometric distance from sea that river routing is allowed to reach. Lower values keep rivers coastal; higher values let them wander farther inland.",
   primaryRiverWidth: "Base render width for the primary river in meters before tributary merge adjustments.",
   tributarySourceRiverDistance: "Minimum distance between tributary source candidates and the primary river.",
   tributaryMergeSeaDistance: "Minimum upstream distance from sea/outlet before tributary merge is allowed.",

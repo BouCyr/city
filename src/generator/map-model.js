@@ -36,6 +36,7 @@ export function createInitialMap(options) {
         hillSeaDistance: options.hillSeaDistance,
         hillsideRadius: options.hillsideRadius,
         riverTurnAngle: options.riverTurnAngle,
+        maxSeaDistance: options.maxSeaDistance,
         primaryRiverWidth: options.primaryRiverWidth,
         tributarySourceRiverDistance: options.tributarySourceRiverDistance,
         tributaryMergeSeaDistance: options.tributaryMergeSeaDistance,
