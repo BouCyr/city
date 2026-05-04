@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coastline Process</title>
+  <title>River Smoothing Process</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -12,32 +12,26 @@
 <body>
   <main class="tutorial-shell">
     <section class="tutorial-toolbar panel">
-      <label class="tutorial-control">
-        <span class="field-title">Dataset</span>
-        <select id="datasetSelect">
-          <option value="threeCellIsland">Three-cell island</option>
-          <option value="northSouthCoastline">North-south coastline</option>
-        </select>
-      </label>
       <div class="tutorial-navigation">
         <button id="previousStepButton" class="secondary-button" type="button">Prev</button>
         <output id="stepCounter" class="tutorial-counter">1 / 1</output>
         <button id="nextStepButton" class="secondary-button" type="button">Next</button>
       </div>
       <a class="secondary-button tutorial-home-link" href="./index.html">Main map</a>
+      <a class="secondary-button tutorial-home-link" href="./coastline.html">Coastline smoothing</a>
     </section>
 
     <section class="tutorial-layout">
       <section class="tutorial-visual-panel panel">
-        <svg id="coastlineSvg" class="tutorial-svg coastline-svg" role="img" aria-label="Coastline process diagram"></svg>
+        <svg id="riverSvg" class="tutorial-svg river-svg" role="img" aria-label="River smoothing process diagram"></svg>
       </section>
       <aside class="tutorial-text-panel panel">
-        <p id="datasetKicker" class="tutorial-kicker">Three-cell island</p>
-        <h1 id="stepTitle">Coastline process</h1>
-        <p id="stepBody">Choose a dataset to inspect the smoothing process.</p>
+        <p id="datasetKicker" class="tutorial-kicker">Irregular river cells</p>
+        <h1 id="stepTitle">River smoothing process</h1>
+        <p id="stepBody">Inspect how an angular river path becomes sampled segment geometry.</p>
       </aside>
     </section>
   </main>
-  <script type="module" src="./src/coastline.js"></script>
+  <script type="module" src="./src/river.js"></script>
 </body>
 </html>

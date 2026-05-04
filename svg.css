@@ -238,36 +238,6 @@
   stroke-linecap: round;
 }
 
-.coastline-river-path {
-  fill: none;
-  stroke: rgba(11, 88, 180, 0.86);
-  stroke-width: 10;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.coastline-final-river-segment {
-  stroke: #0b58b4;
-  stroke-width: 7;
-  stroke-linecap: round;
-}
-
-.coastline-river-bezier-guide {
-  fill: none;
-  stroke: rgba(11, 88, 180, 0.78);
-  stroke-width: 7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.coastline-final-river-path {
-  fill: none;
-  stroke: #0b58b4;
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .coastline-midpoint circle {
   fill: #0b58b4;
 }
@@ -283,4 +253,77 @@
 
 .coastline-reconnect-point circle {
   fill: #c66a25;
+}
+
+.river-svg {
+  width: min(760px, 100%);
+  height: min(640px, calc(100vh - 150px));
+}
+
+.river-map-background {
+  fill: rgba(126, 187, 212, 0.28);
+  stroke: rgba(24, 33, 38, 0.34);
+  stroke-width: 3;
+}
+
+.river-land-cell {
+  fill: rgba(197, 220, 206, 0.74);
+  stroke: rgba(24, 33, 38, 0.16);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.river-grid-edge {
+  stroke: rgba(24, 33, 38, 0.34);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.river-muted-edge {
+  stroke: rgba(24, 33, 38, 0.12);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.river-raw-path {
+  fill: none;
+  stroke: rgba(11, 88, 180, 0.86);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.river-muted-path {
+  fill: none;
+  stroke: rgba(11, 88, 180, 0.2);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.river-bezier-guide {
+  fill: none;
+  stroke: rgba(11, 88, 180, 0.78);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.river-final-segment {
+  stroke: #0b58b4;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.river-midpoint circle {
+  fill: #0b58b4;
+}
+
+.river-control-point circle {
+  fill: #b92f2f;
+}
+
+.river-sample-point circle {
+  fill: #182126;
+  r: 4;
 }

@@ -1,35 +1,27 @@
 /*
- * WHAT: Drive the standalone coastline tutorial page.
- * HOW: Render frames from the same coastline trace builder used by step 1.9.
- * WHY: The smoothing step should be inspectable without running a full random map.
+ * WHAT: Drive the standalone river smoothing tutorial page.
+ * HOW: Render deterministic frames from an irregular cell grid and angular river path.
+ * WHY: River smoothing should be inspectable without mixing it into the coastline tutorial.
  */
 
 import {
-  COASTLINE_TUTORIAL_DATASETS,
-  DEFAULT_COASTLINE_DATASET,
-  buildCoastlineTutorialTrace,
-} from "./generator/1-9-build-coastline-geometry/1-9-coastline-trace.js";
+  DEFAULT_RIVER_TUTORIAL_DATASET,
+  buildRiverTutorialTrace,
+} from "./generator/river-smoothing-trace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const VIEWBOX_PADDING = 0;
 
-const datasetSelect = document.querySelector("#datasetSelect");
 const previousButton = document.querySelector("#previousStepButton");
 const nextButton = document.querySelector("#nextStepButton");
 const stepCounter = document.querySelector("#stepCounter");
 const stepTitle = document.querySelector("#stepTitle");
 const stepBody = document.querySelector("#stepBody");
 const datasetKicker = document.querySelector("#datasetKicker");
-const svg = document.querySelector("#coastlineSvg");
+const svg = document.querySelector("#riverSvg");
 
-let selectedDataset = DEFAULT_COASTLINE_DATASET;
-let trace = null;
+const trace = buildRiverTutorialTrace(DEFAULT_RIVER_TUTORIAL_DATASET);
 let stepIndex = 0;
 
-datasetSelect.addEventListener("change", () => {
-  selectedDataset = COASTLINE_TUTORIAL_DATASETS[datasetSelect.value] || DEFAULT_COASTLINE_DATASET;
-  rebuildTrace();
-});
 previousButton.addEventListener("click", () => {
   stepIndex = Math.max(0, stepIndex - 1);
   render();
@@ -39,17 +31,11 @@ nextButton.addEventListener("click", () => {
   render();
 });
 
-rebuildTrace();
-
-function rebuildTrace() {
-  trace = buildCoastlineTutorialTrace(selectedDataset);
-  stepIndex = 0;
-  render();
-}
+render();
 
 function render() {
   const current = trace.frames[stepIndex];
-  datasetKicker.textContent = selectedDataset.name;
+  datasetKicker.textContent = trace.dataset.name;
   stepTitle.textContent = current.title;
   stepBody.textContent = current.body;
   stepCounter.textContent = `${stepIndex + 1} / ${trace.frames.length}`;
@@ -60,12 +46,12 @@ function render() {
 
 function drawFrame(geometry) {
   svg.replaceChildren();
-  const size = selectedDataset.map.meta.size;
-  svg.setAttribute("viewBox", `${-VIEWBOX_PADDING} ${-VIEWBOX_PADDING} ${size + (VIEWBOX_PADDING * 2)} ${size + (VIEWBOX_PADDING * 2)}`);
+  const size = trace.dataset.size;
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
 
   const layer = createElement("g", { class: "tutorial-svg-layer" });
   layer.append(createElement("rect", {
-    class: "coastline-map-background",
+    class: "river-map-background",
     x: 0,
     y: 0,
     width: size,
@@ -73,31 +59,27 @@ function drawFrame(geometry) {
   }));
   (geometry.cells || []).forEach((cell) => {
     layer.append(createElement("polygon", {
-      class: cell.features.sea ? "coastline-sea-cell" : "coastline-land-cell",
+      class: "river-land-cell",
       points: toSvgPoints(cell.polygon),
     }));
   });
-  (geometry.lots || []).forEach((lot) => {
-    layer.append(createElement("polygon", {
-      class: lot.features.sea ? "coastline-final-sea-lot" : "coastline-final-land-lot",
-      points: toSvgPoints(lot.polygon),
-    }));
-  });
   (geometry.edges || []).forEach((edge) => {
-    layer.append(createLine(edge.from, edge.to, edge.className || "coastline-raw-edge"));
+    layer.append(createLine(edge.from, edge.to, edge.className || "river-grid-edge"));
   });
-  (geometry.segments || []).forEach((segment) => {
-    layer.append(createLine(
-      segment.from,
-      segment.to,
-      segment.features.coast ? "coastline-final-coast-segment" : "coastline-final-segment",
-    ));
+  (geometry.rawPaths || []).forEach((path) => {
+    layer.append(createElement("polyline", {
+      class: path.className || "river-raw-path",
+      points: toSvgPoints(path.points),
+    }));
   });
   (geometry.curves || []).forEach((curve) => {
     layer.append(createElement("polyline", {
-      class: curve.className || "coastline-bezier-guide",
+      class: curve.className || "river-bezier-guide",
       points: toSvgPoints(curve.points),
     }));
+  });
+  (geometry.segments || []).forEach((segment) => {
+    layer.append(createLine(segment.from, segment.to, segment.className || "river-final-segment"));
   });
   (geometry.points || []).forEach((item) => {
     layer.append(createPoint(item));
