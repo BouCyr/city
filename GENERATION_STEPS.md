@@ -18,8 +18,9 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.10 Land edges
 1.11 River splits
 2. Human occupation
-2.1 Parish clustering
-2.2 Lot tessellation
+2.1 Route graph
+2.2 Parish clustering
+2.3 Lot tessellation
 
 ## Geometry Rules
 
@@ -471,16 +472,54 @@ Rules:
 - River segments are canonical `segments`; they are not stored again in a river-specific output field.
 - Lot adjacency and segment ownership are rebuilt from the new polygons.
 
-## 2.1 Parish Clustering
+## 2.1 Route Graph
 
-Source: `src/generator/2-1-group-lots/2-1-group-lots.js`
+Source: `src/generator/2-1-build-route-graph/2-1-build-route-graph.js`
 
 Function input:
 
 ```js
 {
   lots: [{ id: 0, centroid: { x: 100, y: 100 }, features: { land: true, sea: false }, ... }, ...],
-  segments: [{ id: "segment:0", leftLotId: 0, rightLotId: 1, features: { river: false }, ... }, ...],
+  vertices: [{ id: 0, x: 10, y: 20, segmentIds: ["segment:0"], features: { ... } }, ...],
+  segments: [{ id: "segment:0", from: { x: 10, y: 20 }, to: { x: 30, y: 20 }, leftLotId: 0, rightLotId: 1, features: { river: false }, ... }, ...]
+}
+```
+
+Function output:
+
+```js
+{
+  routeGraph: {
+    nodes: [{ id: 0, x: 10, y: 20, routeIds: ["route:0"], type: "road", sourceVertexIds: [4] }, ...],
+    routes: [{ id: "route:0", fromNodeId: 0, toNodeId: 1, type: "road", sourceSegmentId: "segment:0", leftLotId: 0, rightLotId: 1, ... }, ...]
+  }
+}
+```
+
+Rules:
+- Segment endpoints are deduplicated into graph nodes.
+- Existing canonical segments are preserved and each valid segment becomes one route.
+- Route types are `road`, `coast`, `river`, `sea`, and later `alley`.
+- `road` routes are land-to-land non-river segments.
+- `coast` routes are land/sea boundaries.
+- `river` routes are river segments between land geometry.
+- `sea` routes are pure sea segments.
+- Node types are derived from linked routes.
+- `river_mouth` nodes are linked to a river route and a sea or coast route.
+- `river_crossing` nodes are linked to river and road routes.
+- Legacy `vertices` and `segments` remain in the map for renderer compatibility.
+
+## 2.2 Parish Clustering
+
+Source: `src/generator/2-2-group-lots/2-2-group-lots.js`
+
+Function input:
+
+```js
+{
+  lots: [{ id: 0, centroid: { x: 100, y: 100 }, features: { land: true, sea: false }, ... }, ...],
+  routeGraph: { routes: [{ id: "route:0", leftLotId: 0, rightLotId: 1, type: "road", ... }, ...] },
   init: { params: { parishCount: 10, stepAlgorithms: { parishClustering: "euclidean_centroids" } } }
 }
 ```
@@ -497,13 +536,13 @@ Function output:
 Rules:
 - Land lots are grouped into exactly `parishCount` clusters (if enough lots exist).
 - `euclidean_centroids` uses standard k-means on lot centroids.
-- `graph_edge_length` uses k-medoids on the lot adjacency graph. Edge weights are distances from centroids to shared boundary midpoints.
+- `graph_edge_length` uses k-medoids on the route graph. Edge weights are distances from centroids to route midpoints.
 - `graph_river_penalty` doubles the edge weight if the lots are separated by a river.
 - Parishes are colored greedily to avoid adjacent parishes sharing the same color index from the generated HSL palette.
 
-## 2.2 Lot Tessellation
+## 2.3 Lot Tessellation
 
-Source: `src/generator/2-2-tessellate-lots/2-2-tessellate-lots.js`
+Source: `src/generator/2-3-tessellate-lots/2-3-tessellate-lots.js`
 
 Function input:
 
@@ -528,7 +567,8 @@ Function output:
   tessellation: {
     vertices: [{ id: 0, x: 10, y: 20 }, ...],
     sublots: [{ id: 0, lotId: 0, vertexIds: [0, 1, 2], centroid: { x: 20, y: 30 }, area: 100, neighborSublotIds: [1], neighborLotIds: [4], features: { land: true, sea: false } }, ...]
-  }
+  },
+  routeGraph: { nodes: [...], routes: [{ type: "alley", leftSublotId: 0, rightSublotId: 1, ... }, ...] }
 }
 ```
 
@@ -548,3 +588,5 @@ Rules:
 - Sublot neighbours are stored separately as `neighborSublotIds` and `neighborLotIds`.
 - Sublots reuse lot-boundary geometry; they do not go back to Voronoi cells.
 - Split lots receive `sublotIds` and an inline `sublots` list; unsplit lots keep both lists empty.
+- Shared edges between final leaf sublots are appended to `routeGraph.routes` as `alley` routes.
+- Alley route endpoints reuse existing graph nodes when their coordinates match, otherwise they create new nodes.

@@ -1,14 +1,14 @@
 /*
  * WHAT: Build human-readable tutorial frames for the lot tessellation algorithms.
- * HOW: Reuse the same split path builders as step 2.1 while recording the intermediate geometry.
+ * HOW: Reuse the same split path builders as lot tessellation while recording the intermediate geometry.
  * WHY: The illustration page should explain the real algorithm without duplicating renderer-only logic.
  */
 
 import { Delaunay } from "../../lib/d3-delaunay/index.js";
 import { clonePoint, pointDistance } from "../map-model.js";
 import { createSeededRandom } from "../random.js";
-import { inspectCurvedBisection } from "./2-2-curved-bisection.js";
-import { splitLotPolygonRecursively } from "./2-2-tessellate-lots.js";
+import { inspectCurvedBisection } from "./2-3-curved-bisection.js";
+import { splitLotPolygonRecursively } from "./2-3-tessellate-lots.js";
 
 const EPSILON = 0.0001;
 const POISSON_SPACING_RATIO = 0.95;

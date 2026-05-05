@@ -90,7 +90,7 @@ const CONTROL_HELP_TEXT = {
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   parishAlgorithm: "Select the clustering algorithm for parishes. Euclidean centroids uses standard k-means. Graph edge length uses k-medoids on the lot graph. Graph river penalty doubles the travel distance when crossing a river.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
-  tessellateAlgorithm: "Choose how step 2.2 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
+  tessellateAlgorithm: "Choose how step 2.3 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
 };
 
 bindFormInteractions(form);

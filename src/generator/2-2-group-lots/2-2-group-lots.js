@@ -14,7 +14,7 @@ export function runGroupLotsStep(map, { rng }) {
   if (landLots.length === 0) {
     return {
       map,
-      frameEntries: [{ label: "Step 2.1 / Parish clustering", map }]
+      frameEntries: [{ label: "Step 2.2 / Parish clustering", map }]
     };
   }
 
@@ -46,7 +46,7 @@ export function runGroupLotsStep(map, { rng }) {
 
   return {
     map: nextMap,
-    frameEntries: [{ label: "Step 2.1 / Parish clustering", map: nextMap }]
+    frameEntries: [{ label: "Step 2.2 / Parish clustering", map: nextMap }]
   };
 }
 
@@ -251,20 +251,23 @@ function buildLotGraph(map, landLots, algorithm) {
   const n = landLots.length;
   const adj = Array.from({ length: n }, () => []);
 
-  map.segments.forEach(segment => {
-    const l1 = segment.leftLotId;
-    const r1 = segment.rightLotId;
+  const routeGraphRoutes = map.routeGraph?.routes || [];
+  const graphRoutes = routeGraphRoutes.length ? routeGraphRoutes : map.segments || [];
+
+  graphRoutes.forEach(route => {
+    const l1 = route.leftLotId;
+    const r1 = route.rightLotId;
     if (lotIdToIndex.has(l1) && lotIdToIndex.has(r1)) {
       const i = lotIdToIndex.get(l1);
       const j = lotIdToIndex.get(r1);
       const lotA = landLots[i];
       const lotB = landLots[j];
       
-      const mid = segment.midpoint;
+      const mid = route.midpoint;
       // "distance between centroid and edge vertices computed by euclidean distance"
       let weight = pointDistance(lotA.centroid, mid) + pointDistance(mid, lotB.centroid);
       
-      if (algorithm === "graph_river_penalty" && segment.features?.river) {
+      if (algorithm === "graph_river_penalty" && (route.type === "river" || route.features?.river)) {
         weight *= 2;
       }
       

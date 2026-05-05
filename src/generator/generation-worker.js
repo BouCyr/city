@@ -165,10 +165,14 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 10:
       return {
+        routeGraph: "segments",
+      };
+    case 11:
+      return {
         parishAlgorithm: options.stepAlgorithms?.parishClustering || "euclidean_centroids",
         parishCount: options.parishCount,
       };
-    case 11:
+    case 12:
       return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,

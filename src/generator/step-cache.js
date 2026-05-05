@@ -64,6 +64,15 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 10:
       return stableSignature({
+        routeGraph: "segments",
+      });
+    case 11:
+      return stableSignature({
+        parishAlgorithm: options.stepAlgorithms?.parishClustering || "euclidean_centroids",
+        parishCount: options.parishCount,
+      });
+    case 12:
+      return stableSignature({
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         splitSegmentLength: "default",
       });

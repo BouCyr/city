@@ -1,6 +1,6 @@
 /*
  * WHAT: Split land lots into deterministic leaf sublots.
- * HOW: Use the selected step 2.1 algorithm to either recurse with balanced bisections or
+ * HOW: Use the selected tessellation algorithm to either recurse with balanced bisections or
  *      scatter lot-local Poisson points and clip a Voronoi tessellation to the lot boundary.
  * WHY: Both algorithms must preserve the same tessellation output contract for replay and hover UI.
  */
@@ -11,12 +11,13 @@ import {
   clonePoint,
   pointDistance,
 } from "../map-model.js";
-import { buildCurvedBisectionSplitPath } from "./2-2-curved-bisection.js";
-import { buildStraightBisectionSplitPath } from "./2-2-straight-bisection.js";
+import { addAlleyRoutesToRouteGraph } from "../route-graph.js";
+import { buildCurvedBisectionSplitPath } from "./2-3-curved-bisection.js";
+import { buildStraightBisectionSplitPath } from "./2-3-straight-bisection.js";
 
 export function runTessellateLotsStep(map, { rng, onProgress = null }) {
   if (!Array.isArray(map.lots) || !map.lots.length) {
-        const label = "Step 2.2 / Lot tessellation";
+        const label = "Step 2.3 / Lot tessellation";
         return {
           map,
           frameEntries: [
@@ -45,7 +46,7 @@ export function runTessellateLotsStep(map, { rng, onProgress = null }) {
       sublots: progress.sublots.map((sublot) => cloneSublot(sublot)),
     };
     onProgress({
-      label: `Step 2.2 / Lot tessellation (${progress.completed}/${progress.total})`,
+      label: `Step 2.3 / Lot tessellation (${progress.completed}/${progress.total})`,
       map: buildTessellatedMap(map, progressTessellation),
       progress: {
         completed: progress.completed,
@@ -59,7 +60,7 @@ export function runTessellateLotsStep(map, { rng, onProgress = null }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 2.2 / Lot tessellation",
+        label: "Step 2.3 / Lot tessellation",
         map: nextMap,
       },
     ],
@@ -168,7 +169,7 @@ function buildTessellatedMap(map, tessellation) {
     sublotsByLotId.set(sublot.lotId, sublots);
   });
 
-  return {
+  const mapWithSublots = {
     ...map,
     lots: map.lots.map((lot) => ({
       ...lot,
@@ -176,6 +177,11 @@ function buildTessellatedMap(map, tessellation) {
       sublots: sublotsByLotId.get(lot.id) || [],
     })),
     tessellation,
+  };
+
+  return {
+    ...mapWithSublots,
+    routeGraph: addAlleyRoutesToRouteGraph(mapWithSublots, tessellation),
   };
 }
 
