@@ -6,6 +6,7 @@
 
 import { getMapGeometry } from "../generator/map-model.js";
 import { computeSeaDistances } from "../generator/river-path.js";
+import { Delaunay } from "../lib/d3-delaunay/index.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const GRID_DIVISIONS = 12;
@@ -156,16 +157,19 @@ function createRouteGraphNodesGroup(map) {
     "pointer-events": "all",
   });
 
-  map.routeGraph.nodes.filter(isInteractiveRouteNode).forEach((node) => {
+  const nodes = map.routeGraph.nodes.filter(isInteractiveRouteNode);
+  createRouteNodeVoronoiHitPolygons(nodes, map.meta?.size).forEach((hitPolygon) => {
     hitGroup.append(
-      createElement("circle", {
-        cx: node.x,
-        cy: node.y,
-        r: 13,
+      createElement("polygon", {
+        points: toSvgPoints(hitPolygon.points),
         fill: COLORS.routeNodeHit,
-        "data-route-node-id": node.id,
+        opacity: 0,
+        "data-route-node-id": hitPolygon.nodeId,
       }),
     );
+  });
+
+  nodes.forEach((node) => {
     visualGroup.append(
       createElement("circle", {
         cx: node.x,
@@ -181,6 +185,46 @@ function createRouteGraphNodesGroup(map) {
 
   group.append(visualGroup, hitGroup);
   return group;
+}
+
+function createRouteNodeVoronoiHitPolygons(nodes, size) {
+  const boundsSize = Number.isFinite(size) ? size : 3000;
+  if (!nodes.length) {
+    return [];
+  }
+
+  const delaunay = Delaunay.from(nodes.map((node) => [node.x, node.y]));
+  const voronoi = delaunay.voronoi([0, 0, boundsSize, boundsSize]);
+  return nodes.map((node, index) => {
+    const points = sanitizeVoronoiCell(voronoi.cellPolygon(index));
+    return points.length >= 3
+      ? { nodeId: node.id, points }
+      : { nodeId: node.id, points: createFallbackHitSquare(node) };
+  });
+}
+
+function sanitizeVoronoiCell(cell) {
+  if (!Array.isArray(cell)) {
+    return [];
+  }
+
+  const points = cell
+    .map((point) => ({ x: point[0], y: point[1] }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+  if (points.length > 1 && samePoint(points[0], points[points.length - 1])) {
+    points.pop();
+  }
+  return points;
+}
+
+function createFallbackHitSquare(node) {
+  const radius = 18;
+  return [
+    { x: node.x - radius, y: node.y - radius },
+    { x: node.x + radius, y: node.y - radius },
+    { x: node.x + radius, y: node.y + radius },
+    { x: node.x - radius, y: node.y + radius },
+  ];
 }
 
 function routeNodeRadius(node) {

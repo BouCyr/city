@@ -5,7 +5,7 @@
  */
 
 const CROSSING_NODE_TYPE = "river_crossing";
-const DEFAULT_CROSSING_PENALTY = 50;
+const DEFAULT_CROSSING_PENALTY = 500;
 const TRAVERSABLE_ROUTE_TYPE = "road";
 const INVALID_LAND_NODE_TYPES = new Set(["sea", "coast", "river_mouth", "river"]);
 
@@ -37,9 +37,10 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
   }
   if (startId === targetId) {
     const node = nodesById.get(startId);
-    return node ? { nodeIds: [startId], routeIds: [], distance: 0, points: [node] } : null;
+    return node ? { nodeIds: [startId], routeIds: [], distance: 0, actualLength: 0, crossingCost: 0, points: [node] } : null;
   }
 
+  const routesById = new Map((routeGraph.routes || []).map((route) => [route.id, route]));
   const adjacency = buildRoadAdjacency(routeGraph);
   const distances = new Map([[startId, 0]]);
   const previous = new Map();
@@ -95,10 +96,14 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
   nodeIds.reverse();
   routeIds.reverse();
 
+  const distance = distances.get(targetId) ?? Infinity;
+  const actualLength = routeIds.reduce((sum, routeId) => sum + (routesById.get(routeId)?.length || 0), 0);
   return {
     nodeIds,
     routeIds,
-    distance: distances.get(targetId) ?? Infinity,
+    distance,
+    actualLength,
+    crossingCost: distance - actualLength,
     points: nodeIds.map((nodeId) => nodesById.get(nodeId)).filter(Boolean),
   };
 }

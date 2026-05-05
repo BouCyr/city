@@ -45,7 +45,7 @@ const ROUTE_START_FILL = "#e6382e";
 const ROUTE_START_STROKE = "#fff7e1";
 const RIVER_PREVIEW_STEP_INDEX = 4;
 const ROUTE_GRAPH_STEP_INDEX = 10;
-const ROUTE_CROSSING_PENALTY = 50;
+const DEFAULT_ROUTE_CROSSING_PENALTY = 500;
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
@@ -106,6 +106,7 @@ const CONTROL_HELP_TEXT = {
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   parishAlgorithm: "Select the clustering algorithm for parishes. Euclidean centroids uses standard k-means. Graph edge length uses k-medoids on the lot graph. Graph river penalty doubles the travel distance when crossing a river.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
+  routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node.",
   tessellateAlgorithm: "Choose how step 2.3 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
 };
 
@@ -115,6 +116,11 @@ applyViewport();
 
 for (const field of form.elements) {
   if (!(field instanceof HTMLElement) || !field.name) {
+    continue;
+  }
+  if (field.name === "routeCrossingCost") {
+    field.addEventListener("input", refreshRouteNodeHover);
+    field.addEventListener("change", refreshRouteNodeHover);
     continue;
   }
 
@@ -658,6 +664,17 @@ function clearHoverState() {
     : "Hover a lot or river to inspect its data.";
 }
 
+function refreshRouteNodeHover() {
+  if (!isRouteGraphInteractionFrame() || hoveredRouteNodeId === null) {
+    return;
+  }
+
+  const node = findRouteGraphNode(currentFrame.map.routeGraph, hoveredRouteNodeId);
+  if (node) {
+    renderHoveredRouteNode(node);
+  }
+}
+
 /**
  * WHAT: Zoom the SVG viewBox around a focus point while keeping the viewport inside map bounds.
  * HOW: Convert the desired zoom factor into a new viewBox rectangle anchored at the pointer or viewport center.
@@ -944,7 +961,7 @@ function renderHoveredRouteNode(node) {
 
   const isLandNode = isLandRouteNode(routeGraph, node);
   const path = startRouteNodeId !== null && isLandNode
-    ? findShortestLandRoutePath(routeGraph, startRouteNodeId, node.id, { crossingPenalty: ROUTE_CROSSING_PENALTY })
+    ? findShortestLandRoutePath(routeGraph, startRouteNodeId, node.id, { crossingPenalty: getRouteCrossingPenalty() })
     : null;
   drawRoutePathOverlay(path);
   drawStartRouteNodeOverlay();
@@ -957,7 +974,10 @@ function renderHoveredRouteNode(node) {
     createCellDataRow("Land node", isLandNode ? "yes" : "no"),
     createCellDataRow("START", startRouteNodeId === node.id ? "set here" : startRouteNodeId === null ? "not set" : `node ${startRouteNodeId}`),
     startRouteNodeId !== null && node.id !== startRouteNodeId
-      ? createCellDataRow("Path", path ? formatDistanceMeters(path.distance) : "no road path")
+      ? createCellDataRow("Path length", path ? formatDistanceMeters(path.actualLength) : "no road path")
+      : "",
+    startRouteNodeId !== null && node.id !== startRouteNodeId && path
+      ? createCellDataRow("Weighted path", formatDistanceMeters(path.distance))
       : "",
   ].join("");
 }
@@ -1338,6 +1358,15 @@ function shouldShowRiverPreview() {
 
 function isRouteGraphInteractionFrame(frame = currentFrame) {
   return Boolean(frame && frame.type === "map" && frame.stepIndex === ROUTE_GRAPH_STEP_INDEX && frame.map?.routeGraph);
+}
+
+function getRouteCrossingPenalty() {
+  const field = form.elements.namedItem("routeCrossingCost");
+  if (!(field instanceof HTMLInputElement)) {
+    return DEFAULT_ROUTE_CROSSING_PENALTY;
+  }
+  const value = Number(field.value);
+  return Number.isFinite(value) ? Math.min(Math.max(value, 0), 1500) : DEFAULT_ROUTE_CROSSING_PENALTY;
 }
 
 function resetRouteNodeInteractionState() {

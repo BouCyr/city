@@ -19,6 +19,7 @@ const RANGE_FIELDS = [
   "primaryRiverTurnAngleDegrees",
   "tributaryRiverTurnAngleDegrees",
   "parishCount",
+  "routeCrossingCost",
 ];
 const WATER_SIDE_NAMES = ["north", "east", "south", "west"];
 const DEFAULT_SEED = "city-seed";
@@ -44,6 +45,7 @@ const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
 const DEFAULT_PARISH_COUNT = 10;
 const DEFAULT_PARISH_ALGORITHM = "euclidean_centroids";
+const DEFAULT_ROUTE_CROSSING_COST = 500;
 
 /**
  * WHAT: Attach the live form behaviors that keep visible values in sync.
@@ -135,6 +137,7 @@ export function readFormState(form) {
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 12),
     parishCount: normalizeInteger(Number(data.get("parishCount") || DEFAULT_PARISH_COUNT), 3, 25),
+    routeCrossingCost: normalizeInteger(Number(data.get("routeCrossingCost") || DEFAULT_ROUTE_CROSSING_COST), 0, 1500),
     waterSides,
   };
 }
