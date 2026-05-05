@@ -5,15 +5,20 @@
  */
 
 import { DEFAULT_SEGMENT_LENGTH, convertLotGeometryToLandEdgeGeometry } from "../map-model.js";
+import { buildRouteGraph } from "../route-graph.js";
 
 export function runBuildLandEdgeGeometryStep(map) {
-  const nextMap = convertLotGeometryToLandEdgeGeometry(map, DEFAULT_SEGMENT_LENGTH * 2);
+  const geometryMap = convertLotGeometryToLandEdgeGeometry(map, DEFAULT_SEGMENT_LENGTH * 2);
+  const nextMap = {
+    ...geometryMap,
+    routeGraph: buildRouteGraph(geometryMap),
+  };
 
   return {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 1.10 / Land edges",
+        label: "Step 2.3 / Land edges",
         map: nextMap,
       },
     ],

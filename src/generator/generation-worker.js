@@ -157,21 +157,22 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 8:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 9:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
-      };
-    case 10:
-      return {
         routeGraph: "segments",
       };
-    case 11:
+    case 10:
       return {
         parishCount: options.parishCount,
         routeCrossingCost: options.routeCrossingCost,
         routeDistanceModel: "road-length-x3-plus-crossing-cost",
+      };
+    case 11:
+      return {
+        segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
+        routeGraph: "rebuilt-after-segmentation",
       };
     case 12:
       return {

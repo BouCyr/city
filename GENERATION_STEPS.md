@@ -15,12 +15,12 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.7 Primary river
 1.8 River branch
 1.9 Coastline mesh
-1.10 Land edges
-1.11 River splits
+1.10 River splits
 2. Human occupation
 2.1 Route graph
 2.2 Parish clustering
-2.3 Lot tessellation
+2.3 Land edges
+2.4 Field dispatch
 
 ## Geometry Rules
 
@@ -427,41 +427,9 @@ Rules:
 - Segment and vertex features are limited to lot-stage surface data such as `coast`, `land`, `sea`, and later `riverside`.
 - Cell geometry is removed from the output; later work uses lots only.
 
-## 1.10 Build Land-Edge Geometry
+## 1.10 Add Rivers To Lot Geometry
 
-Source: `src/generator/1-10-build-land-edge-geometry/1-10-build-land-edge-geometry.js`
-
-Function input:
-
-```js
-{
-  lots: [{ id: 0, polygon: [...], segmentIds: [...], features: { land: true, river: true } }, ...],
-  vertices: [{ id: 0, features: { riverside: false, ... } }, ...],
-  segments: [{ id: "...", features: { riverside: false, river: false, ... } }, ...],
-  river: { primary: { points: [...] }, secondary: { points: [...] } },
-  rivers: [{ points: [...] }, ...]
-}
-```
-
-Function output:
-
-```js
-{
-  lots: [{ id: 0, polygon: [{ x: 10, y: 20 }, ...], vertexIds: [...], segmentIds: [...], neighborLotIds: [...] }, ...],
-  vertices: [{ id: 22, x: 150, y: 300, segmentIds: ["segment:88"], features: { riverside: true, coast: false, land: true, sea: false } }, ...],
-  segments: [{ id: "segment:88", fromVertexId: 22, toVertexId: 23, features: { river: true, riverside: true, land: true, coast: false, sea: false } }, ...]
-}
-```
-
-Rules:
-- Coastline segments from step 1.9 are preserved.
-- Pure sea segments are preserved as single unchanged segments.
-- Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
-- Lot adjacency, vertex dedupe, and segment ownership are rebuilt from the normalized geometry.
-
-## 1.11 Add Rivers To Lot Geometry
-
-Source: `src/generator/1-11-add-rivers-to-lot-geometry/1-11-add-rivers-to-lot-geometry.js`
+Source: `src/generator/1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js`
 
 Rules:
 - River path bends are smoothed with the same midpoint-control-point Bezier-style construction used for coastline corners.
@@ -520,7 +488,7 @@ Function input:
 {
   lots: [{ id: 0, centroid: { x: 100, y: 100 }, features: { land: true, sea: false }, ... }, ...],
   routeGraph: { routes: [{ id: "route:0", leftLotId: 0, rightLotId: 1, type: "road", ... }, ...] },
-  init: { params: { parishCount: 10, stepAlgorithms: { parishClustering: "euclidean_centroids" } } }
+  init: { params: { parishCount: 15, routeCrossingCost: 1500 } }
 }
 ```
 
@@ -529,20 +497,31 @@ Function output:
 ```js
 {
   lots: [{ id: 0, parishId: 3, ... }, ...],
-  parishColors: ["hsla(0, 60%, 70%, 0.4)", ...]
+  parishColors: ["hsla(0, 60%, 70%, 0.4)", ...],
+  parishCenters: [{ parishId: 0, lotId: 12, nodeId: 88, x: 100, y: 200, centroid: { x: 95, y: 205 } }, ...]
 }
 ```
 
 Rules:
 - Land lots are grouped into exactly `parishCount` clusters (if enough lots exist).
-- `euclidean_centroids` uses standard k-means on lot centroids.
-- `graph_edge_length` uses k-medoids on the route graph. Edge weights are distances from centroids to route midpoints.
-- `graph_river_penalty` doubles the edge weight if the lots are separated by a river.
+- `route_growth` picks graph-spread seeds and grows parishes by weighted route distance.
+- Road route length is weighted by 3 and intermediate river crossings add `routeCrossingCost`.
+- Parish centers identify the nearest central lot and route node for display.
 - Parishes are colored greedily to avoid adjacent parishes sharing the same color index from the generated HSL palette.
 
-## 2.3 Lot Tessellation
+## 2.3 Build Land-Edge Geometry
 
-Source: `src/generator/2-3-tessellate-lots/2-3-tessellate-lots.js`
+Source: `src/generator/2-3-build-land-edge-geometry/2-3-build-land-edge-geometry.js`
+
+Rules:
+- Coastline and sea segments are preserved.
+- Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
+- Lot polygons, vertex ids, segment ids, and adjacency are rebuilt from the normalized geometry.
+- `routeGraph` is rebuilt from the updated canonical segments.
+
+## 2.4 Field Dispatch
+
+Source: `src/generator/2-4-field-dispatch/2-4-field-dispatch.js`
 
 Function input:
 

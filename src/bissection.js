@@ -4,7 +4,7 @@
  * WHY: The page explains the actual tessellation algorithms without depending on the full map UI.
  */
 
-import { buildBisectionTutorialTrace, TUTORIAL_LOT, TUTORIAL_LOTS } from "./generator/2-3-tessellate-lots/2-3-bisection-trace.js";
+import { buildBisectionTutorialTrace, TUTORIAL_LOT, TUTORIAL_LOTS } from "./generator/2-4-field-dispatch/2-4-bisection-trace.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEWBOX_PADDING = 80;

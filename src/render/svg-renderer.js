@@ -19,8 +19,8 @@ const RIVER_INNER_WIDTH_REDUCTION = 4;
 const PRIMARY_RIVER_STEP_INDEX = 5;
 const RIVER_BRANCH_STEP_INDEX = 6;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
-const ROUTE_GRAPH_STEP_INDEX = 10;
-const PARISH_CLUSTERING_STEP_INDEX = 11;
+const ROUTE_GRAPH_STEP_INDEX = 9;
+const PARISH_CLUSTERING_STEP_INDEX = 10;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -135,6 +135,7 @@ function createMapLayer(map) {
     useCanonicalRiverGeometry
       ? createElement("g")
       : createRiversGroup(map.rivers || [], segments),
+    createParishCentersGroup(map),
     createRouteGraphNodesGroup(map),
   );
 
@@ -143,6 +144,34 @@ function createMapLayer(map) {
   }
 
   return layer;
+}
+
+function createParishCentersGroup(map) {
+  const group = createElement("g", {
+    "pointer-events": "none",
+  });
+  if ((map.meta?.stepIndex ?? -1) !== PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.parishCenters)) {
+    return group;
+  }
+
+  map.parishCenters.forEach((center) => {
+    group.append(
+      createElement("circle", {
+        cx: center.x,
+        cy: center.y,
+        r: 30,
+        fill: center.color || "#18232b",
+        stroke: "none",
+        "stroke-width": 7,
+        opacity: 0.92,
+        "data-parish-id": center.parishId,
+        "data-center-lot-id": center.lotId,
+        "data-center-node-id": center.nodeId ?? "",
+      }),
+    );
+  });
+
+  return group;
 }
 
 function createRouteGraphNodesGroup(map) {

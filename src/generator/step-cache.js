@@ -60,17 +60,18 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 9:
       return stableSignature({
-        segmentLength: "default",
-      });
-    case 10:
-      return stableSignature({
         routeGraph: "segments",
       });
-    case 11:
+    case 10:
       return stableSignature({
         parishCount: options.parishCount,
         routeCrossingCost: options.routeCrossingCost,
         routeDistanceModel: "road-length-x3-plus-crossing-cost",
+      });
+    case 11:
+      return stableSignature({
+        segmentLength: "default",
+        routeGraph: "rebuilt-after-segmentation",
       });
     case 12:
       return stableSignature({

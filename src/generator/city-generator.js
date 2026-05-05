@@ -11,11 +11,11 @@ import { runApplyWaterStep } from "./1-5-apply-water/1-5-apply-water.js";
 import { runFirstRiverStep } from "./1-7-first-river/1-7-first-river.js";
 import { runFirstTributaryStep } from "./1-8-first-tributary/1-8-first-tributary.js";
 import { runBuildCoastlineGeometryStep } from "./1-9-build-coastline-geometry/1-9-build-coastline-geometry.js";
-import { runBuildLandEdgeGeometryStep } from "./1-10-build-land-edge-geometry/1-10-build-land-edge-geometry.js";
-import { runAddRiversToLotGeometryStep } from "./1-11-add-rivers-to-lot-geometry/1-11-add-rivers-to-lot-geometry.js";
+import { runAddRiversToLotGeometryStep } from "./1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js";
 import { runBuildRouteGraphStep } from "./2-1-build-route-graph/2-1-build-route-graph.js";
 import { runGroupLotsStep } from "./2-2-group-lots/2-2-group-lots.js";
-import { runTessellateLotsStep } from "./2-3-tessellate-lots/2-3-tessellate-lots.js";
+import { runBuildLandEdgeGeometryStep } from "./2-3-build-land-edge-geometry/2-3-build-land-edge-geometry.js";
+import { runFieldDispatchStep } from "./2-4-field-dispatch/2-4-field-dispatch.js";
 import { runRelaxPointsStep } from "./1-3-relax-points/1-3-relax-points.js";
 import { runScatterPointsStep } from "./1-1-scatter-points/1-1-scatter-points.js";
 import { runCollapseShortEdgesStep } from "./1-4-collapse-short-edges/1-4-collapse-short-edges.js";
@@ -30,11 +30,11 @@ const GENERATION_PIPELINE = [
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },
   { status: "Coastlines", run: runBuildCoastlineGeometryStep },
-  { status: "Land edges", run: runBuildLandEdgeGeometryStep },
   { status: "River Lots", run: runAddRiversToLotGeometryStep },
   { status: "Route graph", run: runBuildRouteGraphStep },
   { status: "Parishes", run: runGroupLotsStep },
-  { status: "Tessellation", run: runTessellateLotsStep },
+  { status: "Land edges", run: runBuildLandEdgeGeometryStep },
+  { status: "Field dispatch", run: runFieldDispatchStep },
 ];
 
 export async function generateCity(options, stepTracker) {

@@ -18,7 +18,7 @@ export function runGroupLotsStep(map) {
     };
   }
 
-  const k = Math.min(landLots.length, map.init?.params?.parishCount || 10);
+  const k = Math.min(landLots.length, map.init?.params?.parishCount || 15);
   const clusters = runRouteGraphClustering(map, landLots, k);
 
   const nextLots = lots.map(lot => {
@@ -30,11 +30,13 @@ export function runGroupLotsStep(map) {
   });
 
   const parishColors = assignParishColors(nextLots, k);
+  const parishCenters = computeParishCenters(map, nextLots, clusters, parishColors);
 
   const nextMap = {
     ...map,
     lots: nextLots,
-    parishColors
+    parishColors,
+    parishCenters,
   };
 
   return {
@@ -172,6 +174,7 @@ function buildLotGraph(map, landLots) {
   const routeGraphRoutes = routeGraph?.routes || [];
   const graphRoutes = routeGraphRoutes.length ? routeGraphRoutes : map.segments || [];
   const nodesById = new Map((routeGraph?.nodes || []).map((node) => [node.id, node]));
+  const routesById = new Map(routeGraphRoutes.map((route) => [route.id, route]));
   const crossingPenalty = map.init?.params?.routeCrossingCost ?? getDefaultRouteCrossingPenalty();
 
   graphRoutes.forEach(route => {
@@ -193,7 +196,41 @@ function buildLotGraph(map, landLots) {
       adj[j].push({ to: i, weight });
     }
   });
+
+  connectRiverCrossingLots(adj, lotIdToIndex, nodesById, routesById, crossingPenalty);
   return adj;
+}
+
+function connectRiverCrossingLots(adj, lotIdToIndex, nodesById, routesById, crossingPenalty) {
+  nodesById.forEach((node) => {
+    if (node.type !== "river_crossing") {
+      return;
+    }
+
+    const lotIndices = new Set();
+    (node.routeIds || []).forEach((routeId) => {
+      const route = routesById.get(routeId);
+      if (!route || route.type !== "road") {
+        return;
+      }
+      if (lotIdToIndex.has(route.leftLotId)) {
+        lotIndices.add(lotIdToIndex.get(route.leftLotId));
+      }
+      if (lotIdToIndex.has(route.rightLotId)) {
+        lotIndices.add(lotIdToIndex.get(route.rightLotId));
+      }
+    });
+
+    const indices = [...lotIndices];
+    for (let firstIndex = 0; firstIndex < indices.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < indices.length; secondIndex += 1) {
+        const from = indices[firstIndex];
+        const to = indices[secondIndex];
+        adj[from].push({ to, weight: crossingPenalty });
+        adj[to].push({ to: from, weight: crossingPenalty });
+      }
+    }
+  });
 }
 
 function computeSingleSourceDistances(adj, start) {
@@ -228,6 +265,69 @@ function findNearestUnvisited(distances, visited) {
     bestDistance = distances[index];
   }
   return Number.isFinite(bestDistance) ? bestIndex : -1;
+}
+
+function computeParishCenters(map, lots, clusters, parishColors) {
+  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+  const routeGraph = map.routeGraph || null;
+  const routeById = new Map((routeGraph?.routes || []).map((route) => [route.id, route]));
+  const routeNodeCandidates = new Map();
+
+  (routeGraph?.nodes || []).forEach((node) => {
+    const lotIds = new Set();
+    (node.routeIds || []).forEach((routeId) => {
+      const route = routeById.get(routeId);
+      if (!route || route.type !== "road") {
+        return;
+      }
+      if (route.leftLotId !== null && route.leftLotId !== undefined) lotIds.add(route.leftLotId);
+      if (route.rightLotId !== null && route.rightLotId !== undefined) lotIds.add(route.rightLotId);
+    });
+
+    lotIds.forEach((lotId) => {
+      const parishId = lotById.get(lotId)?.parishId;
+      if (parishId === null || parishId === undefined) {
+        return;
+      }
+      const nodes = routeNodeCandidates.get(parishId) || [];
+      nodes.push(node);
+      routeNodeCandidates.set(parishId, nodes);
+    });
+  });
+
+  return clusters
+    .map((lotIds, parishId) => {
+      const parishLots = lotIds.map((lotId) => lotById.get(lotId)).filter(Boolean);
+      if (!parishLots.length) {
+        return null;
+      }
+
+      const centroid = computeAverageCentroid(parishLots);
+      const centerLot = parishLots
+        .map((lot) => ({ lot, distance: pointDistance(lot.centroid, centroid) }))
+        .sort((first, second) => first.distance - second.distance)[0]?.lot || parishLots[0];
+      const centerNode = (routeNodeCandidates.get(parishId) || [])
+        .map((node) => ({ node, distance: pointDistance(node, centroid) }))
+        .sort((first, second) => first.distance - second.distance)[0]?.node || null;
+
+      return {
+        parishId,
+        lotId: centerLot.id,
+        nodeId: centerNode?.id ?? null,
+        centroid,
+        x: centerLot.centroid.x,
+        y: centerLot.centroid.y,
+        color: parishColors[parishId]?.border || parishColors[parishId]?.fill || null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function computeAverageCentroid(lots) {
+  return {
+    x: lots.reduce((sum, lot) => sum + lot.centroid.x, 0) / lots.length,
+    y: lots.reduce((sum, lot) => sum + lot.centroid.y, 0) / lots.length,
+  };
 }
 
 function assignParishColors(lots, k) {
