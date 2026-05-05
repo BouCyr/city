@@ -344,7 +344,7 @@ function splitLotPolygon(lot, riverSpatialIndex) {
   const polygon = normalizePolygon(lot.polygon);
   const polygonBounds = computeBounds(polygon);
   const clippedEdges = querySpatialIndex(riverSpatialIndex, polygonBounds)
-    .map((segment) => clipRiverSegmentToConvexPolygon(segment, polygon))
+    .map((segment) => clipRiverSegmentToPolygon(segment, polygon))
     .filter(Boolean);
 
   if (!clippedEdges.length) {
@@ -1024,7 +1024,7 @@ function createSplitLot(lot, polygon, id) {
   };
 }
 
-function clipRiverSegmentToConvexPolygon(segment, polygon) {
+function clipRiverSegmentToPolygon(segment, polygon) {
   const parameters = [0, 1];
   const boundaryHits = [];
 
@@ -1056,6 +1056,7 @@ function clipRiverSegmentToConvexPolygon(segment, polygon) {
     return null;
   }
 
+  let bestClip = null;
   for (let index = 0; index < sortedParameters.length - 1; index += 1) {
     const startT = sortedParameters[index];
     const endT = sortedParameters[index + 1];
@@ -1070,17 +1071,27 @@ function clipRiverSegmentToConvexPolygon(segment, polygon) {
 
     const fromPoint = pointAlongSegment(segment.from, segment.to, startT);
     const toPoint = pointAlongSegment(segment.from, segment.to, endT);
+    const length = pointDistance(fromPoint, toPoint);
 
-    return {
+    const clip = {
       from: fromPoint,
       to: toPoint,
       fromBoundaryEdgeIndex: findBoundaryEdgeIndex(boundaryHits, startT) ?? findBoundaryEdgeIndexForPoint(fromPoint, polygon),
       toBoundaryEdgeIndex: findBoundaryEdgeIndex(boundaryHits, endT) ?? findBoundaryEdgeIndexForPoint(toPoint, polygon),
       segmentId: segment.id,
+      length,
     };
+    if (!bestClip || clip.length > bestClip.length) {
+      bestClip = clip;
+    }
   }
 
-  return null;
+  if (!bestClip) {
+    return null;
+  }
+
+  const { length, ...clip } = bestClip;
+  return clip;
 }
 
 function resampleSpan(from, to, targetLength = DEFAULT_SEGMENT_LENGTH) {
