@@ -68,8 +68,9 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 11:
       return stableSignature({
-        parishAlgorithm: options.stepAlgorithms?.parishClustering || "euclidean_centroids",
         parishCount: options.parishCount,
+        routeCrossingCost: options.routeCrossingCost,
+        routeDistanceModel: "road-length-x3-plus-crossing-cost",
       });
     case 12:
       return stableSignature({

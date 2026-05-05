@@ -44,8 +44,7 @@ const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
 const DEFAULT_TRIBUTARY_WIDTH_RATIO = 0.72;
 const DEFAULT_PRIMARY_MERGE_WIDTH_GAIN = 3.6;
 const DEFAULT_PARISH_COUNT = 10;
-const DEFAULT_PARISH_ALGORITHM = "euclidean_centroids";
-const DEFAULT_ROUTE_CROSSING_COST = 500;
+const DEFAULT_ROUTE_CROSSING_COST = 1500;
 
 /**
  * WHAT: Attach the live form behaviors that keep visible values in sync.
@@ -117,7 +116,6 @@ export function readFormState(form) {
     seed: String(data.get("seed") || DEFAULT_SEED),
     stepAlgorithms: {
       scatterPoints: scatterAlgorithm,
-      parishClustering: normalizeParishAlgorithm(String(data.get("parishAlgorithm") || DEFAULT_PARISH_ALGORITHM)),
       tessellateLots: normalizeTessellateAlgorithm(String(data.get("tessellateAlgorithm") || DEFAULT_TESSELLATE_ALGORITHM)),
     },
     pointCount: normalizePointCountForScatterAlgorithm(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), scatterAlgorithm, MIN_POINT_COUNT, MAX_POINT_COUNT),
@@ -137,7 +135,7 @@ export function readFormState(form) {
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
     primaryMergeWidthGain: normalizeDecimal(Number(data.get("primaryMergeWidthGain") || DEFAULT_PRIMARY_MERGE_WIDTH_GAIN), 0, 12),
     parishCount: normalizeInteger(Number(data.get("parishCount") || DEFAULT_PARISH_COUNT), 3, 25),
-    routeCrossingCost: normalizeInteger(Number(data.get("routeCrossingCost") || DEFAULT_ROUTE_CROSSING_COST), 0, 1500),
+    routeCrossingCost: normalizeInteger(Number(data.get("routeCrossingCost") || DEFAULT_ROUTE_CROSSING_COST), 0, 3000),
     waterSides,
   };
 }
@@ -154,13 +152,6 @@ function normalizeTessellateAlgorithm(value) {
     return value;
   }
   return DEFAULT_TESSELLATE_ALGORITHM;
-}
-
-function normalizeParishAlgorithm(value) {
-  if (value === "euclidean_centroids" || value === "graph_edge_length" || value === "graph_river_penalty") {
-    return value;
-  }
-  return DEFAULT_PARISH_ALGORITHM;
 }
 
 function getSelectedScatterAlgorithm(form) {

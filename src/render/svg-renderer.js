@@ -20,6 +20,7 @@ const PRIMARY_RIVER_STEP_INDEX = 5;
 const RIVER_BRANCH_STEP_INDEX = 6;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
 const ROUTE_GRAPH_STEP_INDEX = 10;
+const PARISH_CLUSTERING_STEP_INDEX = 11;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -146,7 +147,8 @@ function createMapLayer(map) {
 
 function createRouteGraphNodesGroup(map) {
   const group = createElement("g");
-  if ((map.meta?.stepIndex ?? -1) !== ROUTE_GRAPH_STEP_INDEX || !Array.isArray(map.routeGraph?.nodes)) {
+  const stepIndex = map.meta?.stepIndex ?? -1;
+  if ((stepIndex !== ROUTE_GRAPH_STEP_INDEX && stepIndex !== PARISH_CLUSTERING_STEP_INDEX) || !Array.isArray(map.routeGraph?.nodes)) {
     return group;
   }
 

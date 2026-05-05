@@ -15,6 +15,7 @@ import {
 import {
   findRouteGraphNode,
   findShortestLandRoutePath,
+  getDefaultRouteCrossingPenalty,
   isLandRouteNode,
   isRouteGraphJunctionNode,
 } from "./generator/route-path.js";
@@ -45,7 +46,8 @@ const ROUTE_START_FILL = "#e6382e";
 const ROUTE_START_STROKE = "#fff7e1";
 const RIVER_PREVIEW_STEP_INDEX = 4;
 const ROUTE_GRAPH_STEP_INDEX = 10;
-const DEFAULT_ROUTE_CROSSING_PENALTY = 500;
+const PARISH_CLUSTERING_STEP_INDEX = 11;
+const DEFAULT_ROUTE_CROSSING_PENALTY = getDefaultRouteCrossingPenalty();
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
@@ -104,9 +106,8 @@ const CONTROL_HELP_TEXT = {
   relaxPaddingRatio: "Padding ratio applied during Lloyd relaxation to keep adjusted points away from map edges.",
   primaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the primary river route. Lower values allow sharper bends, higher values keep the river straighter.",
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
-  parishAlgorithm: "Select the clustering algorithm for parishes. Euclidean centroids uses standard k-means. Graph edge length uses k-medoids on the lot graph. Graph river penalty doubles the travel distance when crossing a river.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
-  routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node.",
+  routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node. Road route lengths count triple before this penalty.",
   tessellateAlgorithm: "Choose how step 2.3 creates sublots. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
 };
 
@@ -121,7 +122,6 @@ for (const field of form.elements) {
   if (field.name === "routeCrossingCost") {
     field.addEventListener("input", refreshRouteNodeHover);
     field.addEventListener("change", refreshRouteNodeHover);
-    continue;
   }
 
   const eventName = field instanceof HTMLInputElement && field.type === "text" ? "input" : "change";
@@ -1357,7 +1357,9 @@ function shouldShowRiverPreview() {
 }
 
 function isRouteGraphInteractionFrame(frame = currentFrame) {
-  return Boolean(frame && frame.type === "map" && frame.stepIndex === ROUTE_GRAPH_STEP_INDEX && frame.map?.routeGraph);
+  return Boolean(frame && frame.type === "map"
+    && (frame.stepIndex === ROUTE_GRAPH_STEP_INDEX || frame.stepIndex === PARISH_CLUSTERING_STEP_INDEX)
+    && frame.map?.routeGraph);
 }
 
 function getRouteCrossingPenalty() {
@@ -1366,7 +1368,7 @@ function getRouteCrossingPenalty() {
     return DEFAULT_ROUTE_CROSSING_PENALTY;
   }
   const value = Number(field.value);
-  return Number.isFinite(value) ? Math.min(Math.max(value, 0), 1500) : DEFAULT_ROUTE_CROSSING_PENALTY;
+  return Number.isFinite(value) ? Math.min(Math.max(value, 0), 3000) : DEFAULT_ROUTE_CROSSING_PENALTY;
 }
 
 function resetRouteNodeInteractionState() {

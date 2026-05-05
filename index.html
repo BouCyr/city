@@ -169,20 +169,14 @@
                     <div class="step-controls">
                       <label>
                         <span class="field-title">River Crossing Cost <button class="control-help-trigger" type="button" data-help-key="routeCrossingCost" aria-label="River Crossing Cost help">?</button></span>
-                        <input id="routeCrossingCost" name="routeCrossingCost" type="range" min="0" max="1500" step="10" value="500">
-                        <output for="routeCrossingCost" id="routeCrossingCostValue">500</output>
+                        <input id="routeCrossingCost" name="routeCrossingCost" type="range" min="0" max="3000" step="10" value="1500">
+                        <output for="routeCrossingCost" id="routeCrossingCostValue">1500</output>
                       </label>
                     </div>
                   </li>
                   <li data-step-index="11">
                     <button class="step-select" type="button">2.2 Parish clustering</button>
                     <div class="step-controls">
-                      <fieldset class="algorithm-choice">
-                        <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="parishAlgorithm" aria-label="Parish algorithm help">?</button></legend>
-                        <label><input type="radio" name="parishAlgorithm" value="euclidean_centroids" checked>Euclidean centroids</label>
-                        <label><input type="radio" name="parishAlgorithm" value="graph_edge_length">Graph edge length</label>
-                        <label><input type="radio" name="parishAlgorithm" value="graph_river_penalty">Graph river penalty</label>
-                      </fieldset>
                       <label>
                         <span class="field-title">Parish Count <button class="control-help-trigger" type="button" data-help-key="parishCount" aria-label="Parish Count help">?</button></span>
                         <input id="parishCount" name="parishCount" type="range" min="3" max="25" value="10">

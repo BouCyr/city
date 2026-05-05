@@ -5,7 +5,8 @@
  */
 
 const CROSSING_NODE_TYPE = "river_crossing";
-const DEFAULT_CROSSING_PENALTY = 500;
+const DEFAULT_CROSSING_PENALTY = 1500;
+const ROAD_ROUTE_WEIGHT_FACTOR = 3;
 const TRAVERSABLE_ROUTE_TYPE = "road";
 const INVALID_LAND_NODE_TYPES = new Set(["sea", "coast", "river_mouth", "river"]);
 
@@ -64,7 +65,7 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
       const nodePenalty = nextNode.type === CROSSING_NODE_TYPE && edge.toNodeId !== targetId && edge.toNodeId !== startId
         ? crossingPenalty
         : 0;
-      const nextDistance = current.priority + edge.length + nodePenalty;
+      const nextDistance = current.priority + edge.weight + nodePenalty;
       if (nextDistance >= (distances.get(edge.toNodeId) ?? Infinity)) {
         return;
       }
@@ -108,6 +109,14 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
   };
 }
 
+export function getRouteWeightedLength(route) {
+  return (route?.length || 0) * (route?.type === TRAVERSABLE_ROUTE_TYPE ? ROAD_ROUTE_WEIGHT_FACTOR : 1);
+}
+
+export function getDefaultRouteCrossingPenalty() {
+  return DEFAULT_CROSSING_PENALTY;
+}
+
 export function findRouteGraphNode(routeGraph, nodeId) {
   const normalizedId = normalizeNodeId(nodeId);
   if (normalizedId === null) {
@@ -126,11 +135,13 @@ function buildRoadAdjacency(routeGraph) {
       toNodeId: route.toNodeId,
       routeId: route.id,
       length: route.length,
+      weight: getRouteWeightedLength(route),
     });
     appendAdjacency(adjacency, route.toNodeId, {
       toNodeId: route.fromNodeId,
       routeId: route.id,
       length: route.length,
+      weight: getRouteWeightedLength(route),
     });
   });
   return adjacency;
