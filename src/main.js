@@ -12,6 +12,12 @@ import {
   computeSeaDistances,
   findInlandRiverPaths,
 } from "./generator/river-path.js";
+import {
+  findRouteGraphNode,
+  findShortestLandRoutePath,
+  isLandRouteNode,
+  isRouteGraphJunctionNode,
+} from "./generator/route-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
 import { GENERATION_STEPS } from "./generator/steps.js";
 import { getMapLots } from "./generator/map-model.js";
@@ -25,13 +31,21 @@ const VIEWPORT_FALLBACK_RATIO = 0.5;
 const FLOW_OVERLAY_ID = "hoveredFlowOverlay";
 const HOVER_NEIGHBOR_OVERLAY_ID = "hoveredNeighborOverlay";
 const HOVER_RIVER_OVERLAY_ID = "hoveredRiverOverlay";
+const ROUTE_PATH_OVERLAY_ID = "hoveredRoutePathOverlay";
+const ROUTE_START_OVERLAY_ID = "routeStartOverlay";
 const HOVER_NEIGHBOR_STROKE = "#7a5a2e";
 const HOVER_NEIGHBOR_STROKE_WIDTH = 4.5;
 const FLOW_STROKE = "#4f7cff";
 const FLOW_STROKE_WIDTH = 12;
 const RIVER_HOVER_STROKE = "#1e56c5";
 const RIVER_HOVER_GLOW = "rgba(255, 255, 255, 0.82)";
+const ROUTE_PATH_STROKE = "#e6382e";
+const ROUTE_PATH_GLOW = "rgba(255, 247, 225, 0.86)";
+const ROUTE_START_FILL = "#e6382e";
+const ROUTE_START_STROKE = "#fff7e1";
 const RIVER_PREVIEW_STEP_INDEX = 4;
+const ROUTE_GRAPH_STEP_INDEX = 10;
+const ROUTE_CROSSING_PENALTY = 50;
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
 const svg = document.querySelector("#cityMap");
@@ -68,6 +82,8 @@ let currentFrame = null;
 let selectedStepIndex = GENERATION_STEPS.length - 1;
 let hoveredCellId = null;
 let hoveredRiverId = null;
+let hoveredRouteNodeId = null;
+let startRouteNodeId = null;
 let isDragging = false;
 let dragPointerId = null;
 let dragStart = null;
@@ -138,6 +154,8 @@ mapViewport.addEventListener("pointercancel", handlePointerUp);
 mapViewport.addEventListener("pointerleave", handlePointerUp);
 svg.addEventListener("pointermove", handleMapHover);
 svg.addEventListener("pointerleave", clearHoverState);
+svg.addEventListener("pointerdown", handleRouteNodePointerDown, { capture: true });
+svg.addEventListener("click", handleMapClick);
 mapSummary?.addEventListener("pointerover", handleSummaryPointerOver);
 mapSummary?.addEventListener("pointerout", handleSummaryPointerOut);
 document.querySelectorAll(".control-help-trigger").forEach((button) => {
@@ -201,6 +219,7 @@ function setupScatterAlgorithmControls() {
  */
 function renderStepIndex(stepIndex) {
   if (!currentMap) {
+    resetRouteNodeInteractionState();
     clearSvg(svg, CANVAS_SIZE);
     applyViewport();
     updateMapSummary();
@@ -213,10 +232,14 @@ function renderStepIndex(stepIndex) {
   }
 
   currentFrame = frame;
+  if (!isRouteGraphInteractionFrame()) {
+    resetRouteNodeInteractionState();
+  }
   drawReplayFrame(svg, frame, currentMap.meta.size);
   applyViewport();
   updateMapSummary(frame.map, currentMap);
   clearHoverState();
+  drawStartRouteNodeOverlay();
   stepTracker.setSelectedStep(frame.stepIndex ?? stepIndex);
 }
 
@@ -227,6 +250,7 @@ function generateRandomSeed() {
 function runSingleGeneration(options) {
   const requestId = ++generationToken;
   cancelWorkerTask();
+  resetRouteNodeInteractionState();
   stepTracker.reset();
   selectedStepIndex = GENERATION_STEPS.length - 1;
   setBackgroundTaskStatus(`Generating 0/${TOTAL_GENERATION_STEPS}`);
@@ -304,6 +328,7 @@ function runBestOfSeeds(sampleCount) {
   const baselineSeed = currentMap?.init?.seed || options.seed;
 
   cancelWorkerTask();
+  resetRouteNodeInteractionState();
   setAsyncControlsDisabled(true);
   setBackgroundTaskStatus(`Best of ${sampleCount}: 0/${sampleCount}`);
 
@@ -435,10 +460,14 @@ function renderInterimFrame(frame) {
   currentFrame = frame;
   hoveredCellId = null;
   hoveredRiverId = null;
+  if (!isRouteGraphInteractionFrame()) {
+    resetRouteNodeInteractionState();
+  }
   drawReplayFrame(svg, frame, CANVAS_SIZE);
   applyViewport();
   updateMapSummary(frame.map, null);
   clearHoverState();
+  drawStartRouteNodeOverlay();
   stepTracker.setSelectedStep(frame.stepIndex ?? -1);
 }
 
@@ -496,6 +525,10 @@ function handlePointerDown(event) {
   if (event.button !== 0 || !currentMap) {
     return;
   }
+  if (isRouteGraphInteractionFrame() && getRouteNodeFromEvent(event)) {
+    console.debug("[route-node] viewport drag skipped for node pointerdown");
+    return;
+  }
 
   isDragging = true;
   dragPointerId = event.pointerId;
@@ -531,6 +564,17 @@ function handlePointerUp(event) {
 }
 
 function handleMapHover(event) {
+  if (isRouteGraphInteractionFrame()) {
+    const routeNode = getRouteNodeFromEvent(event);
+    if (!routeNode) {
+      clearHoverState();
+      return;
+    }
+
+    renderHoveredRouteNode(routeNode);
+    return;
+  }
+
   const river = getRiverFromEvent(event);
   if (river) {
     renderHoveredRiver(river);
@@ -546,6 +590,55 @@ function handleMapHover(event) {
   renderHoveredGeometry(hoverTarget);
 }
 
+function handleMapClick(event) {
+  if (!isRouteGraphInteractionFrame()) {
+    return;
+  }
+
+  console.debug("[route-node] click", describeRouteNodeEvent(event));
+  setRouteStartFromEvent(event, "click");
+}
+
+function handleRouteNodePointerDown(event) {
+  if (event.button !== 0 || !isRouteGraphInteractionFrame()) {
+    return;
+  }
+
+  const didSetStart = setRouteStartFromEvent(event, "pointerdown");
+  if (!didSetStart) {
+    console.debug("[route-node] pointerdown ignored", describeRouteNodeEvent(event));
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function setRouteStartFromEvent(event, source) {
+  const node = getRouteNodeFromEvent(event);
+  if (!isLandRouteNode(currentFrame?.map?.routeGraph, node)) {
+    console.debug("[route-node] start rejected", {
+      source,
+      ...describeRouteNodeEvent(event),
+      nodeType: node?.type || null,
+      routeCount: node?.routeIds?.length || 0,
+    });
+    return false;
+  }
+
+  startRouteNodeId = node.id;
+  clearRoutePathOverlay();
+  drawStartRouteNodeOverlay();
+  renderHoveredRouteNode(node);
+  console.debug("[route-node] start set", {
+    source,
+    nodeId: node.id,
+    nodeType: node.type,
+    routeCount: node.routeIds?.length || 0,
+  });
+  return true;
+}
+
 function clearHoverState() {
   if (!(hoveredCellData instanceof HTMLElement)) {
     return;
@@ -553,12 +646,16 @@ function clearHoverState() {
 
   hoveredCellId = null;
   hoveredRiverId = null;
+  hoveredRouteNodeId = null;
   clearFlowOverlay();
   clearNeighborOverlay();
   clearRiverOverlay();
+  clearRoutePathOverlay();
   syncActiveRiverSummaryState();
   hoveredCellData.className = "cell-data empty";
-  hoveredCellData.textContent = "Hover a lot or river to inspect its data.";
+  hoveredCellData.textContent = isRouteGraphInteractionFrame()
+    ? "Hover a route node to inspect it. Click a land node to set START."
+    : "Hover a lot or river to inspect its data.";
 }
 
 /**
@@ -753,6 +850,31 @@ function getHoverTargetFromEvent(event) {
   };
 }
 
+function getRouteNodeFromEvent(event) {
+  if (!isRouteGraphInteractionFrame()) {
+    return null;
+  }
+
+  const target = event.target instanceof Element ? event.target.closest("[data-route-node-id]") : null;
+  const nodeId = target ? Number(target.getAttribute("data-route-node-id")) : Number.NaN;
+  const node = findRouteGraphNode(currentFrame.map.routeGraph, nodeId);
+  return isRouteGraphJunctionNode(node) ? node : null;
+}
+
+function describeRouteNodeEvent(event) {
+  const target = event.target instanceof Element ? event.target.closest("[data-route-node-id]") : null;
+  const nodeId = target ? Number(target.getAttribute("data-route-node-id")) : Number.NaN;
+  const node = findRouteGraphNode(currentFrame?.map?.routeGraph, nodeId);
+  return {
+    hasRouteNodeTarget: Boolean(target),
+    nodeId: Number.isFinite(nodeId) ? nodeId : null,
+    nodeType: node?.type || null,
+    isJunction: isRouteGraphJunctionNode(node),
+    isLand: isLandRouteNode(currentFrame?.map?.routeGraph, node),
+    eventTarget: event.target instanceof Element ? event.target.tagName : typeof event.target,
+  };
+}
+
 function getRiverFromEvent(event) {
   if (!currentFrame || currentFrame.type !== "map") {
     return null;
@@ -804,6 +926,40 @@ function renderHoveredGeometry(hoverTarget) {
     createCellDataRow("Neighbours", formatNeighborList(item, kind)),
   ].join("");
   drawFlowOverlay(previewRiverPath);
+}
+
+function renderHoveredRouteNode(node) {
+  if (!(hoveredCellData instanceof HTMLElement)) {
+    return;
+  }
+
+  const routeGraph = currentFrame?.map?.routeGraph;
+  hoveredCellId = null;
+  hoveredRiverId = null;
+  hoveredRouteNodeId = node.id;
+  syncActiveRiverSummaryState();
+  clearFlowOverlay();
+  clearNeighborOverlay();
+  clearRiverOverlay();
+
+  const isLandNode = isLandRouteNode(routeGraph, node);
+  const path = startRouteNodeId !== null && isLandNode
+    ? findShortestLandRoutePath(routeGraph, startRouteNodeId, node.id, { crossingPenalty: ROUTE_CROSSING_PENALTY })
+    : null;
+  drawRoutePathOverlay(path);
+  drawStartRouteNodeOverlay();
+
+  hoveredCellData.className = `cell-data route-node-hover${isLandNode ? "" : " invalid-route-node"}`;
+  hoveredCellData.innerHTML = [
+    createCellDataRow("Node", String(node.id)),
+    createCellDataRow("Type", formatNodeType(node.type)),
+    createCellDataRow("Routes", String(node.routeIds?.length || 0)),
+    createCellDataRow("Land node", isLandNode ? "yes" : "no"),
+    createCellDataRow("START", startRouteNodeId === node.id ? "set here" : startRouteNodeId === null ? "not set" : `node ${startRouteNodeId}`),
+    startRouteNodeId !== null && node.id !== startRouteNodeId
+      ? createCellDataRow("Path", path ? formatDistanceMeters(path.distance) : "no road path")
+      : "",
+  ].join("");
 }
 
 function renderHoveredRiver(river) {
@@ -963,6 +1119,100 @@ function clearRiverOverlay() {
   svg.querySelector(`#${HOVER_RIVER_OVERLAY_ID}`)?.remove();
 }
 
+function drawRoutePathOverlay(path) {
+  clearRoutePathOverlay();
+  if (!path || path.points.length < 2) {
+    return;
+  }
+
+  const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  overlay.setAttribute("id", ROUTE_PATH_OVERLAY_ID);
+  overlay.setAttribute("pointer-events", "none");
+
+  const glow = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  glow.setAttribute("points", toSvgPoints(path.points));
+  glow.setAttribute("fill", "none");
+  glow.setAttribute("stroke", ROUTE_PATH_GLOW);
+  glow.setAttribute("stroke-width", "18");
+  glow.setAttribute("stroke-linecap", "round");
+  glow.setAttribute("stroke-linejoin", "round");
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  line.setAttribute("points", toSvgPoints(path.points));
+  line.setAttribute("fill", "none");
+  line.setAttribute("stroke", ROUTE_PATH_STROKE);
+  line.setAttribute("stroke-width", "7");
+  line.setAttribute("stroke-linecap", "round");
+  line.setAttribute("stroke-linejoin", "round");
+
+  overlay.append(glow, line);
+  svg.append(overlay);
+}
+
+function clearRoutePathOverlay() {
+  svg.querySelector(`#${ROUTE_PATH_OVERLAY_ID}`)?.remove();
+}
+
+function drawStartRouteNodeOverlay() {
+  clearStartRouteNodeOverlay();
+  if (!isRouteGraphInteractionFrame() || startRouteNodeId === null) {
+    return;
+  }
+
+  const node = findRouteGraphNode(currentFrame.map.routeGraph, startRouteNodeId);
+  if (!isLandRouteNode(currentFrame.map.routeGraph, node)) {
+    return;
+  }
+
+  const overlay = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  overlay.setAttribute("id", ROUTE_START_OVERLAY_ID);
+  overlay.setAttribute("pointer-events", "none");
+
+  const stem = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  stem.setAttribute("x1", String(node.x));
+  stem.setAttribute("y1", String(node.y));
+  stem.setAttribute("x2", String(node.x));
+  stem.setAttribute("y2", String(node.y - 34));
+  stem.setAttribute("stroke", ROUTE_START_STROKE);
+  stem.setAttribute("stroke-width", "8");
+  stem.setAttribute("stroke-linecap", "round");
+
+  const stemInner = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  stemInner.setAttribute("x1", String(node.x));
+  stemInner.setAttribute("y1", String(node.y));
+  stemInner.setAttribute("x2", String(node.x));
+  stemInner.setAttribute("y2", String(node.y - 34));
+  stemInner.setAttribute("stroke", ROUTE_START_FILL);
+  stemInner.setAttribute("stroke-width", "3.5");
+  stemInner.setAttribute("stroke-linecap", "round");
+
+  const pin = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  pin.setAttribute("cx", String(node.x));
+  pin.setAttribute("cy", String(node.y - 38));
+  pin.setAttribute("r", "13");
+  pin.setAttribute("fill", ROUTE_START_FILL);
+  pin.setAttribute("stroke", ROUTE_START_STROKE);
+  pin.setAttribute("stroke-width", "4");
+
+  const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  label.setAttribute("x", String(node.x + 18));
+  label.setAttribute("y", String(node.y - 30));
+  label.setAttribute("fill", "#18232b");
+  label.setAttribute("stroke", ROUTE_START_STROKE);
+  label.setAttribute("stroke-width", "3");
+  label.setAttribute("paint-order", "stroke");
+  label.setAttribute("font-size", "26");
+  label.setAttribute("font-weight", "800");
+  label.textContent = "START";
+
+  overlay.append(stem, stemInner, pin, label);
+  svg.append(overlay);
+}
+
+function clearStartRouteNodeOverlay() {
+  svg.querySelector(`#${ROUTE_START_OVERLAY_ID}`)?.remove();
+}
+
 function createNeighborArrow(from, to) {
   const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line.setAttribute("x1", String(from.x));
@@ -1084,6 +1334,21 @@ function appendFlowPolyline(overlay, flowPath, stroke) {
 
 function shouldShowRiverPreview() {
   return Boolean(currentFrame && currentFrame.type === "map" && currentFrame.stepIndex === RIVER_PREVIEW_STEP_INDEX);
+}
+
+function isRouteGraphInteractionFrame(frame = currentFrame) {
+  return Boolean(frame && frame.type === "map" && frame.stepIndex === ROUTE_GRAPH_STEP_INDEX && frame.map?.routeGraph);
+}
+
+function resetRouteNodeInteractionState() {
+  hoveredRouteNodeId = null;
+  startRouteNodeId = null;
+  clearRoutePathOverlay();
+  clearStartRouteNodeOverlay();
+}
+
+function formatNodeType(type) {
+  return String(type || "unknown").replaceAll("_", " ");
 }
 
 function formatRiverWidth(river) {

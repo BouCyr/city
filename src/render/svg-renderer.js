@@ -18,6 +18,7 @@ const RIVER_INNER_WIDTH_REDUCTION = 4;
 const PRIMARY_RIVER_STEP_INDEX = 5;
 const RIVER_BRANCH_STEP_INDEX = 6;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
+const ROUTE_GRAPH_STEP_INDEX = 10;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -31,6 +32,12 @@ const COLORS = {
   seaEdge: "#1f4e72",
   riverHit: "rgba(0, 0, 0, 0)",
   tessellation: "rgba(42, 30, 20, 0.36)",
+  routeNode: "#18232b",
+  routeNodeHit: "rgba(0, 0, 0, 0)",
+  routeNodeSea: "#2f7fa1",
+  routeNodeCoast: "#f4efe5",
+  routeNodeRiver: "#2d77c6",
+  routeNodeCrossing: "#f08a24",
 };
 
 /**
@@ -126,6 +133,7 @@ function createMapLayer(map) {
     useCanonicalRiverGeometry
       ? createElement("g")
       : createRiversGroup(map.rivers || [], segments),
+    createRouteGraphNodesGroup(map),
   );
 
   if (!lots.length) {
@@ -133,6 +141,73 @@ function createMapLayer(map) {
   }
 
   return layer;
+}
+
+function createRouteGraphNodesGroup(map) {
+  const group = createElement("g");
+  if ((map.meta?.stepIndex ?? -1) !== ROUTE_GRAPH_STEP_INDEX || !Array.isArray(map.routeGraph?.nodes)) {
+    return group;
+  }
+
+  const visualGroup = createElement("g", {
+    "pointer-events": "none",
+  });
+  const hitGroup = createElement("g", {
+    "pointer-events": "all",
+  });
+
+  map.routeGraph.nodes.filter(isInteractiveRouteNode).forEach((node) => {
+    hitGroup.append(
+      createElement("circle", {
+        cx: node.x,
+        cy: node.y,
+        r: 13,
+        fill: COLORS.routeNodeHit,
+        "data-route-node-id": node.id,
+      }),
+    );
+    visualGroup.append(
+      createElement("circle", {
+        cx: node.x,
+        cy: node.y,
+        r: routeNodeRadius(node),
+        fill: routeNodeFill(node),
+        stroke: "#f8f2e8",
+        "stroke-width": 1.7,
+        opacity: 0.94,
+      }),
+    );
+  });
+
+  group.append(visualGroup, hitGroup);
+  return group;
+}
+
+function routeNodeRadius(node) {
+  if (node.type === "river_crossing" || node.type === "river_mouth") {
+    return 5.4;
+  }
+  return node.routeIds?.length > 2 ? 4.4 : 3.2;
+}
+
+function isInteractiveRouteNode(node) {
+  return node.type === "river_crossing" || node.type === "river_mouth" || (node.routeIds || []).length > 2;
+}
+
+function routeNodeFill(node) {
+  if (node.type === "sea") {
+    return COLORS.routeNodeSea;
+  }
+  if (node.type === "coast" || node.type === "river_mouth") {
+    return COLORS.routeNodeCoast;
+  }
+  if (node.type === "river") {
+    return COLORS.routeNodeRiver;
+  }
+  if (node.type === "river_crossing") {
+    return COLORS.routeNodeCrossing;
+  }
+  return COLORS.routeNode;
 }
 
 function createLotsGroup(lots, map) {
