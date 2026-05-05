@@ -359,7 +359,12 @@ function splitLotPolygon(lot, riverSpatialIndex) {
     .filter((facePolygon) => pointInPolygon(computePolygonCentroid(facePolygon), polygon))
     .filter((facePolygon, index, collection) => !collection.some((other, otherIndex) => otherIndex < index && polygonsMatch(facePolygon, other)));
 
-  return polygons.length ? polygons : [polygon];
+  if (polygons.length > 1) {
+    return polygons;
+  }
+
+  const pathSplitPolygons = splitPolygonByBoundaryRiverPath(polygon, clippedEdges);
+  return pathSplitPolygons.length > 1 ? pathSplitPolygons : [polygon];
 }
 
 function buildSegmentSpatialIndex(segments) {
@@ -427,6 +432,135 @@ function queryPointSpatialIndex(index, bounds) {
     });
   });
   return matches;
+}
+
+function splitPolygonByBoundaryRiverPath(polygon, clippedEdges) {
+  const paths = findBoundaryRiverPaths(clippedEdges)
+    .sort((first, second) => polylineLength(second.points) - polylineLength(first.points));
+
+  for (const path of paths) {
+    const firstBoundaryPath = buildBoundaryPath(polygon, path.start.point, path.start.edgeIndex, path.end.point, path.end.edgeIndex);
+    const secondBoundaryPath = buildBoundaryPath(polygon, path.end.point, path.end.edgeIndex, path.start.point, path.start.edgeIndex);
+    const firstPolygon = normalizePolygon(dedupeConsecutivePoints([
+      ...firstBoundaryPath,
+      ...path.points.slice(1, -1).reverse(),
+    ]));
+    const secondPolygon = normalizePolygon(dedupeConsecutivePoints([
+      ...secondBoundaryPath,
+      ...path.points.slice(1, -1),
+    ]));
+
+    const polygons = [firstPolygon, secondPolygon]
+      .filter((candidate) => candidate.length >= 3 && Math.abs(computeSignedArea(candidate)) > EPSILON)
+      .filter((candidate) => pointInPolygonInclusive(computePolygonCentroid(candidate), polygon));
+    if (polygons.length > 1) {
+      return polygons;
+    }
+  }
+
+  return [];
+}
+
+function findBoundaryRiverPaths(clippedEdges) {
+  const nodes = [];
+  const nodeByKey = new Map();
+  const adjacency = new Map();
+
+  clippedEdges.forEach((edge) => {
+    const fromNodeId = getOrCreateGraphNode(nodes, nodeByKey, edge.from);
+    const toNodeId = getOrCreateGraphNode(nodes, nodeByKey, edge.to);
+    if (fromNodeId === toNodeId) {
+      return;
+    }
+
+    pushPathAdjacency(adjacency, fromNodeId, toNodeId);
+    pushPathAdjacency(adjacency, toNodeId, fromNodeId);
+  });
+
+  const boundaryNodes = [];
+  clippedEdges.forEach((edge) => {
+    if (edge.fromBoundaryEdgeIndex !== null) {
+      boundaryNodes.push({
+        nodeId: getOrCreateGraphNode(nodes, nodeByKey, edge.from),
+        edgeIndex: edge.fromBoundaryEdgeIndex,
+        point: clonePoint(edge.from),
+      });
+    }
+    if (edge.toBoundaryEdgeIndex !== null) {
+      boundaryNodes.push({
+        nodeId: getOrCreateGraphNode(nodes, nodeByKey, edge.to),
+        edgeIndex: edge.toBoundaryEdgeIndex,
+        point: clonePoint(edge.to),
+      });
+    }
+  });
+
+  const uniqueBoundaryNodes = boundaryNodes.filter((node, index, collection) =>
+    collection.findIndex((candidate) => candidate.nodeId === node.nodeId) === index
+  );
+  if (uniqueBoundaryNodes.length < 2) {
+    return [];
+  }
+
+  const paths = [];
+  for (let startIndex = 0; startIndex < uniqueBoundaryNodes.length - 1; startIndex += 1) {
+    for (let endIndex = startIndex + 1; endIndex < uniqueBoundaryNodes.length; endIndex += 1) {
+      const start = uniqueBoundaryNodes[startIndex];
+      const end = uniqueBoundaryNodes[endIndex];
+      const nodePath = findNodePath(adjacency, start.nodeId, end.nodeId);
+      if (nodePath.length >= 2) {
+        paths.push({
+          start,
+          end,
+          points: nodePath.map((nodeId) => clonePoint(nodes[nodeId])),
+        });
+      }
+    }
+  }
+
+  return paths;
+}
+
+function pushPathAdjacency(adjacency, fromNodeId, toNodeId) {
+  const neighbors = adjacency.get(fromNodeId) || [];
+  if (!neighbors.includes(toNodeId)) {
+    neighbors.push(toNodeId);
+  }
+  adjacency.set(fromNodeId, neighbors);
+}
+
+function findNodePath(adjacency, startNodeId, endNodeId) {
+  const queue = [[startNodeId]];
+  const visited = new Set([startNodeId]);
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const path = queue[index];
+    const currentNodeId = path[path.length - 1];
+    if (currentNodeId === endNodeId) {
+      return path;
+    }
+
+    (adjacency.get(currentNodeId) || []).forEach((nextNodeId) => {
+      if (visited.has(nextNodeId)) {
+        return;
+      }
+      visited.add(nextNodeId);
+      queue.push([...path, nextNodeId]);
+    });
+  }
+
+  return [];
+}
+
+function buildBoundaryPath(polygon, startPoint, startEdgeIndex, endPoint, endEdgeIndex) {
+  const path = [clonePoint(startPoint)];
+  let edgeIndex = startEdgeIndex;
+  while (edgeIndex !== endEdgeIndex) {
+    path.push(clonePoint(polygon[(edgeIndex + 1) % polygon.length]));
+    edgeIndex = (edgeIndex + 1) % polygon.length;
+  }
+  path.push(clonePoint(endPoint));
+  return dedupeConsecutivePoints(path);
 }
 
 function buildLotSplitGraph(polygon, clippedEdges) {
@@ -636,6 +770,8 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     }
   });
 
+  appendUnrepresentedRiverSegments(segments, riverGraph.segments, normalizedLots, lotById);
+
   segments.forEach((segment) => {
     if (segment.leftLotId !== null) {
       lotById.get(segment.leftLotId)?.segmentIds.push(segment.id);
@@ -670,6 +806,53 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     lots: normalizedLots,
     segments,
   };
+}
+
+function appendUnrepresentedRiverSegments(segments, riverSegments, lots, lotById) {
+  const segmentSpatialIndex = buildSegmentSpatialIndex(segments);
+
+  riverSegments.forEach((riverSegment) => {
+    const bounds = expandBounds(computeBounds([riverSegment.from, riverSegment.to]), RIVER_SPAN_EPSILON);
+    const represented = querySpatialIndex(segmentSpatialIndex, bounds)
+      .some((segment) => spanLiesOnRiverSegment(segment.from, segment.to, riverSegment));
+    if (represented) {
+      return;
+    }
+
+    const ownerLot = findRiverSegmentOwnerLot(riverSegment, lots);
+    const side = ownerLot ? pointSide(riverSegment.from, riverSegment.to, ownerLot.centroid) : 0;
+    const segment = {
+      id: `segment:${segments.length}`,
+      from: clonePoint(riverSegment.from),
+      to: clonePoint(riverSegment.to),
+      midpoint: midpointBetween(riverSegment.from, riverSegment.to),
+      length: pointDistance(riverSegment.from, riverSegment.to),
+      leftLotId: ownerLot && side >= 0 ? ownerLot.id : null,
+      rightLotId: ownerLot && side < 0 ? ownerLot.id : null,
+      features: {
+        boundary: true,
+        coast: false,
+        land: Boolean(ownerLot && lotById.get(ownerLot.id)?.features.land),
+        sea: false,
+        river: true,
+        riverside: true,
+      },
+    };
+    segments.push(segment);
+    forEachBucket(computeBounds([segment.from, segment.to]), (bucketKey) => {
+      const bucket = segmentSpatialIndex.get(bucketKey) || [];
+      bucket.push(segment);
+      segmentSpatialIndex.set(bucketKey, bucket);
+    });
+  });
+}
+
+function findRiverSegmentOwnerLot(segment, lots) {
+  const midpoint = midpointBetween(segment.from, segment.to);
+  return lots.find((lot) => pointInPolygonInclusive(midpoint, lot.polygon))
+    || lots.find((lot) => pointInPolygonInclusive(segment.from, lot.polygon))
+    || lots.find((lot) => pointInPolygonInclusive(segment.to, lot.polygon))
+    || null;
 }
 
 function buildSegmentSurfaceFeatures(segment, lotById) {
@@ -861,10 +1044,10 @@ function clipRiverSegmentToConvexPolygon(segment, polygon) {
     });
   }
 
-  if (pointInConvexPolygon(segment.from, polygon)) {
+  if (pointInPolygonInclusive(segment.from, polygon)) {
     parameters.push(0);
   }
-  if (pointInConvexPolygon(segment.to, polygon)) {
+  if (pointInPolygonInclusive(segment.to, polygon)) {
     parameters.push(1);
   }
 
@@ -881,7 +1064,7 @@ function clipRiverSegmentToConvexPolygon(segment, polygon) {
     }
 
     const midpoint = pointAlongSegment(segment.from, segment.to, (startT + endT) / 2);
-    if (!pointInConvexPolygon(midpoint, polygon)) {
+    if (!pointInPolygonInclusive(midpoint, polygon)) {
       continue;
     }
 
@@ -891,8 +1074,8 @@ function clipRiverSegmentToConvexPolygon(segment, polygon) {
     return {
       from: fromPoint,
       to: toPoint,
-      fromBoundaryEdgeIndex: findBoundaryEdgeIndex(boundaryHits, startT),
-      toBoundaryEdgeIndex: findBoundaryEdgeIndex(boundaryHits, endT),
+      fromBoundaryEdgeIndex: findBoundaryEdgeIndex(boundaryHits, startT) ?? findBoundaryEdgeIndexForPoint(fromPoint, polygon),
+      toBoundaryEdgeIndex: findBoundaryEdgeIndex(boundaryHits, endT) ?? findBoundaryEdgeIndexForPoint(toPoint, polygon),
       segmentId: segment.id,
     };
   }
@@ -1188,6 +1371,17 @@ function pointInPolygon(point, polygon) {
   return inside;
 }
 
+function pointInPolygonInclusive(point, polygon) {
+  if (pointInPolygon(point, polygon)) {
+    return true;
+  }
+
+  return polygon.some((from, index) => {
+    const to = polygon[(index + 1) % polygon.length];
+    return pointLiesOnSegmentInclusive(point, from, to, RIVER_SPAN_EPSILON);
+  });
+}
+
 function polygonsMatch(first, second) {
   if (first.length !== second.length) {
     return false;
@@ -1223,6 +1417,18 @@ function uniqueSortedNumbers(values) {
 function findBoundaryEdgeIndex(boundaryHits, parameter) {
   const match = boundaryHits.find((hit) => Math.abs(hit.t - parameter) <= 0.0005);
   return match ? match.edgeIndex : null;
+}
+
+function findBoundaryEdgeIndexForPoint(point, polygon) {
+  for (let index = 0; index < polygon.length; index += 1) {
+    const boundaryFrom = polygon[index];
+    const boundaryTo = polygon[(index + 1) % polygon.length];
+    if (pointLiesOnSegmentInclusive(point, boundaryFrom, boundaryTo, RIVER_SPAN_EPSILON)) {
+      return index;
+    }
+  }
+
+  return null;
 }
 
 function segmentIntersection(firstFrom, firstTo, secondFrom, secondTo) {
