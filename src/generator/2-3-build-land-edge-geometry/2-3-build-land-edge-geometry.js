@@ -1,7 +1,7 @@
 /*
- * WHAT: Normalize the remaining lot geometry after coastline conversion.
- * HOW: Keep pure sea edges intact and resample every other edge into straight segments.
- * WHY: Downstream lot processing expects a stable segment-only geometry with shared vertices deduped.
+ * WHAT: Normalize post-parish lot geometry and smooth inter-parish borders before field dispatch.
+ * HOW: Preserve sea/coast edges, curve eligible parish-border chains, and resample the remaining land edges.
+ * WHY: Later steps should consume one canonical sampled geometry with parish borders already baked in.
  */
 
 import { DEFAULT_SEGMENT_LENGTH, convertLotGeometryToLandEdgeGeometry } from "../map-model.js";
@@ -18,7 +18,7 @@ export function runBuildLandEdgeGeometryStep(map) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 2.3 / Land edges",
+        label: "Step 2.3 / Land edges + parish borders",
         map: nextMap,
       },
     ],

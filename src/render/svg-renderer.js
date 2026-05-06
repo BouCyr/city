@@ -21,6 +21,7 @@ const RIVER_BRANCH_STEP_INDEX = 6;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
 const ROUTE_GRAPH_STEP_INDEX = 9;
 const PARISH_CLUSTERING_STEP_INDEX = 10;
+const LAND_EDGE_PARISH_BORDER_STEP_INDEX = 11;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -415,7 +416,7 @@ function seaDistanceFill(seaDistance, maxLandSeaDistance) {
 
 function createSegmentsGroup(segments, map) {
   const stepIndex = map.meta?.stepIndex ?? -1;
-  const hideDots = stepIndex >= PARISH_CLUSTERING_STEP_INDEX;
+  const hideDots = stepIndex > LAND_EDGE_PARISH_BORDER_STEP_INDEX;
   const strokeWidth = stepIndex >= PARISH_CLUSTERING_STEP_INDEX ? EDGE_STROKE_WIDTH * 1.55 : EDGE_STROKE_WIDTH;
   const group = createElement("g", {
     "pointer-events": "none",

@@ -4,10 +4,10 @@
  * WHY: The tutorial should explain the actual step 1.9 behavior without a separate drawing-only algorithm.
  */
 
-import { convertCellGeometryToCoastlineLotGeometry } from "../map-model.js";
+import { DEFAULT_SEGMENT_LENGTH, convertCellGeometryToCoastlineLotGeometry } from "../map-model.js";
 import { buildCoastlineTrace } from "../coastline-model.js";
 
-const TUTORIAL_SEGMENT_LENGTH = 70;
+const TUTORIAL_SEGMENT_LENGTH = DEFAULT_SEGMENT_LENGTH;
 
 export const COASTLINE_TUTORIAL_DATASETS = {
   threeCellIsland: buildThreeCellIslandDataset(),

@@ -1,13 +1,11 @@
 /*
  * WHAT: Drive the standalone river smoothing tutorial page.
- * HOW: Render deterministic frames from an irregular cell grid and angular river path.
- * WHY: River smoothing should be inspectable without mixing it into the coastline tutorial.
+ * HOW: Load one deterministic generated map and render trace frames from the production river smoothing helpers.
+ * WHY: River smoothing should be inspectable without diverging from the main generator.
  */
 
-import {
-  DEFAULT_RIVER_TUTORIAL_DATASET,
-  buildRiverTutorialTrace,
-} from "./generator/river-smoothing-trace.js";
+import { buildRiverTutorialTrace } from "./generator/river-smoothing-trace.js";
+import { getRiverDemoDataset } from "./tutorial-demo-data.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -19,19 +17,30 @@ const stepBody = document.querySelector("#stepBody");
 const datasetKicker = document.querySelector("#datasetKicker");
 const svg = document.querySelector("#riverSvg");
 
-const trace = buildRiverTutorialTrace(DEFAULT_RIVER_TUTORIAL_DATASET);
+let trace = null;
 let stepIndex = 0;
 
 previousButton.addEventListener("click", () => {
+  if (!trace) {
+    return;
+  }
   stepIndex = Math.max(0, stepIndex - 1);
   render();
 });
 nextButton.addEventListener("click", () => {
+  if (!trace) {
+    return;
+  }
   stepIndex = Math.min(trace.frames.length - 1, stepIndex + 1);
   render();
 });
 
-render();
+init();
+
+async function init() {
+  trace = buildRiverTutorialTrace(await getRiverDemoDataset());
+  render();
+}
 
 function render() {
   const current = trace.frames[stepIndex];
@@ -57,6 +66,12 @@ function drawFrame(geometry) {
     width: size,
     height: size,
   }));
+  (geometry.lots || []).forEach((lot) => {
+    layer.append(createElement("polygon", {
+      class: lot.features?.sea ? "coastline-final-sea-lot" : "river-land-cell",
+      points: toSvgPoints(lot.polygon),
+    }));
+  });
   (geometry.cells || []).forEach((cell) => {
     layer.append(createElement("polygon", {
       class: "river-land-cell",
@@ -79,6 +94,9 @@ function drawFrame(geometry) {
     }));
   });
   (geometry.segments || []).forEach((segment) => {
+    layer.append(createLine(segment.from, segment.to, segment.className || "river-final-segment"));
+  });
+  (geometry.segmentsOverlay || []).forEach((segment) => {
     layer.append(createLine(segment.from, segment.to, segment.className || "river-final-segment"));
   });
   (geometry.points || []).forEach((item) => {

@@ -19,7 +19,7 @@ Each step is a simple function. Its input is exactly the previous step output, e
 2. Human occupation
 2.1 Route graph
 2.2 Parish clustering
-2.3 Land edges
+2.3 Land edges + parish borders
 2.4 Field dispatch
 
 ## Geometry Rules
@@ -518,15 +518,20 @@ Rules:
 - Step 2.2 only accepts lot center nodes as route START points.
 - From step 2.2 onward, route endpoint dots are hidden, route lines are wider, alley routes are medium gray, and parish centers remain visible.
 
-## 2.3 Build Land-Edge Geometry
+## 2.3 Build Land-Edge Geometry + Parish Borders
 
 Source: `src/generator/2-3-build-land-edge-geometry/2-3-build-land-edge-geometry.js`
 
 Rules:
 - Coastline and sea segments are preserved.
+- Segments between two different parishes are marked with `features.parishBoundary`.
+- Only same-parish-pair border chains are smoothed, using the same midpoint-control quadratic sampling strategy used for rivers and coasts.
+- Nodes touching coast, river, sea, or map-boundary segments stay fixed.
+- Protected or non-degree-2 parish-border vertices break smoothing chains; single-segment borders stay straight.
+- Smoothed parish-border spans are marked with `features.parishBoundarySmoothed`.
 - Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
 - Lot polygons, vertex ids, segment ids, and adjacency are rebuilt from the normalized geometry.
-- `routeGraph` is rebuilt from the updated canonical segments.
+- `routeGraph` is rebuilt from the updated canonical segments, preserving `parishBoundary` and `parishBoundarySmoothed` on routes for later steps.
 
 ## 2.4 Field Dispatch
 

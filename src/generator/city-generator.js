@@ -33,7 +33,7 @@ const GENERATION_PIPELINE = [
   { status: "River Lots", run: runAddRiversToLotGeometryStep },
   { status: "Route graph", run: runBuildRouteGraphStep },
   { status: "Parishes", run: runGroupLotsStep },
-  { status: "Land edges", run: runBuildLandEdgeGeometryStep },
+  { status: "Land edges + parish borders", run: runBuildLandEdgeGeometryStep },
   { status: "Field dispatch", run: runFieldDispatchStep },
 ];
 

@@ -72,7 +72,8 @@ export function buildGenerationStepSignature(stepIndex, options) {
     case 11:
       return stableSignature({
         segmentLength: "default",
-        routeGraph: "rebuilt-after-segmentation",
+        routeGraph: "rebuilt-after-land-edge-and-parish-border-smoothing",
+        parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
       });
     case 12:
       return stableSignature({

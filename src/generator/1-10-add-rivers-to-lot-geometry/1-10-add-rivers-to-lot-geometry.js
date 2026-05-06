@@ -12,9 +12,10 @@ import {
   dedupeConsecutivePoints,
   midpointBetween,
   normalizePolyline,
+  polylineLength,
   pointDistance,
-  resamplePolyline,
 } from "../map-model.js";
+import { smoothPinnedPolyline } from "../polyline-smoothing.js";
 
 export function runAddRiversToLotGeometryStep(map) {
   if (!Array.isArray(map.lots) || !map.lots.length || !Array.isArray(map.rivers) || !map.rivers.length) {
@@ -50,7 +51,7 @@ const RIVER_SPAN_EPSILON = 0.5;
 const SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
 const TRIBUTARY_MERGE_DOWNSTREAM_RATIO = 0.33;
 
-function buildRiverSegmentModel(rivers) {
+export function buildRiverSegmentModel(rivers) {
   const nodes = [];
   const segments = [];
   const nodeByKey = new Map();
@@ -108,7 +109,7 @@ function buildRiverSegmentModel(rivers) {
     }
 
     const mergeIndex = findPrimaryMergePointIndex(river);
-    const smoothedPoints = smoothRiverPolyline(points, pinnedPointKeys);
+    const smoothedPoints = smoothPinnedPolyline(points, pinnedPointKeys);
     let segmentCursor = 0;
 
     for (let index = 0; index < smoothedPoints.length - 1; index += 1) {
@@ -143,7 +144,7 @@ function buildRiverSegmentModel(rivers) {
   };
 }
 
-function buildAdjustedRiverPointMap(rivers) {
+export function buildAdjustedRiverPointMap(rivers) {
   const pointsByRiverId = new Map(rivers.map((river) => [
     river.id,
     normalizePolyline(river.points || []),
@@ -181,55 +182,8 @@ function buildAdjustedRiverPointMap(rivers) {
   return pointsByRiverId;
 }
 
-function isTributaryRiver(river) {
+export function isTributaryRiver(river) {
   return river.mergedIntoRiverId !== null && river.mergedIntoRiverId !== undefined;
-}
-
-function smoothRiverPolyline(points, pinnedPointKeys, targetLength = DEFAULT_SEGMENT_LENGTH) {
-  if (points.length < 3) {
-    return resamplePolyline(points, Math.max(1, Math.ceil(polylineLength(points) / targetLength)));
-  }
-
-  const segmentPaths = Array.from({ length: points.length - 1 }, () => ({
-    fromToMidpoint: null,
-    midpointToTo: null,
-  }));
-
-  for (let index = 0; index < points.length; index += 1) {
-    const control = points[index];
-    const previousMidpoint = index > 0 ? midpointBetween(points[index - 1], control) : null;
-    const nextMidpoint = index < points.length - 1 ? midpointBetween(control, points[index + 1]) : null;
-    const isPinned = index === 0 || index === points.length - 1 || pinnedPointKeys.has(pointKey(control));
-    const start = previousMidpoint || mirrorPoint(nextMidpoint, control);
-    const end = nextMidpoint || mirrorPoint(previousMidpoint, control);
-    const curve = sampleQuadraticBezier(start, control, end, targetLength);
-    const splitIndex = isPinned ? findClosestPointIndex(curve, control) : findClosestPointIndex(curve, control);
-    const splitPoint = isPinned ? clonePoint(control) : clonePoint(curve[splitIndex]);
-
-    if (index > 0) {
-      segmentPaths[index - 1].midpointToTo = dedupeConsecutivePoints([
-        ...curve.slice(0, splitIndex),
-        splitPoint,
-      ]);
-    }
-    if (index < points.length - 1) {
-      segmentPaths[index].fromToMidpoint = dedupeConsecutivePoints([
-        splitPoint,
-        ...curve.slice(splitIndex + 1),
-      ]);
-    }
-  }
-
-  const smoothed = [];
-  segmentPaths.forEach((entry, index) => {
-    const fallback = resamplePolyline([points[index], points[index + 1]], Math.max(1, Math.ceil(pointDistance(points[index], points[index + 1]) / targetLength)));
-    const path = entry.fromToMidpoint && entry.midpointToTo
-      ? dedupeConsecutivePoints([...entry.fromToMidpoint, ...entry.midpointToTo.slice(1)])
-      : fallback;
-    appendPath(smoothed, path);
-  });
-
-  return dedupeConsecutivePoints(smoothed);
 }
 
 function mapSmoothedRiverSamplePosition(originalPoints, smoothedPoints, sampleIndex) {
@@ -248,34 +202,6 @@ function mapSmoothedRiverSamplePosition(originalPoints, smoothedPoints, sampleIn
   return bestIndex;
 }
 
-function sampleQuadraticBezier(start, control, end, targetLength) {
-  const approximateLength = pointDistance(start, control) + pointDistance(control, end);
-  const segmentCount = Math.max(2, Math.ceil(approximateLength / Math.max(EPSILON, targetLength)));
-  const points = [];
-  for (let index = 0; index <= segmentCount; index += 1) {
-    const t = index / segmentCount;
-    const inverse = 1 - t;
-    points.push({
-      x: (inverse * inverse * start.x) + (2 * inverse * t * control.x) + (t * t * end.x),
-      y: (inverse * inverse * start.y) + (2 * inverse * t * control.y) + (t * t * end.y),
-    });
-  }
-  return dedupeConsecutivePoints(points);
-}
-
-function findClosestPointIndex(points, target) {
-  let bestIndex = 0;
-  let bestDistance = Infinity;
-  points.forEach((point, index) => {
-    const distance = pointDistance(point, target);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
-    }
-  });
-  return bestIndex;
-}
-
 function pointDistanceToSegment(point, from, to) {
   const length = pointDistance(from, to);
   if (length <= EPSILON) {
@@ -283,30 +209,6 @@ function pointDistanceToSegment(point, from, to) {
   }
   const along = Math.max(0, Math.min(1, ((point.x - from.x) * (to.x - from.x) + (point.y - from.y) * (to.y - from.y)) / (length ** 2)));
   return pointDistance(point, pointAlongSegment(from, to, along));
-}
-
-function mirrorPoint(point, origin) {
-  return {
-    x: (origin.x * 2) - point.x,
-    y: (origin.y * 2) - point.y,
-  };
-}
-
-function polylineLength(points) {
-  let length = 0;
-  for (let index = 1; index < points.length; index += 1) {
-    length += pointDistance(points[index - 1], points[index]);
-  }
-  return length;
-}
-
-function appendPath(target, path) {
-  path.forEach((point) => {
-    const previous = target[target.length - 1];
-    if (!previous || !pointsMatch(previous, point)) {
-      target.push(clonePoint(point));
-    }
-  });
 }
 
 function splitLotsByRiverGraph(map, riverGraph) {
@@ -750,24 +652,11 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
       boundary: segment.leftLotId === null || segment.rightLotId === null,
       ...buildSegmentSurfaceFeatures(segment, lotById),
     };
-    const preserveAsIs = features.river || features.coast || features.sea;
-    const sampledPoints = preserveAsIs
-      ? [segment.from, segment.to]
-      : resampleSpan(segment.from, segment.to, DEFAULT_SEGMENT_LENGTH * 2);
-
-    for (let index = 0; index < sampledPoints.length - 1; index += 1) {
-      const from = sampledPoints[index];
-      const to = sampledPoints[index + 1];
-      segments.push({
-        ...segment,
-        id: `segment:${segments.length}`,
-        from,
-        to,
-        midpoint: midpointBetween(from, to),
-        length: pointDistance(from, to),
-        features,
-      });
-    }
+    segments.push({
+      ...segment,
+      id: `segment:${segments.length}`,
+      features,
+    });
   });
 
   appendUnrepresentedRiverSegments(segments, riverGraph.segments, normalizedLots, lotById);
@@ -1094,12 +983,6 @@ function clipRiverSegmentToPolygon(segment, polygon) {
   return clip;
 }
 
-function resampleSpan(from, to, targetLength = DEFAULT_SEGMENT_LENGTH) {
-  const spanLength = pointDistance(from, to);
-  const segmentCount = Math.max(1, Math.ceil(spanLength / targetLength));
-  return resamplePolyline([from, to], segmentCount);
-}
-
 function resolveRiverBranchType(river, samplePosition, mergeIndex, branchType) {
   if (branchType === "tributary") {
     return "tributary";
@@ -1112,7 +995,7 @@ function resolveRiverBranchType(river, samplePosition, mergeIndex, branchType) {
   return samplePosition < mergeIndex ? "primary_upstream" : "primary_downstream";
 }
 
-function findPrimaryMergePointIndex(river) {
+export function findPrimaryMergePointIndex(river) {
   if (river.widthMergeCellId === null || river.widthMergeCellId === undefined) {
     return null;
   }
@@ -1120,7 +1003,7 @@ function findPrimaryMergePointIndex(river) {
   return findPrimaryMergePointIndexForCell(river, river.widthMergeCellId);
 }
 
-function findPrimaryMergePointIndexForCell(river, cellId) {
+export function findPrimaryMergePointIndexForCell(river, cellId) {
   if (cellId === null || cellId === undefined) {
     return null;
   }

@@ -4,13 +4,11 @@
  * WHY: The illustration page should explain the real algorithm without duplicating renderer-only logic.
  */
 
-import { clonePoint, pointDistance } from "../map-model.js";
+import { DEFAULT_SEGMENT_LENGTH, clonePoint, pointDistance } from "../map-model.js";
 import { inspectCurvedBisection } from "./2-4-curved-bisection.js";
 import { splitLotPolygonRecursively } from "./2-4-field-dispatch.js";
 
 const EPSILON = 0.0001;
-const EDGE_SEGMENT_LENGTH = 70;
-
 export const TUTORIAL_LOTS = {
   potato: {
     id: 436,
@@ -73,17 +71,17 @@ export const TUTORIAL_LOT = TUTORIAL_LOTS.potato;
 
 const FALLBACK_SEGMENTED_LOT = {
   id: 436,
-  polygon: splitPolygonEdgesIntoSegments(normalizePolygon(TUTORIAL_LOT.polygon), EDGE_SEGMENT_LENGTH),
+  polygon: normalizePolygon(TUTORIAL_LOT.polygon),
 };
 
 export function buildBisectionTutorialTrace({
   algorithm = "straight_bisection",
   lot = TUTORIAL_LOT,
-  segmentLength = 135,
+  segmentLength = DEFAULT_SEGMENT_LENGTH,
   curveAmplitude = 0.35,
 } = {}) {
   const originalPolygon = normalizePolygon(lot.polygon);
-  const polygon = splitPolygonEdgesIntoSegments(originalPolygon, EDGE_SEGMENT_LENGTH);
+  const polygon = normalizePolygon(lot.polygon);
   const segmentedLot = { id: lot.id, polygon };
   const frames = [
     frame("Original fixed lot", `The tutorial starts from the ${lot.name || "selected"} lot. It is drawn as one polygon before the bisection code prepares its working vertices.`, {
@@ -91,7 +89,7 @@ export function buildBisectionTutorialTrace({
       polygons: [{ points: originalPolygon, className: "tutorial-active-area" }],
       points: labelVertices(originalPolygon),
     }),
-    frame("Split edges into working segments", `Long lot edges are split into shorter boundary segments first. The bisection algorithms work from these ${polygon.length} boundary vertices.`, {
+    frame("Working boundary vertices", `Step 2.3 already provides the canonical lot boundary used by field dispatch. This lot enters the bisection step with ${polygon.length} boundary vertices.`, {
       basePolygon: originalPolygon,
       polygons: [{ points: polygon, className: "tutorial-active-area segmented-lot" }],
       points: labelVertices(polygon),
@@ -223,24 +221,6 @@ function samePolygon(first, second) {
     return false;
   }
   return first.every((point, index) => pointDistance(point, second[index]) <= EPSILON);
-}
-
-function splitPolygonEdgesIntoSegments(polygon, targetLength) {
-  const segmented = [];
-  for (let index = 0; index < polygon.length; index += 1) {
-    const from = polygon[index];
-    const to = polygon[(index + 1) % polygon.length];
-    const length = pointDistance(from, to);
-    const count = Math.max(1, Math.ceil(length / targetLength));
-    for (let segmentIndex = 0; segmentIndex < count; segmentIndex += 1) {
-      const t = segmentIndex / count;
-      segmented.push({
-        x: from.x + ((to.x - from.x) * t),
-        y: from.y + ((to.y - from.y) * t),
-      });
-    }
-  }
-  return normalizePolygon(segmented);
 }
 
 function labelVertices(polygon, blockedVertexKeys = new Set()) {

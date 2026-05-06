@@ -16,7 +16,7 @@ export const GENERATION_STEPS = [
   "River splits",
   "Route graph",
   "Parish clustering",
-  "Land edges",
+  "Land edges + parish borders",
   "Field dispatch",
 ];
 

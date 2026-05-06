@@ -1,10 +1,11 @@
 /*
  * WHAT: Drive the standalone bisection tutorial page.
- * HOW: Build trace frames from the shared tessellation trace helper and render the selected frame into SVG.
- * WHY: The page explains the actual tessellation algorithms without depending on the full map UI.
+ * HOW: Load deterministic generated lots, then build trace frames from the shared tessellation trace helper.
+ * WHY: The page should explain the actual field-dispatch algorithms on real map output.
  */
 
-import { buildBisectionTutorialTrace, TUTORIAL_LOT, TUTORIAL_LOTS } from "./generator/2-4-field-dispatch/2-4-bisection-trace.js";
+import { buildBisectionTutorialTrace } from "./generator/2-4-field-dispatch/2-4-bisection-trace.js";
+import { getBisectionDemoDataset } from "./tutorial-demo-data.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEWBOX_PADDING = 80;
@@ -21,27 +22,53 @@ const svg = document.querySelector("#bissectionSvg");
 
 let trace = null;
 let stepIndex = 0;
-let selectedLot = TUTORIAL_LOT;
+let selectedLot = null;
+let availableLots = [];
 
 algorithmSelect.addEventListener("change", () => {
+  if (!selectedLot) {
+    return;
+  }
   rebuildTrace();
 });
 lotSelect.addEventListener("change", () => {
-  selectedLot = TUTORIAL_LOTS[lotSelect.value] || TUTORIAL_LOT;
+  selectedLot = availableLots.find((lot) => String(lot.id) === lotSelect.value) || availableLots[0] || null;
   rebuildTrace();
 });
 previousButton.addEventListener("click", () => {
+  if (!trace) {
+    return;
+  }
   stepIndex = Math.max(0, stepIndex - 1);
   render();
 });
 nextButton.addEventListener("click", () => {
+  if (!trace) {
+    return;
+  }
   stepIndex = Math.min(trace.frames.length - 1, stepIndex + 1);
   render();
 });
 
-rebuildTrace();
+init();
+
+async function init() {
+  const dataset = await getBisectionDemoDataset();
+  availableLots = dataset.lots || [];
+  selectedLot = availableLots[0] || null;
+  lotSelect.replaceChildren(...availableLots.map((lot) => {
+    const option = document.createElement("option");
+    option.value = String(lot.id);
+    option.textContent = `${lot.name}`;
+    return option;
+  }));
+  rebuildTrace();
+}
 
 function rebuildTrace() {
+  if (!selectedLot) {
+    return;
+  }
   trace = buildBisectionTutorialTrace({
     algorithm: algorithmSelect.value,
     lot: selectedLot,

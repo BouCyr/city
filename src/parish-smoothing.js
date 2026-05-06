@@ -1,14 +1,13 @@
 /*
- * WHAT: Drive the standalone coastline tutorial page.
- * HOW: Generate one deterministic map, then render frames from the same coastline trace builder used by step 1.9.
- * WHY: The smoothing step should show the real pipeline behavior on a fixed map.
+ * WHAT: Drive the standalone parish-border smoothing tutorial page.
+ * HOW: Load one deterministic generated map and render the production parish-smoothing trace frames.
+ * WHY: The merged 2.3 smoothing pass should be inspectable without the full main-map UI.
  */
 
-import { buildCoastlineTutorialTrace } from "./generator/1-9-build-coastline-geometry/1-9-coastline-trace.js";
-import { getCoastlineDemoDataset } from "./tutorial-demo-data.js";
+import { buildParishSmoothingTutorialTrace } from "./generator/parish-smoothing-trace.js";
+import { getParishSmoothingDemoDataset } from "./tutorial-demo-data.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const VIEWBOX_PADDING = 0;
 
 const previousButton = document.querySelector("#previousStepButton");
 const nextButton = document.querySelector("#nextStepButton");
@@ -16,9 +15,8 @@ const stepCounter = document.querySelector("#stepCounter");
 const stepTitle = document.querySelector("#stepTitle");
 const stepBody = document.querySelector("#stepBody");
 const datasetKicker = document.querySelector("#datasetKicker");
-const svg = document.querySelector("#coastlineSvg");
+const svg = document.querySelector("#parishSvg");
 
-let selectedDataset = null;
 let trace = null;
 let stepIndex = 0;
 
@@ -40,15 +38,13 @@ nextButton.addEventListener("click", () => {
 init();
 
 async function init() {
-  selectedDataset = await getCoastlineDemoDataset();
-  trace = buildCoastlineTutorialTrace(selectedDataset);
-  stepIndex = 0;
+  trace = buildParishSmoothingTutorialTrace(await getParishSmoothingDemoDataset());
   render();
 }
 
 function render() {
   const current = trace.frames[stepIndex];
-  datasetKicker.textContent = selectedDataset.name;
+  datasetKicker.textContent = trace.dataset.name;
   stepTitle.textContent = current.title;
   stepBody.textContent = current.body;
   stepCounter.textContent = `${stepIndex + 1} / ${trace.frames.length}`;
@@ -59,42 +55,30 @@ function render() {
 
 function drawFrame(geometry) {
   svg.replaceChildren();
-  const size = selectedDataset.map.meta.size;
-  svg.setAttribute("viewBox", `${-VIEWBOX_PADDING} ${-VIEWBOX_PADDING} ${size + (VIEWBOX_PADDING * 2)} ${size + (VIEWBOX_PADDING * 2)}`);
+  const size = trace.dataset.size;
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
 
   const layer = createElement("g", { class: "tutorial-svg-layer" });
   layer.append(createElement("rect", {
-    class: "coastline-map-background",
+    class: "parish-map-background",
     x: 0,
     y: 0,
     width: size,
     height: size,
   }));
-  (geometry.cells || []).forEach((cell) => {
-    layer.append(createElement("polygon", {
-      class: cell.features.sea ? "coastline-sea-cell" : "coastline-land-cell",
-      points: toSvgPoints(cell.polygon),
-    }));
-  });
   (geometry.lots || []).forEach((lot) => {
     layer.append(createElement("polygon", {
-      class: lot.features.sea ? "coastline-final-sea-lot" : "coastline-final-land-lot",
+      class: "parish-lot",
       points: toSvgPoints(lot.polygon),
+      fill: parishFill(lot),
     }));
   });
-  (geometry.edges || []).forEach((edge) => {
-    layer.append(createLine(edge.from, edge.to, edge.className || "coastline-raw-edge"));
-  });
   (geometry.segments || []).forEach((segment) => {
-    layer.append(createLine(
-      segment.from,
-      segment.to,
-      segment.features.coast ? "coastline-final-coast-segment" : "coastline-final-segment",
-    ));
+    layer.append(createLine(segment.from, segment.to, segment.className || "parish-muted-edge"));
   });
   (geometry.curves || []).forEach((curve) => {
     layer.append(createElement("polyline", {
-      class: curve.className || "coastline-bezier-guide",
+      class: curve.className || "parish-bezier-guide",
       points: toSvgPoints(curve.points),
     }));
   });
@@ -102,6 +86,18 @@ function drawFrame(geometry) {
     layer.append(createPoint(item));
   });
   svg.append(layer);
+}
+
+function parishFill(lot) {
+  const palette = [
+    "rgba(209, 133, 92, 0.48)",
+    "rgba(83, 141, 195, 0.44)",
+    "rgba(119, 164, 121, 0.44)",
+  ];
+  if (lot.parishId === null || lot.parishId === undefined) {
+    return "rgba(197, 220, 206, 0.72)";
+  }
+  return palette[lot.parishId % palette.length];
 }
 
 function createLine(from, to, className) {
@@ -119,12 +115,12 @@ function createPoint({ point, label, className }) {
   group.append(createElement("circle", {
     cx: point.x,
     cy: point.y,
-    r: label ? 10 : 5,
+    r: label ? 9 : 6,
   }));
   if (label !== undefined) {
     const text = createElement("text", {
       x: point.x,
-      y: point.y - 16,
+      y: point.y - 14,
       "text-anchor": "middle",
     });
     text.textContent = label;

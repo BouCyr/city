@@ -1,226 +1,137 @@
 /*
- * WHAT: Build tutorial frames for river smoothing.
- * HOW: Generate a seeded irregular cell grid and smooth an angular river with midpoint-controlled quadratic curves.
- * WHY: The dedicated river tutorial should show river-specific geometry without coastline concepts.
+ * WHAT: Build tutorial frames for the real river smoothing step.
+ * HOW: Reuse the production river-point adjustments and smoothing helpers on a deterministic generated map.
+ * WHY: The river tutorial should explain the actual 1.10 geometry pass, not a separate demo-only path.
  */
 
-import { createSeededRandom } from "./random.js";
+import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
+import {
+  buildAdjustedRiverPointMap,
+  buildRiverSegmentModel,
+  findPrimaryMergePointIndex,
+} from "./1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js";
+import { inspectPinnedPolylineSmoothing } from "./polyline-smoothing.js";
 
-const TUTORIAL_SEGMENT_LENGTH = 58;
+const TUTORIAL_SEGMENT_LENGTH = DEFAULT_SEGMENT_LENGTH;
 
-export const DEFAULT_RIVER_TUTORIAL_DATASET = buildIrregularRiverDataset();
+export function buildRiverTutorialTrace(dataset) {
+  const inputMap = dataset?.map;
+  const river = (inputMap?.rivers || [])[0] || null;
+  const size = inputMap?.meta?.size || dataset?.size || 720;
+  if (!inputMap || !river) {
+    return {
+      dataset: dataset || { name: "River smoothing" },
+      frames: [frame("River smoothing", "No generated river is available for this tutorial dataset.", {})],
+    };
+  }
 
-export function buildRiverTutorialTrace(dataset = DEFAULT_RIVER_TUTORIAL_DATASET) {
-  const riverTrace = buildRiverBezierTrace(dataset.riverPath);
-  const segments = pointsToSegments(riverTrace.path);
+  const adjustedPointsByRiverId = buildAdjustedRiverPointMap(inputMap.rivers || []);
+  const adjustedPoints = adjustedPointsByRiverId.get(river.id) || river.points || [];
+  const pinnedPointKeys = buildPinnedPointKeySet(inputMap.rivers || [], adjustedPointsByRiverId);
+  const smoothing = inspectPinnedPolylineSmoothing(adjustedPoints, pinnedPointKeys, TUTORIAL_SEGMENT_LENGTH);
+  const riverGraph = buildRiverSegmentModel(inputMap.rivers || []);
+  const finalSegments = riverGraph.segments
+    .filter((segment) => segment.riverId === river.id)
+    .map((segment) => ({
+      ...segment,
+      className: "river-final-segment",
+    }));
 
   return {
-    dataset,
+    dataset: {
+      ...dataset,
+      size,
+    },
     frames: [
-      frame("Irregular source cells", "The river tutorial starts from a deterministic jittered cell grid so the path is not tied to a perfect rectangular lattice.", {
-        cells: dataset.cells,
-        edges: dataset.edges,
+      frame("Generated coastline-adjusted lots", "The tutorial starts from the real step 1.9 output: deterministic coastline-adjusted lots and canonical segments before river splitting.", {
+        lots: inputMap.lots,
+        segments: inputMap.segments?.map((segment) => ({
+          ...segment,
+          className: segment.features?.coast ? "river-muted-edge" : "river-grid-edge",
+        })),
       }),
-      frame("Angular cell path", "The selected river follows cell-to-cell turns before smoothing. Its control points are intentionally uneven to mimic a generated drainage route.", {
-        cells: dataset.cells,
-        edges: dataset.edges.map((edge) => ({ ...edge, className: "river-muted-edge" })),
-        rawPaths: [{ points: dataset.riverPath, className: "river-raw-path" }],
-        points: dataset.riverPath.map((point, index) => ({ point, label: index + 1, className: "river-control-point" })),
+      frame("Angular river path", "The stored river route still follows the generator's angular path through cells before the lot split step samples it into geometry.", {
+        lots: inputMap.lots,
+        segments: inputMap.segments?.map((segment) => ({ ...segment, className: "river-muted-edge" })),
+        rawPaths: [{ points: river.points, className: "river-raw-path" }],
+        points: river.points.map((point, index) => ({
+          point,
+          label: String(index + 1),
+          className: pinnedPointKeys.has(pointKey(point)) ? "river-pinned-point" : "river-control-point",
+        })),
       }),
-      frame("Find midpoint controls", "Each bend becomes a control point, and neighboring river vertices provide the half-span start and end points for that curve.", {
-        cells: dataset.cells,
-        edges: dataset.edges.map((edge) => ({ ...edge, className: "river-muted-edge" })),
-        rawPaths: [{ points: dataset.riverPath, className: "river-muted-path" }],
+      frame("Adjusted merge and pinned points", "Before smoothing, tributary merges and primary width-change points are aligned exactly so the final sampled river geometry stays topologically consistent.", {
+        lots: inputMap.lots,
+        segments: inputMap.segments?.map((segment) => ({ ...segment, className: "river-muted-edge" })),
+        rawPaths: [{ points: adjustedPoints, className: "river-muted-path" }],
+        points: adjustedPoints.map((point) => ({
+          point,
+          className: pinnedPointKeys.has(pointKey(point)) ? "river-pinned-point" : "river-control-point",
+        })),
+      }),
+      frame("Build smoothing curves", "Each river bend uses the same midpoint-control quadratic construction as the production step. Pinned vertices split the sampled curves back onto exact merge and endpoint locations.", {
+        lots: inputMap.lots,
+        segments: inputMap.segments?.map((segment) => ({ ...segment, className: "river-muted-edge" })),
+        curves: smoothing.curves.map((curve) => ({ points: curve.points, className: "river-bezier-guide" })),
         points: [
-          ...riverTrace.midpoints.map((point) => ({ point, label: "M", className: "river-midpoint" })),
-          ...dataset.riverPath.map((point) => ({ point, label: "R", className: "river-control-point" })),
+          ...smoothing.curves.map((curve) => ({ point: curve.control, label: "R", className: "river-control-point" })),
+          ...smoothing.curves.flatMap((curve) => {
+            const points = [];
+            if (curve.start) {
+              points.push({ point: curve.start, label: "M", className: "river-midpoint" });
+            }
+            if (curve.end) {
+              points.push({ point: curve.end, label: "M", className: "river-midpoint" });
+            }
+            return points;
+          }),
+          ...smoothing.curves
+            .filter((curve) => curve.isPinned)
+            .map((curve) => ({ point: curve.splitPoint, className: "river-pinned-point" })),
         ],
       }),
-      frame("Build Bezier curves", "Every river bend emits a short quadratic curve from one span midpoint to the next, controlled by the original angular river vertex.", {
-        cells: dataset.cells,
-        edges: dataset.edges.map((edge) => ({ ...edge, className: "river-muted-edge" })),
-        curves: riverTrace.curves.map((curve) => ({ points: curve.points, className: "river-bezier-guide" })),
-        points: dataset.riverPath.map((point) => ({ point, label: "R", className: "river-control-point" })),
-      }),
-      frame("Final smoothed river segments", "The smoothed path is emitted as ordinary segment geometry. Production merge points are pinned exactly before these sampled segments are added to the lot model.", {
-        cells: dataset.cells,
-        edges: dataset.edges.map((edge) => ({ ...edge, className: "river-muted-edge" })),
-        segments,
-        points: riverTrace.path.map((point) => ({ point, className: "river-sample-point" })),
+      frame("Final smoothed river segments", "The real 1.10 step emits ordinary river segments from the smoothed path, ready to split the coastline-adjusted lots.", {
+        lots: inputMap.lots,
+        segments: inputMap.segments?.map((segment) => ({ ...segment, className: "river-muted-edge" })),
+        rawPaths: [{ points: smoothing.smoothedPath, className: "river-muted-path" }],
+        segmentsOverlay: finalSegments,
+        points: smoothing.smoothedPath.map((point) => ({ point, className: "river-sample-point" })),
       }),
     ],
   };
 }
 
-function buildIrregularRiverDataset() {
-  const rng = createSeededRandom("river-smoothing-tutorial");
-  const size = 720;
-  const columns = 5;
-  const rows = 7;
-  const lattice = [];
-
-  for (let row = 0; row <= rows; row += 1) {
-    const line = [];
-    for (let column = 0; column <= columns; column += 1) {
-      const baseX = (column / columns) * size;
-      const baseY = (row / rows) * size;
-      const isBoundary = row === 0 || row === rows || column === 0 || column === columns;
-      line.push(point(
-        isBoundary ? baseX : baseX + rng.between(-42, 42),
-        isBoundary ? baseY : baseY + rng.between(-36, 36),
-      ));
+function buildPinnedPointKeySet(rivers, adjustedPointsByRiverId) {
+  const pinnedPointKeys = new Set();
+  rivers.forEach((river) => {
+    if (river.mergeCellId === null || river.mergeCellId === undefined) {
+      return;
     }
-    lattice.push(line);
-  }
 
-  const cells = [];
-  const edges = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      const id = (row * columns) + column;
-      const polygon = [
-        lattice[row][column],
-        lattice[row][column + 1],
-        lattice[row + 1][column + 1],
-        lattice[row + 1][column],
-      ];
-      cells.push({
-        id,
-        polygon,
-        centroid: centroid(polygon),
-        features: { land: true, sea: false, river: false },
-      });
+    const riverPoints = adjustedPointsByRiverId.get(river.id) || river.points || [];
+    const pointIndex = riverPoints.length - 1;
+    if (pointIndex >= 0) {
+      pinnedPointKeys.add(pointKey(riverPoints[pointIndex]));
     }
-  }
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column <= columns; column += 1) {
-      edges.push(edge(`river:v:${row}:${column}`, lattice[row][column], lattice[row + 1][column]));
-    }
-  }
-  for (let row = 0; row <= rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      edges.push(edge(`river:h:${row}:${column}`, lattice[row][column], lattice[row][column + 1]));
-    }
-  }
-
-  const riverColumns = [2.7, 1.9, 3.2, 1.4, 2.35, 3.55, 2.15, 2.55, 1.8];
-  const riverPath = riverColumns.map((columnOffset, index) => {
-    const y = (index / (riverColumns.length - 1)) * size;
-    const x = (columnOffset / columns) * size;
-    return point(
-      clamp(x + rng.between(-34, 34), 22, size - 22),
-      clamp(y + (index === 0 || index === riverColumns.length - 1 ? 0 : rng.between(-28, 28)), 0, size),
-    );
   });
+  rivers.forEach((river) => {
+    if (river.widthMergeCellId === null || river.widthMergeCellId === undefined) {
+      return;
+    }
 
-  return {
-    id: "irregularRiverCells",
-    name: "Irregular river cells",
-    size,
-    cells,
-    edges,
-    riverPath,
-  };
+    const mergePointIndex = findPrimaryMergePointIndex(river);
+    const riverPoints = adjustedPointsByRiverId.get(river.id) || river.points || [];
+    if (mergePointIndex !== null && riverPoints[mergePointIndex]) {
+      pinnedPointKeys.add(pointKey(riverPoints[mergePointIndex]));
+    }
+  });
+  return pinnedPointKeys;
 }
 
 function frame(title, body, geometry) {
   return { title, body, geometry };
 }
 
-function buildRiverBezierTrace(points) {
-  const curves = [];
-  const path = [];
-  const midpoints = [];
-
-  for (let index = 0; index < points.length - 1; index += 1) {
-    midpoints.push(midpoint(points[index], points[index + 1]));
-  }
-
-  for (let index = 0; index < points.length; index += 1) {
-    const control = points[index];
-    const previousMidpoint = index > 0 ? midpoints[index - 1] : null;
-    const nextMidpoint = index < points.length - 1 ? midpoints[index] : null;
-    const start = previousMidpoint || mirrorPoint(nextMidpoint, control);
-    const end = nextMidpoint || mirrorPoint(previousMidpoint, control);
-    const curvePoints = sampleQuadraticBezier(start, control, end, TUTORIAL_SEGMENT_LENGTH);
-    curves.push({ points: curvePoints, control });
-    appendTracePath(path, curvePoints);
-  }
-
-  return {
-    curves,
-    midpoints,
-    path,
-  };
-}
-
-function sampleQuadraticBezier(start, control, end, targetLength) {
-  const approximateLength = distance(start, control) + distance(control, end);
-  const segmentCount = Math.max(2, Math.ceil(approximateLength / targetLength));
-  const points = [];
-  for (let index = 0; index <= segmentCount; index += 1) {
-    const t = index / segmentCount;
-    const inverse = 1 - t;
-    points.push({
-      x: (inverse * inverse * start.x) + (2 * inverse * t * control.x) + (t * t * end.x),
-      y: (inverse * inverse * start.y) + (2 * inverse * t * control.y) + (t * t * end.y),
-    });
-  }
-  return points;
-}
-
-function pointsToSegments(points) {
-  return points.slice(1).map((point, index) => ({
-    id: `river-segment:${index}`,
-    from: points[index],
-    to: point,
-    className: "river-final-segment",
-  }));
-}
-
-function appendTracePath(target, path) {
-  path.forEach((point) => {
-    const previous = target[target.length - 1];
-    if (!previous || distance(previous, point) > 0.0001) {
-      target.push(point);
-    }
-  });
-}
-
-function edge(id, from, to) {
-  return { id, from, to, className: "river-grid-edge" };
-}
-
-function midpoint(first, second) {
-  return {
-    x: (first.x + second.x) / 2,
-    y: (first.y + second.y) / 2,
-  };
-}
-
-function mirrorPoint(point, origin) {
-  return {
-    x: (origin.x * 2) - point.x,
-    y: (origin.y * 2) - point.y,
-  };
-}
-
-function centroid(points) {
-  return {
-    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
-  };
-}
-
-function point(x, y) {
-  return { x, y };
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function distance(first, second) {
-  return Math.hypot(first.x - second.x, first.y - second.y);
+function pointKey(point) {
+  return `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
 }

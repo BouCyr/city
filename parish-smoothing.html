@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bissection Process</title>
+  <title>Parish Smoothing Process</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -12,37 +12,27 @@
 <body>
   <main class="tutorial-shell">
     <section class="tutorial-toolbar panel">
-      <label class="tutorial-control">
-        <span class="field-title">Algorithm</span>
-        <select id="algorithmSelect">
-          <option value="straight_bisection">Straight bisection</option>
-          <option value="curved_bisection" selected>Curved bisection</option>
-        </select>
-      </label>
-      <label class="tutorial-control">
-        <span class="field-title">Generated lot</span>
-        <select id="lotSelect"></select>
-      </label>
       <div class="tutorial-navigation">
         <button id="previousStepButton" class="secondary-button" type="button">Prev</button>
         <output id="stepCounter" class="tutorial-counter">1 / 1</output>
         <button id="nextStepButton" class="secondary-button" type="button">Next</button>
       </div>
       <a class="secondary-button tutorial-home-link" href="./index.html">Main map</a>
-      <a class="secondary-button tutorial-home-link" href="./parish-smoothing.html">Parish smoothing</a>
+      <a class="secondary-button tutorial-home-link" href="./coastline.html">Coastline smoothing</a>
+      <a class="secondary-button tutorial-home-link" href="./river.html">River smoothing</a>
     </section>
 
     <section class="tutorial-layout">
       <section class="tutorial-visual-panel panel">
-        <svg id="bissectionSvg" class="tutorial-svg" role="img" aria-label="Bisection process diagram"></svg>
+        <svg id="parishSvg" class="tutorial-svg parish-svg" role="img" aria-label="Parish smoothing process diagram"></svg>
       </section>
       <aside class="tutorial-text-panel panel">
-        <p id="lotKicker" class="tutorial-kicker">Loading generated lots</p>
-        <h1 id="stepTitle">Bissection process</h1>
-        <p id="stepBody">Inspect the real field-dispatch split process on deterministic generated lots.</p>
+        <p id="datasetKicker" class="tutorial-kicker">Loading parish map</p>
+        <h1 id="stepTitle">Parish smoothing process</h1>
+        <p id="stepBody">Inspect how inter-parish borders become sampled geometry before field dispatch.</p>
       </aside>
     </section>
   </main>
-  <script type="module" src="./src/bissection.js"></script>
+  <script type="module" src="./src/parish-smoothing.js"></script>
 </body>
 </html>

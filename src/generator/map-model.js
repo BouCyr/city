@@ -6,6 +6,7 @@
 
 import { cross } from "./geometry.js";
 import { buildCoastlineTrace } from "./coastline-model.js";
+import { buildParishBorderTrace } from "./parish-border-model.js";
 
 export const BLANK_STEP_INDEX = -1;
 export const DEFAULT_SEGMENT_LENGTH = 20;
@@ -207,11 +208,16 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
   const vertexByKey = new Map();
   const segments = [];
   const segmentPathById = new Map();
+  const parishBorderTrace = buildParishBorderTrace(map, { segmentLength });
 
   (map.segments || []).forEach((segment) => {
-    const path = normalizePolyline(segment.path?.length ? segment.path : [segment.from, segment.to]);
+    const replacementPath = parishBorderTrace.edgePathById.get(segment.id);
+    const from = parishBorderTrace.replacementPointByVertexKey.get(pointKey(segment.from)) || segment.from;
+    const to = parishBorderTrace.replacementPointByVertexKey.get(pointKey(segment.to)) || segment.to;
+    const path = normalizePolyline(replacementPath || replacePathEndpoints(segment.path?.length ? segment.path : [segment.from, segment.to], from, to));
     const keepAsIs = Boolean(segment.features?.coast) || Boolean(segment.features?.sea);
-    const sampledPoints = keepAsIs
+    const preservePath = keepAsIs || parishBorderTrace.smoothedSegmentIds.has(segment.id);
+    const sampledPoints = preservePath
       ? path
       : resamplePolyline(path, Math.max(1, Math.ceil(polylineLength(path) / segmentLength)));
     segmentPathById.set(segment.id, sampledPoints);
@@ -236,6 +242,8 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
         rightLotId,
         features: {
           ...segment.features,
+          parishBoundary: parishBorderTrace.parishBoundarySegmentIds.has(segment.id),
+          parishBoundarySmoothed: parishBorderTrace.smoothedSegmentIds.has(segment.id),
           sea: keepAsIs && Boolean(segment.features?.sea),
         },
       };
@@ -410,6 +418,17 @@ function orientPathForEndpoints(path, from, to) {
   const reverseDistance = pointDistance(last, from) + pointDistance(first, to);
   const oriented = forwardDistance <= reverseDistance ? path : [...path].reverse();
   return oriented.map((point) => clonePoint(point));
+}
+
+function replacePathEndpoints(path, from, to) {
+  if (!Array.isArray(path) || !path.length) {
+    return [clonePoint(from), clonePoint(to)];
+  }
+
+  const replaced = path.map((point) => clonePoint(point));
+  replaced[0] = clonePoint(from);
+  replaced[replaced.length - 1] = clonePoint(to);
+  return replaced;
 }
 
 function appendPath(target, path) {

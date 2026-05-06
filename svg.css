@@ -324,7 +324,87 @@
   fill: #b92f2f;
 }
 
+.river-pinned-point circle {
+  fill: #c66a25;
+}
+
 .river-sample-point circle {
   fill: #182126;
   r: 4;
+}
+
+.parish-svg {
+  width: min(760px, 100%);
+  height: min(640px, calc(100vh - 150px));
+}
+
+.parish-map-background {
+  fill: rgba(245, 242, 234, 1);
+  stroke: rgba(24, 33, 38, 0.18);
+  stroke-width: 3;
+}
+
+.parish-lot {
+  stroke: rgba(24, 33, 38, 0.14);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.parish-muted-edge {
+  stroke: rgba(24, 33, 38, 0.18);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.parish-boundary-edge,
+.parish-chain-edge {
+  stroke: #c66a25;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.parish-chain-edge.chain-1 { stroke: #0b58b4; }
+.parish-chain-edge.chain-2 { stroke: #7c5818; }
+.parish-chain-edge.chain-3 { stroke: #4d835f; }
+.parish-chain-edge.unsmoothed {
+  stroke: rgba(24, 33, 38, 0.46);
+  stroke-dasharray: 10 8;
+}
+
+.parish-bezier-guide {
+  fill: none;
+  stroke: rgba(11, 88, 180, 0.82);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.parish-final-edge {
+  stroke: rgba(24, 33, 38, 0.26);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.parish-final-boundary-edge {
+  stroke: rgba(198, 106, 37, 0.64);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.parish-final-smoothed-edge {
+  stroke: #182126;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.parish-control-point circle {
+  fill: #b92f2f;
+}
+
+.parish-midpoint circle {
+  fill: #0b58b4;
+}
+
+.parish-pinned-point circle {
+  fill: #c66a25;
 }
