@@ -1,11 +1,9 @@
 /*
  * WHAT: Split land lots into deterministic leaf sublots.
- * HOW: Use the selected tessellation algorithm to either recurse with balanced bisections or
- *      scatter lot-local Poisson points and clip a Voronoi tessellation to the lot boundary.
- * WHY: Both algorithms must preserve the same tessellation output contract for replay and hover UI.
+ * HOW: Use the selected tessellation algorithm to recurse with balanced straight or curved bisections.
+ * WHY: Both algorithms preserve the same tessellation output contract for replay and hover UI.
  */
 
-import { Delaunay } from "../../lib/d3-delaunay/index.js";
 import {
   DEFAULT_SEGMENT_LENGTH,
   clonePoint,
@@ -15,7 +13,7 @@ import { addAlleyRoutesToRouteGraph } from "../route-graph.js";
 import { buildCurvedBisectionSplitPath } from "./2-4-curved-bisection.js";
 import { buildStraightBisectionSplitPath } from "./2-4-straight-bisection.js";
 
-export function runFieldDispatchStep(map, { rng, onProgress = null }) {
+export function runFieldDispatchStep(map, { onProgress = null }) {
   if (!Array.isArray(map.lots) || !map.lots.length) {
         const label = "Step 2.4 / Field dispatch";
         return {
@@ -32,7 +30,7 @@ export function runFieldDispatchStep(map, { rng, onProgress = null }) {
   const algorithm = map.init?.params?.stepAlgorithms?.tessellateLots || "curved_bisection";
   const curveAmplitude = CURVE_TENSION_RATIO;
   let lastProgressAt = 0;
-  const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH, rng, algorithm, curveAmplitude, (progress) => {
+  const tessellation = buildLotTessellation(map, DEFAULT_SEGMENT_LENGTH, algorithm, curveAmplitude, (progress) => {
     if (typeof onProgress !== "function") {
       return;
     }
@@ -75,15 +73,13 @@ const MIN_RECURSIVE_SPLIT_AREA_RATIO = 3;
 const SPLIT_SEGMENT_LENGTH_RATIO = 0.5;
 const CURVE_TENSION_RATIO = 0.35;
 const CURVE_SAMPLING_STEPS = 24;
-const POISSON_SPACING_RATIO = 0.95;
-const POISSON_MAX_ATTEMPTS = 30;
-const POISSON_CANDIDATE_ATTEMPTS = 120;
-const POISSON_BBOX_PADDING = 0.001;
 const PROGRESS_UPDATE_INTERVAL_MS = 150;
+const SEGMENT_SPATIAL_BUCKET_SIZE = DEFAULT_SEGMENT_LENGTH * 2;
 
-function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude, onLotComplete = null) {
+function buildLotTessellation(map, segmentLength, algorithm, curveAmplitude, onLotComplete = null) {
   const lots = map.lots || [];
   const segments = map.segments || [];
+  const boundaryPointLookup = buildLotBoundaryPointLookup(segments);
   const vertices = [];
   const vertexByKey = new Map();
   const sublots = [];
@@ -100,10 +96,8 @@ function buildLotTessellation(map, segmentLength, rng, algorithm, curveAmplitude
   let completedLots = 0;
 
   landLots.forEach((lot) => {
-    const boundaryPoints = getBoundaryVertices(lot, segments);
-    const pieces = algorithm === "poisson_voronoi"
-      ? createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng)
-      : splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm, curveAmplitude);
+    const boundaryPoints = getBoundaryVertices(lot, boundaryPointLookup.get(lot.id) || []);
+    const pieces = splitLotPolygonRecursively(boundaryPoints, segmentLength, algorithm, curveAmplitude);
     appendSublotsForLot(lot, pieces, vertices, vertexByKey, sublots);
     completedLots += 1;
     onLotComplete?.({
@@ -200,211 +194,12 @@ function getTimestamp() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
 }
 
-function createVoronoiSublotPieces(lot, boundaryPoints, segments, segmentLength, rng) {
-  const estimatedPieces = splitLotPolygonRecursively(boundaryPoints, segmentLength, "straight_bisection")
-    .map((piece) => normalizePolygon(piece))
-    .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
-  if (estimatedPieces.length < 2) {
-    return estimatedPieces;
-  }
-
-  const polygon = normalizePolygon(boundaryPoints);
-  const targetCount = estimatedPieces.length;
-  const area = Math.abs(computeSignedArea(polygon));
-  const boundarySites = collectVoronoiBoundarySites(boundaryPoints, lot, segments);
-  const sites = samplePoissonPointsInPolygon(polygon, area, targetCount, rng, boundarySites);
-  if (boundarySites.length + sites.length < 2) {
-    return estimatedPieces;
-  }
-
-  const voronoiSites = [...boundarySites, ...sites];
-  const bbox = computeBoundingBox(polygon);
-  const delaunay = Delaunay.from(voronoiSites.map((point) => [point.x, point.y]));
-  const voronoi = delaunay.voronoi([
-    bbox.minX - POISSON_BBOX_PADDING,
-    bbox.minY - POISSON_BBOX_PADDING,
-    bbox.maxX + POISSON_BBOX_PADDING,
-    bbox.maxY + POISSON_BBOX_PADDING,
-  ]);
-
-  return voronoiSites
-    .map((_, index) => {
-      const rawCell = sanitizeCellPolygon(voronoi.cellPolygon(index));
-      if (rawCell.length < 3) {
-        return null;
-      }
-
-      const clipped = clipPolygonToPolygon(rawCell, polygon);
-      if (clipped.length < 3) {
-        return null;
-      }
-
-      return reinsertBoundaryVertices(normalizePolygon(clipped), boundarySites);
-    })
-    .filter(Boolean)
-    .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
-}
-
-function samplePoissonPointsInPolygon(polygon, area, targetCount, rng, spacingObstacles = []) {
-  if (targetCount <= 0) {
-    return [];
-  }
-
-  const bbox = computeBoundingBox(polygon);
-  const spacingSiteCount = targetCount + spacingObstacles.length;
-  const nominalSpacing = Math.sqrt(area / Math.max(1, spacingSiteCount));
-  const minDistance = Math.max(1, nominalSpacing * POISSON_SPACING_RATIO);
-  const points = [];
-  const spacingPoints = [];
-  spacingObstacles.forEach((point) => addSpacingPoint(point));
-
-  while (points.length < targetCount) {
-    const point = chooseBestCandidatePoint();
-    if (!point) {
-      break;
-    }
-    addPoint(point);
-  }
-
-  return points.slice(0, targetCount);
-
-  function addPoint(point) {
-    points.push(point);
-    addSpacingPoint(point);
-  }
-
-  function addSpacingPoint(point) {
-    spacingPoints.push(point);
-  }
-
-  function chooseBestCandidatePoint() {
-    let best = null;
-    let bestDistance = -Infinity;
-    for (let attempt = 0; attempt < POISSON_CANDIDATE_ATTEMPTS; attempt += 1) {
-      const point = randomCandidatePoint();
-      if (!point) {
-        continue;
-      }
-      const distance = nearestSpacingDistance(point);
-      if (distance > bestDistance) {
-        best = point;
-        bestDistance = distance;
-      }
-    }
-    return best && bestDistance + EPSILON >= minDistance ? best : null;
-  }
-
-  function randomCandidatePoint(maxAttempts = POISSON_MAX_ATTEMPTS) {
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const point = {
-        x: rng.between(bbox.minX, bbox.maxX),
-        y: rng.between(bbox.minY, bbox.maxY),
-      };
-      if (pointInPolygon(point, polygon)) {
-        return point;
-      }
-    }
-    return null;
-  }
-
-  function nearestSpacingDistance(point) {
-    return spacingPoints.reduce((minimum, neighbor) => Math.min(minimum, pointDistance(point, neighbor)), Infinity);
-  }
-}
-
-function sanitizeCellPolygon(polygon) {
-  if (!polygon) {
-    return [];
-  }
-
-  return normalizePolygon(
-    polygon
-      .slice(0, -1)
-      .map(([x, y]) => ({ x, y })),
-  );
-}
-
-function clipPolygonToPolygon(subject, clipPolygon) {
-  let output = subject.map((point) => clonePoint(point));
-  for (let index = 0; index < clipPolygon.length; index += 1) {
-    const clipStart = clipPolygon[index];
-    const clipEnd = clipPolygon[(index + 1) % clipPolygon.length];
-    const input = output;
-    output = [];
-    if (!input.length) {
-      break;
-    }
-
-    let previous = input[input.length - 1];
-    for (const current of input) {
-      const currentInside = isInsideClipEdge(current, clipStart, clipEnd);
-      const previousInside = isInsideClipEdge(previous, clipStart, clipEnd);
-
-      if (currentInside) {
-        if (!previousInside) {
-          const intersection = lineIntersection(previous, current, clipStart, clipEnd);
-          if (intersection) {
-            output.push(intersection);
-          }
-        }
-        output.push(clonePoint(current));
-      } else if (previousInside) {
-        const intersection = lineIntersection(previous, current, clipStart, clipEnd);
-        if (intersection) {
-          output.push(intersection);
-        }
-      }
-
-      previous = current;
-    }
-  }
-
-  return normalizePolygon(output);
-}
-
-function isInsideClipEdge(point, from, to) {
-  return cross2d(from, to, point) >= -EPSILON;
-}
-
-function lineIntersection(firstFrom, firstTo, secondFrom, secondTo) {
-  const firstDx = firstTo.x - firstFrom.x;
-  const firstDy = firstTo.y - firstFrom.y;
-  const secondDx = secondTo.x - secondFrom.x;
-  const secondDy = secondTo.y - secondFrom.y;
-  const denominator = (firstDx * secondDy) - (firstDy * secondDx);
-  if (Math.abs(denominator) <= EPSILON) {
-    return clonePoint(firstTo);
-  }
-
-  const deltaX = secondFrom.x - firstFrom.x;
-  const deltaY = secondFrom.y - firstFrom.y;
-  const t = ((deltaX * secondDy) - (deltaY * secondDx)) / denominator;
-  return {
-    x: firstFrom.x + (firstDx * t),
-    y: firstFrom.y + (firstDy * t),
-  };
-}
-
 function cross2d(from, to, point) {
   return ((to.x - from.x) * (point.y - from.y)) - ((to.y - from.y) * (point.x - from.x));
 }
 
-function pointInPolygon(point, polygon) {
-  let inside = false;
-  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
-    const current = polygon[index];
-    const previous = polygon[previousIndex];
-    const intersects = ((current.y > point.y) !== (previous.y > point.y))
-      && point.x < (((previous.x - current.x) * (point.y - current.y)) / ((previous.y - current.y) || EPSILON)) + current.x;
-    if (intersects) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function computeBoundingBox(polygon) {
-  return polygon.reduce((bounds, point) => ({
+function computeBounds(points) {
+  return points.reduce((bounds, point) => ({
     minX: Math.min(bounds.minX, point.x),
     minY: Math.min(bounds.minY, point.y),
     maxX: Math.max(bounds.maxX, point.x),
@@ -417,32 +212,12 @@ function computeBoundingBox(polygon) {
   });
 }
 
-function normalizeVector(vector) {
-  const length = vectorLength(vector);
-  if (length <= EPSILON) {
-    return { x: 0, y: 0 };
-  }
+function expandBounds(bounds, padding) {
   return {
-    x: vector.x / length,
-    y: vector.y / length,
-  };
-}
-
-function vectorLength(vector) {
-  return Math.hypot(vector.x, vector.y);
-}
-
-function scalePoint(point, scalar) {
-  return {
-    x: point.x * scalar,
-    y: point.y * scalar,
-  };
-}
-
-function leftNormal(vector) {
-  return {
-    x: -vector.y,
-    y: vector.x,
+    minX: bounds.minX - padding,
+    minY: bounds.minY - padding,
+    maxX: bounds.maxX + padding,
+    maxY: bounds.maxY + padding,
   };
 }
 
@@ -452,7 +227,7 @@ export function splitLotPolygonRecursively(boundaryPoints, segmentLength, algori
   const polygon = normalizePolygon(boundaryPoints);
   splitBranch({
     polygon,
-    partition: [polygon],
+    partition: observer ? [polygon] : null,
     blockedVertexKeys: new Set(),
     algorithm,
     curveAmplitude,
@@ -470,44 +245,52 @@ function splitBranch({ polygon, partition, blockedVertexKeys, segmentLength, min
   const area = Math.abs(computeSignedArea(polygon));
   if (polygon.length < 3 || area <= minimumLeafArea) {
     leaves.push(polygon);
-    observer?.({
+    if (observer) {
+      observer({
       type: "leaf",
       polygon,
       partition,
       depth,
       area,
       minimumLeafArea,
-    });
+      });
+    }
     return;
   }
 
   const candidates = findBalancedSplitCandidates(polygon, blockedVertexKeys);
-  observer?.({
+  if (observer) {
+    observer({
     type: "candidates",
     polygon,
     partition,
     depth,
     blockedVertexKeys: new Set(blockedVertexKeys),
     candidates,
-  });
+    });
+  }
   const split = candidates[0] || null;
   if (!split) {
     leaves.push(polygon);
-    observer?.({
+    if (observer) {
+      observer({
       type: "no-split",
       polygon,
       partition,
       depth,
-    });
+      });
+    }
     return;
   }
-  observer?.({
+  if (observer) {
+    observer({
     type: "selected",
     polygon,
     partition,
     depth,
     split,
-  });
+    });
+  }
 
   const splitSegmentLength = segmentLength * SPLIT_SEGMENT_LENGTH_RATIO;
   const splitPath = buildSplitPath(
@@ -519,14 +302,16 @@ function splitBranch({ polygon, partition, blockedVertexKeys, segmentLength, min
     curveAmplitude,
     normalGuides,
   );
-  observer?.({
+  if (observer) {
+    observer({
     type: "computed",
     polygon,
     partition,
     depth,
     split,
     splitPath,
-  });
+    });
+  }
   const pieces = splitBetweenBoundaryPoints(
     polygon,
     split.firstIndex,
@@ -541,18 +326,23 @@ function splitBranch({ polygon, partition, blockedVertexKeys, segmentLength, min
     .filter((piece) => piece.length >= 3 && Math.abs(computeSignedArea(piece)) >= MIN_SUBLOT_AREA);
   if (childPolygons.length < 2) {
     leaves.push(polygon);
-    observer?.({
+    if (observer) {
+      observer({
       type: "rejected",
       polygon,
       partition,
       depth,
       split,
       splitPath,
-    });
+      });
+    }
     return;
   }
-  replacePartitionLeaf(partition, polygon, childPolygons);
-  observer?.({
+  if (partition) {
+    replacePartitionLeaf(partition, polygon, childPolygons);
+  }
+  if (observer) {
+    observer({
     type: "children",
     polygon,
     partition,
@@ -560,7 +350,8 @@ function splitBranch({ polygon, partition, blockedVertexKeys, segmentLength, min
     split,
     splitPath,
     pieces: childPolygons,
-  });
+    });
+  }
 
   childPolygons.forEach((normalizedPiece) => {
     splitBranch({
@@ -580,6 +371,7 @@ function splitBranch({ polygon, partition, blockedVertexKeys, segmentLength, min
 }
 
 function populateSublotNeighbors(sublots, segments, vertices) {
+  const segmentSpatialIndex = buildSegmentSpatialIndex(segments);
   const edgeOwners = new Map();
   sublots.forEach((sublot) => {
     for (let index = 0; index < sublot.vertexIds.length; index += 1) {
@@ -619,7 +411,7 @@ function populateSublotNeighbors(sublots, segments, vertices) {
     for (let index = 0; index < sublot.vertexIds.length; index += 1) {
       const from = vertices[sublot.vertexIds[index]];
       const to = vertices[sublot.vertexIds[(index + 1) % sublot.vertexIds.length]];
-      findNeighborLotIdsForEdge(sublot.lotId, from, to, segments).forEach((neighborLotId) => {
+      findNeighborLotIdsForEdge(sublot.lotId, from, to, segmentSpatialIndex).forEach((neighborLotId) => {
         if (!sublot.neighborLotIds.includes(neighborLotId)) {
           sublot.neighborLotIds.push(neighborLotId);
         }
@@ -631,9 +423,9 @@ function populateSublotNeighbors(sublots, segments, vertices) {
   });
 }
 
-function findNeighborLotIdsForEdge(lotId, from, to, segments) {
+function findNeighborLotIdsForEdge(lotId, from, to, segmentSpatialIndex) {
   const neighborLotIds = new Set();
-  segments.forEach((segment) => {
+  querySegmentSpatialIndex(segmentSpatialIndex, computeBounds([from, to])).forEach((segment) => {
     if (segment.leftLotId !== lotId && segment.rightLotId !== lotId) {
       return;
     }
@@ -669,9 +461,8 @@ function isLandLot(lot) {
   return lot.features?.land !== false && !lot.features?.sea;
 }
 
-function getBoundaryVertices(lot, segments) {
+function getBoundaryVertices(lot, boundaryPoints) {
   const polygon = normalizePolygon(lot.polygon || []);
-  const boundaryPoints = collectSegmentBoundaryPoints(lot, segments);
   if (!boundaryPoints.length) {
     return polygon;
   }
@@ -700,33 +491,72 @@ function reinsertBoundaryVertices(polygon, boundaryPoints) {
   return normalizePolygon(expanded);
 }
 
-function collectSegmentBoundaryPoints(lot, segments) {
-  const pointsByKey = new Map();
+function buildLotBoundaryPointLookup(segments) {
+  const pointsByLotId = new Map();
   segments.forEach((segment) => {
-    if (segment.leftLotId !== lot.id && segment.rightLotId !== lot.id) {
-      return;
-    }
-
-    pointsByKey.set(pointKey(segment.from), clonePoint(segment.from));
-    pointsByKey.set(pointKey(segment.to), clonePoint(segment.to));
+    const lotIds = [segment.leftLotId, segment.rightLotId].filter((lotId) => lotId !== null && lotId !== undefined);
+    lotIds.forEach((lotId) => {
+      const pointsByKey = pointsByLotId.get(lotId) || new Map();
+      pointsByKey.set(pointKey(segment.from), clonePoint(segment.from));
+      pointsByKey.set(pointKey(segment.to), clonePoint(segment.to));
+      pointsByLotId.set(lotId, pointsByKey);
+    });
   });
-  return Array.from(pointsByKey.values());
+
+  const lookup = new Map();
+  pointsByLotId.forEach((pointsByKey, lotId) => {
+    lookup.set(lotId, Array.from(pointsByKey.values()));
+  });
+  return lookup;
 }
 
-function collectVoronoiBoundarySites(boundaryPoints, lot, segments) {
-  const sitesByKey = new Map();
-  normalizePolygon(boundaryPoints).forEach((point) => {
-    sitesByKey.set(pointKey(point), clonePoint(point));
+function buildSegmentSpatialIndex(segments) {
+  const buckets = new Map();
+  segments.forEach((segment) => {
+    const bounds = expandBounds(computeBounds([segment.from, segment.to]), EPSILON);
+    forEachSegmentBucket(bounds, (bucketKey) => {
+      const bucket = buckets.get(bucketKey) || [];
+      bucket.push(segment);
+      buckets.set(bucketKey, bucket);
+    });
   });
-  collectSegmentBoundaryPoints(lot, segments).forEach((point) => {
-    sitesByKey.set(pointKey(point), clonePoint(point));
+  return buckets;
+}
+
+function querySegmentSpatialIndex(index, bounds) {
+  const seen = new Set();
+  const matches = [];
+  forEachSegmentBucket(expandBounds(bounds, EPSILON), (bucketKey) => {
+    const bucket = index.get(bucketKey) || [];
+    bucket.forEach((segment) => {
+      if (seen.has(segment.id)) {
+        return;
+      }
+      seen.add(segment.id);
+      matches.push(segment);
+    });
   });
-  return Array.from(sitesByKey.values());
+  return matches;
+}
+
+function forEachSegmentBucket(bounds, callback) {
+  const minBucketX = Math.floor(bounds.minX / SEGMENT_SPATIAL_BUCKET_SIZE);
+  const maxBucketX = Math.floor(bounds.maxX / SEGMENT_SPATIAL_BUCKET_SIZE);
+  const minBucketY = Math.floor(bounds.minY / SEGMENT_SPATIAL_BUCKET_SIZE);
+  const maxBucketY = Math.floor(bounds.maxY / SEGMENT_SPATIAL_BUCKET_SIZE);
+
+  for (let bucketX = minBucketX; bucketX <= maxBucketX; bucketX += 1) {
+    for (let bucketY = minBucketY; bucketY <= maxBucketY; bucketY += 1) {
+      callback(`${bucketX},${bucketY}`);
+    }
+  }
 }
 
 function findBalancedSplitCandidates(boundaryPoints, blockedVertexKeys = new Set()) {
-  const totalArea = Math.abs(computeSignedArea(boundaryPoints));
+  const totalSignedArea = computeSignedArea(boundaryPoints);
+  const totalArea = Math.abs(totalSignedArea);
   const minimumChildArea = totalArea * MIN_SPLIT_CHILD_AREA_RATIO;
+  const prefixCross = buildPrefixCrossSums(boundaryPoints);
   const candidates = [];
 
   for (let firstIndex = 0; firstIndex < boundaryPoints.length; firstIndex += 1) {
@@ -742,9 +572,8 @@ function findBalancedSplitCandidates(boundaryPoints, blockedVertexKeys = new Set
         continue;
       }
 
-      const pieces = splitBetweenBoundaryPoints(boundaryPoints, firstIndex, secondIndex, [boundaryPoints[firstIndex], boundaryPoints[secondIndex]]);
-      const firstArea = Math.abs(computeSignedArea(pieces[0]));
-      const secondArea = Math.abs(computeSignedArea(pieces[1]));
+      const firstArea = computeSplitArea(boundaryPoints, prefixCross, firstIndex, secondIndex);
+      const secondArea = Math.abs(totalArea - firstArea);
       if (Math.min(firstArea, secondArea) + EPSILON < minimumChildArea) {
         continue;
       }
@@ -759,6 +588,22 @@ function findBalancedSplitCandidates(boundaryPoints, blockedVertexKeys = new Set
   }
 
   return candidates.sort((first, second) => first.length - second.length || first.balanceGap - second.balanceGap);
+}
+
+function buildPrefixCrossSums(points) {
+  const prefixCross = new Array(points.length + 1).fill(0);
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    prefixCross[index + 1] = prefixCross[index] + ((current.x * next.y) - (next.x * current.y));
+  }
+  return prefixCross;
+}
+
+function computeSplitArea(points, prefixCross, firstIndex, secondIndex) {
+  const chordCross = (points[secondIndex].x * points[firstIndex].y) - (points[firstIndex].x * points[secondIndex].y);
+  const pathCross = prefixCross[secondIndex] - prefixCross[firstIndex];
+  return Math.abs((pathCross + chordCross) / 2);
 }
 
 function splitBetweenBoundaryPoints(

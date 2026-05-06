@@ -110,7 +110,7 @@ const CONTROL_HELP_TEXT = {
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
   parishClusteringAlgorithm: "Choose how step 2.2 clusters parishes. Each option measures shortest weighted paths from lot center nodes over roads and center-to-corner alleys.",
   routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node. Road lengths count triple and step 2.2 center alleys count sixfold.",
-  tessellateAlgorithm: "Choose how step 2.4 dispatches fields. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
+  tessellateAlgorithm: "Choose how step 2.4 dispatches fields. Straight bisection uses straight split chords, and Curved bisection follows a circular arc constrained by the endpoint normals.",
 };
 
 bindFormInteractions(form);

@@ -150,7 +150,7 @@ function normalizeScatterAlgorithm(value) {
 }
 
 function normalizeTessellateAlgorithm(value) {
-  if (value === "poisson_voronoi" || value === "curved_bisection" || value === "straight_bisection") {
+  if (value === "curved_bisection" || value === "straight_bisection") {
     return value;
   }
   return DEFAULT_TESSELLATE_ALGORITHM;
