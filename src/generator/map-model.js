@@ -597,6 +597,7 @@ function applyVertexFeaturesFromSegments(vertices, segments) {
       land: featureList.some((features) => features.land || features.coast),
       sea: featureList.some((features) => features.sea),
       riverside: featureList.some((features) => features.riverside),
+      bridge: featureList.some((features) => features.bridge),
     };
   });
 }

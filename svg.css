@@ -408,3 +408,89 @@
 .parish-pinned-point circle {
   fill: #c66a25;
 }
+
+.road-network-svg {
+  background: #efe7d8;
+}
+
+.road-network-map-background {
+  fill: #efe7d8;
+}
+
+.road-network-lot {
+  stroke: rgba(31, 38, 34, 0.35);
+  stroke-width: 1.6;
+}
+
+.road-network-alley,
+.road-network-center-alley,
+.road-network-road,
+.road-network-current-road {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.road-network-alley {
+  stroke: #777777;
+  stroke-width: 4;
+  opacity: 0.45;
+}
+
+.road-network-center-alley {
+  stroke: #777777;
+  stroke-width: 3;
+  stroke-dasharray: 7 9;
+  opacity: 0.58;
+}
+
+.road-network-road {
+  stroke: #2a2219;
+  stroke-width: 9;
+  opacity: 0.85;
+}
+
+.road-network-current-road {
+  stroke: #d6542f;
+  stroke-width: 12;
+  opacity: 0.95;
+}
+
+.road-network-center-node circle,
+.road-network-target-node circle,
+.road-network-linked-node circle,
+.road-network-parish-node circle {
+  stroke: #fff7e1;
+  stroke-width: 3;
+}
+
+.road-network-center-node circle {
+  fill: #2a2219;
+}
+
+.road-network-target-node circle {
+  fill: #d6542f;
+}
+
+.road-network-linked-node circle {
+  fill: #4d835f;
+}
+
+.road-network-parish-node circle {
+  fill: #777777;
+}
+
+.road-network-center-node text,
+.road-network-target-node text,
+.road-network-linked-node text,
+.road-network-parish-node text {
+  fill: #fff7e1;
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.road-network-bridge-node {
+  fill: #f08a24;
+  stroke: #fff7e1;
+  stroke-width: 2.5;
+}

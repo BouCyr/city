@@ -21,7 +21,8 @@ const RIVER_BRANCH_STEP_INDEX = 6;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
 const ROUTE_GRAPH_STEP_INDEX = 9;
 const PARISH_CLUSTERING_STEP_INDEX = 10;
-const LAND_EDGE_PARISH_BORDER_STEP_INDEX = 11;
+const ROAD_NETWORK_STEP_INDEX = 11;
+const LAND_EDGE_PARISH_BORDER_STEP_INDEX = 12;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -42,6 +43,9 @@ const COLORS = {
   routeNodeRiver: "#2d77c6",
   routeNodeCrossing: "#f08a24",
   alley: "#777777",
+  wild: "#8a5a2b",
+  road: "#2a2219",
+  bridge: "#f08a24",
 };
 
 /**
@@ -192,7 +196,7 @@ function createParishCentersGroup(map) {
 function createRouteGraphNodesGroup(map) {
   const group = createElement("g");
   const stepIndex = map.meta?.stepIndex ?? -1;
-  if ((stepIndex !== ROUTE_GRAPH_STEP_INDEX && stepIndex !== PARISH_CLUSTERING_STEP_INDEX) || !Array.isArray(map.routeGraph?.nodes)) {
+  if ((stepIndex !== ROUTE_GRAPH_STEP_INDEX && stepIndex !== PARISH_CLUSTERING_STEP_INDEX && stepIndex !== ROAD_NETWORK_STEP_INDEX) || !Array.isArray(map.routeGraph?.nodes)) {
     return group;
   }
 
@@ -284,10 +288,16 @@ function isInteractiveRouteNode(node, stepIndex) {
   if (stepIndex === PARISH_CLUSTERING_STEP_INDEX) {
     return node.type === "lot_center";
   }
+  if (stepIndex === ROAD_NETWORK_STEP_INDEX) {
+    return node.type !== "sea" && node.type !== "coast" && node.type !== "river_mouth" && node.type !== "river";
+  }
   return node.type === "river_crossing" || node.type === "river_mouth" || (node.routeIds || []).length > 2;
 }
 
 function routeNodeFill(node) {
+  if (node.features?.bridge) {
+    return COLORS.bridge;
+  }
   if (node.type === "lot_center") {
     return COLORS.routeNode;
   }
@@ -437,7 +447,9 @@ function createSegmentsGroup(segments, map) {
     const leftId = segment.leftLotId ?? segment.leftCellId ?? "";
     const rightId = segment.rightLotId ?? segment.rightCellId ?? "";
     const isRiver = Boolean(segment.features.river);
-    const stroke = segment.features.sea
+    const stroke = segment.features.wild || segment.features.routeType === "wild"
+        ? COLORS.wild
+        : segment.features.sea
         ? COLORS.seaEdge
         : COLORS.edge;
 
@@ -504,13 +516,22 @@ function createRouteGraphAlleyGroup(map) {
     "stroke-linecap": "round",
     "pointer-events": "none",
   });
-  if ((map.meta?.stepIndex ?? -1) < PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.routeGraph?.routes)) {
+  const stepIndex = map.meta?.stepIndex ?? -1;
+  if (stepIndex < PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.routeGraph?.routes)) {
     return group;
   }
 
   const nodesById = new Map(map.routeGraph.nodes.map((node) => [node.id, node]));
   map.routeGraph.routes
-    .filter((route) => route.type === "alley" && route.features?.lotCenterAlley)
+    .filter((route) => {
+      if (stepIndex === PARISH_CLUSTERING_STEP_INDEX) {
+        return route.type === "alley" && route.features?.lotCenterAlley;
+      }
+      if (stepIndex >= ROAD_NETWORK_STEP_INDEX) {
+        return (route.type === "alley" || route.type === "road" || route.type === "street" || route.type === "wild") && !route.features?.lotCenterAlley;
+      }
+      return false;
+    })
     .forEach((route) => {
       const from = nodesById.get(route.fromNodeId);
       const to = nodesById.get(route.toNodeId);
@@ -523,9 +544,13 @@ function createRouteGraphAlleyGroup(map) {
           y1: from.y,
           x2: to.x,
           y2: to.y,
-          stroke: COLORS.alley,
-          "stroke-width": EDGE_STROKE_WIDTH * 1.25,
-          opacity: 0.78,
+          stroke: route.type === "wild"
+            ? COLORS.wild
+            : route.type === "road" || route.type === "street"
+              ? COLORS.road
+              : COLORS.alley,
+          "stroke-width": route.type === "road" || route.type === "street" ? EDGE_STROKE_WIDTH * 2.6 : EDGE_STROKE_WIDTH * 1.25,
+          opacity: route.type === "road" || route.type === "street" ? 0.92 : route.type === "wild" ? 0.72 : 0.56,
           "data-route-id": route.id,
         }),
       );

@@ -7,8 +7,10 @@
 const CROSSING_NODE_TYPE = "river_crossing";
 const DEFAULT_CROSSING_PENALTY = 1500;
 const ROAD_ROUTE_WEIGHT_FACTOR = 3;
+const STREET_ROUTE_WEIGHT_FACTOR = 1;
 const ALLEY_ROUTE_WEIGHT_FACTOR = 6;
 const TRAVERSABLE_ROUTE_TYPE = "road";
+const STREET_ROUTE_TYPE = "street";
 const CENTER_ROUTE_NODE_TYPE = "lot_center";
 const INVALID_LAND_NODE_TYPES = new Set(["sea", "coast", "river_mouth", "river"]);
 
@@ -23,7 +25,10 @@ export function isLandRouteNode(routeGraph, nodeOrId) {
   }
 
   const routesById = new Map((routeGraph?.routes || []).map((route) => [route.id, route]));
-  return (node.routeIds || []).some((routeId) => routesById.get(routeId)?.type === TRAVERSABLE_ROUTE_TYPE);
+  return (node.routeIds || []).some((routeId) => {
+    const type = routesById.get(routeId)?.type;
+    return type === TRAVERSABLE_ROUTE_TYPE || type === STREET_ROUTE_TYPE || type === "alley";
+  });
 }
 
 export function isLotCenterRouteNode(routeGraph, nodeOrId) {
@@ -33,13 +38,18 @@ export function isLotCenterRouteNode(routeGraph, nodeOrId) {
   }
 
   const routesById = new Map((routeGraph?.routes || []).map((route) => [route.id, route]));
-  return (node.routeIds || []).some((routeId) => routesById.get(routeId)?.type === "alley");
+  return (node.routeIds || []).some((routeId) => {
+    const type = routesById.get(routeId)?.type;
+    return type === "alley" || type === "street" || type === "road";
+  });
 }
 
 export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId, options = {}) {
   const crossingPenalty = options.crossingPenalty ?? DEFAULT_CROSSING_PENALTY;
-  const routeTypes = options.routeTypes || [TRAVERSABLE_ROUTE_TYPE];
+  const routeTypes = options.routeTypes || [TRAVERSABLE_ROUTE_TYPE, STREET_ROUTE_TYPE];
   const isValidNode = options.nodeValidator || isLandRouteNode;
+  const isValidStartNode = options.startNodeValidator || isValidNode;
+  const isValidTargetNode = options.targetNodeValidator || isValidNode;
   const startId = normalizeNodeId(startNodeId);
   const targetId = normalizeNodeId(targetNodeId);
   if (startId === null || targetId === null || !routeGraph) {
@@ -47,7 +57,7 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
   }
 
   const nodesById = new Map((routeGraph.nodes || []).map((node) => [node.id, node]));
-  if (!isValidNode(routeGraph, startId) || !isValidNode(routeGraph, targetId)) {
+  if (!isValidStartNode(routeGraph, startId) || !isValidTargetNode(routeGraph, targetId)) {
     return null;
   }
   if (startId === targetId) {
@@ -76,7 +86,7 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
       if (!nextNode) {
         return;
       }
-      const nodePenalty = edge.routeType === TRAVERSABLE_ROUTE_TYPE
+      const nodePenalty = (edge.routeType === TRAVERSABLE_ROUTE_TYPE || edge.routeType === STREET_ROUTE_TYPE)
         && nextNode.type === CROSSING_NODE_TYPE
         && edge.toNodeId !== targetId
         && edge.toNodeId !== startId
@@ -129,6 +139,9 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
 export function getRouteWeightedLength(route) {
   if (route?.type === TRAVERSABLE_ROUTE_TYPE) {
     return (route.length || 0) * ROAD_ROUTE_WEIGHT_FACTOR;
+  }
+  if (route?.type === STREET_ROUTE_TYPE) {
+    return (route.length || 0) * STREET_ROUTE_WEIGHT_FACTOR;
   }
   if (route?.type === "alley") {
     return (route.length || 0) * ALLEY_ROUTE_WEIGHT_FACTOR;

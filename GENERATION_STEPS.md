@@ -19,8 +19,9 @@ Each step is a simple function. Its input is exactly the previous step output, e
 2. Human occupation
 2.1 Route graph
 2.2 Parish clustering
-2.3 Land edges + parish borders
-2.4 Field dispatch
+2.3 Road network
+2.4 Land edges + parish borders
+2.5 Field dispatch
 
 ## Geometry Rules
 
@@ -518,24 +519,40 @@ Rules:
 - Step 2.2 only accepts lot center nodes as route START points.
 - From step 2.2 onward, route endpoint dots are hidden, route lines are wider, alley routes are medium gray, and parish centers remain visible.
 
-## 2.3 Build Land-Edge Geometry + Parish Borders
+## 2.3 Road Network
 
-Source: `src/generator/2-3-build-land-edge-geometry/2-3-build-land-edge-geometry.js`
+Source: `src/generator/2-3-build-road-network/2-3-build-road-network.js`
+
+Rules:
+- Existing physical land `road` routes are demoted to `alley`; river, sea, and coast routes keep their route types.
+- Temporary parish-center alleys are added only for the selected parish-center lots, using the same eligible junction rule as step 2.2.
+- The parish center closest to the map midpoint becomes the center parish.
+- Each iteration finds the cheapest weighted path from the center parish to any unlinked parish center over roads and alleys.
+- The nearest unlinked parish path is promoted to road, and subsequent iterations include those cheaper road weights.
+- River crossing nodes on promoted paths become bridges and add no further crossing penalty.
+- Each newly added bridge multiplies the future river crossing penalty by 1.5.
+- Temporary parish-center alleys used by a selected path become persistent `street` routes and are treated like roads.
+- Unused temporary parish-center alleys are removed from the final route graph.
+- Final physical routes keep either `road` or `alley` type/features for later geometry rebuilds.
+
+## 2.4 Build Land-Edge Geometry + Parish Borders
+
+Source: `src/generator/2-4-build-land-edge-geometry/2-4-build-land-edge-geometry.js`
 
 Rules:
 - Coastline and sea segments are preserved.
 - Segments between two different parishes are marked with `features.parishBoundary`.
 - Only same-parish-pair border chains are smoothed, using the same midpoint-control quadratic sampling strategy used for rivers and coasts.
 - Nodes touching coast, river, sea, or map-boundary segments stay fixed.
-- Protected or non-degree-2 parish-border vertices break smoothing chains; single-segment borders stay straight.
+- Protected parish-border vertices break smoothing chains; single-segment borders stay straight.
 - Smoothed parish-border spans are marked with `features.parishBoundarySmoothed`.
 - Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
 - Lot polygons, vertex ids, segment ids, and adjacency are rebuilt from the normalized geometry.
 - `routeGraph` is rebuilt from the updated canonical segments, preserving `parishBoundary` and `parishBoundarySmoothed` on routes for later steps.
 
-## 2.4 Field Dispatch
+## 2.5 Field Dispatch
 
-Source: `src/generator/2-4-field-dispatch/2-4-field-dispatch.js`
+Source: `src/generator/2-5-field-dispatch/2-5-field-dispatch.js`
 
 Function input:
 

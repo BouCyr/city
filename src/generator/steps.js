@@ -16,6 +16,7 @@ export const GENERATION_STEPS = [
   "River splits",
   "Route graph",
   "Parish clustering",
+  "Road network",
   "Land edges + parish borders",
   "Field dispatch",
 ];
@@ -27,6 +28,6 @@ export const GENERATION_STEP_TREE = [
   },
   {
     label: "Human occupation",
-    stepIndices: [9, 10, 11, 12],
+    stepIndices: [9, 10, 11, 12, 13],
   },
 ];

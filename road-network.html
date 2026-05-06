@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coastline Process</title>
+  <title>Road Network Process</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,22 +18,22 @@
         <button id="nextStepButton" class="secondary-button" type="button">Next</button>
       </div>
       <a class="secondary-button tutorial-home-link" href="./index.html">Main map</a>
+      <a class="secondary-button tutorial-home-link" href="./coastline.html">Coastline smoothing</a>
       <a class="secondary-button tutorial-home-link" href="./river.html">River smoothing</a>
-      <a class="secondary-button tutorial-home-link" href="./road-network.html">Road network</a>
       <a class="secondary-button tutorial-home-link" href="./parish-smoothing.html">Parish smoothing</a>
     </section>
 
     <section class="tutorial-layout">
       <section class="tutorial-visual-panel panel">
-        <svg id="coastlineSvg" class="tutorial-svg coastline-svg" role="img" aria-label="Coastline process diagram"></svg>
+        <svg id="roadNetworkSvg" class="tutorial-svg road-network-svg" role="img" aria-label="Road network process diagram"></svg>
       </section>
       <aside class="tutorial-text-panel panel">
-        <p id="datasetKicker" class="tutorial-kicker">Loading coastline map</p>
-        <h1 id="stepTitle">Coastline process</h1>
-        <p id="stepBody">Inspect the generated coastline smoothing process.</p>
+        <p id="datasetKicker" class="tutorial-kicker">Loading road network</p>
+        <h1 id="stepTitle">Road network process</h1>
+        <p id="stepBody">Inspect how parish centers are linked by selected roads.</p>
       </aside>
     </section>
   </main>
-  <script type="module" src="./src/coastline.js"></script>
+  <script type="module" src="./src/road-network.js"></script>
 </body>
 </html>

@@ -73,10 +73,26 @@ export async function getParishSmoothingDemoDataset() {
     pointCount: 15,
     mapSize: 720,
     waterSides: waterSides({}),
-  }, 10);
+  }, 11);
   return {
     id: "generatedParishes",
     name: "Generated parishes",
+    size: map.meta?.size || 720,
+    map,
+  };
+}
+
+export async function getRoadNetworkDemoDataset() {
+  const map = await getCachedMap("road-network-demo", {
+    ...DEFAULTS,
+    seed: "road-network-demo",
+    pointCount: 15,
+    mapSize: 720,
+    waterSides: waterSides({}),
+  }, 10);
+  return {
+    id: "generatedRoadNetwork",
+    name: "Generated road network",
     size: map.meta?.size || 720,
     map,
   };
@@ -89,7 +105,7 @@ export async function getBisectionDemoDataset() {
     pointCount: 90,
     mapSize: 900,
     waterSides: waterSides({ north: true }),
-  }, 11);
+  }, 12);
   const lots = (map.lots || [])
     .filter((lot) => lot.features?.land && !lot.features?.sea && !lot.features?.boundary && Array.isArray(lot.polygon) && lot.polygon.length >= 4)
     .map((lot) => ({

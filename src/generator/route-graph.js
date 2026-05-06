@@ -16,14 +16,15 @@ export function buildRouteGraph(map) {
   const routes = [];
   const lotById = new Map((map.lots || []).map((lot) => [lot.id, lot]));
   const vertexIdsByPointKey = buildVertexIdsByPointKey(map.vertices || []);
+  const vertexFeaturesByPointKey = buildVertexFeaturesByPointKey(map.vertices || []);
 
   (map.segments || []).forEach((segment) => {
     if (!segment?.from || !segment?.to || pointDistance(segment.from, segment.to) <= EPSILON) {
       return;
     }
 
-    const fromNodeId = getOrCreateNode(nodes, nodeByKey, segment.from, vertexIdsByPointKey);
-    const toNodeId = getOrCreateNode(nodes, nodeByKey, segment.to, vertexIdsByPointKey);
+    const fromNodeId = getOrCreateNode(nodes, nodeByKey, segment.from, vertexIdsByPointKey, vertexFeaturesByPointKey);
+    const toNodeId = getOrCreateNode(nodes, nodeByKey, segment.to, vertexIdsByPointKey, vertexFeaturesByPointKey);
     if (fromNodeId === toNodeId) {
       return;
     }
@@ -130,7 +131,7 @@ export function addAlleyRoutesToRouteGraph(map, tessellation) {
   };
 }
 
-export function addLotCenterAlleyRoutesToRouteGraph(map) {
+export function addLotCenterAlleyRoutesToRouteGraph(map, lots = map.lots || [], routeFeatureOverrides = {}) {
   const graph = cloneRouteGraph(map.routeGraph || buildRouteGraph(map));
   const eligibleNodeIds = findLotCenterAlleyTargetNodeIds(graph);
   const nodes = graph.nodes.map((node) => ({
@@ -141,7 +142,7 @@ export function addLotCenterAlleyRoutesToRouteGraph(map) {
   const routes = graph.routes.map((route) => cloneRoute(route));
   const nodeByKey = new Map(nodes.map((node) => [pointKey(node), node.id]));
 
-  (map.lots || []).forEach((lot) => {
+  lots.forEach((lot) => {
     if (!lot.features?.land || lot.features?.sea || !lot.centroid || !Array.isArray(lot.polygon)) {
       return;
     }
@@ -177,6 +178,7 @@ export function addLotCenterAlleyRoutesToRouteGraph(map) {
         features: {
           alley: true,
           lotCenterAlley: true,
+          ...(routeFeatureOverrides || {}),
         },
       });
     });
@@ -192,7 +194,40 @@ export function addLotCenterAlleyRoutesToRouteGraph(map) {
   };
 }
 
-function findLotCenterAlleyTargetNodeIds(graph) {
+export function stripLotCenterAlleyRoutesFromRouteGraph(routeGraph) {
+  const graph = cloneRouteGraph(routeGraph || { nodes: [], routes: [] });
+  const keptRoutes = graph.routes.filter((route) => !route.features?.lotCenterAlley);
+  const usedNodeIds = new Set();
+  keptRoutes.forEach((route) => {
+    usedNodeIds.add(route.fromNodeId);
+    usedNodeIds.add(route.toNodeId);
+  });
+  const idByOldId = new Map();
+  const nodes = graph.nodes
+    .filter((node) => usedNodeIds.has(node.id) && !node.features?.lotCenter)
+    .map((node) => {
+      const id = idByOldId.size;
+      idByOldId.set(node.id, id);
+      return { ...node, id, routeIds: [] };
+    });
+  const routes = keptRoutes
+    .filter((route) => idByOldId.has(route.fromNodeId) && idByOldId.has(route.toNodeId))
+    .map((route) => ({
+      ...route,
+      fromNodeId: idByOldId.get(route.fromNodeId),
+      toNodeId: idByOldId.get(route.toNodeId),
+    }));
+  rebuildNodeRouteIds(nodes, routes);
+  return {
+    nodes: nodes.map((node) => ({
+      ...node,
+      type: classifyNodeType(node, routes),
+    })),
+    routes,
+  };
+}
+
+export function findLotCenterAlleyTargetNodeIds(graph) {
   const routesById = new Map((graph.routes || []).map((route) => [route.id, route]));
   const blockedRouteTypes = new Set(["coast", "river", "sea"]);
   return new Set((graph.nodes || [])
@@ -217,11 +252,30 @@ function buildVertexIdsByPointKey(vertices) {
   return idsByKey;
 }
 
-function getOrCreateNode(nodes, nodeByKey, point, vertexIdsByPointKey = new Map()) {
+function buildVertexFeaturesByPointKey(vertices) {
+  const featuresByKey = new Map();
+  vertices.forEach((vertex) => {
+    if (!vertex.features) {
+      return;
+    }
+    const key = pointKey(vertex);
+    featuresByKey.set(key, {
+      ...(featuresByKey.get(key) || {}),
+      ...(vertex.features || {}),
+    });
+  });
+  return featuresByKey;
+}
+
+function getOrCreateNode(nodes, nodeByKey, point, vertexIdsByPointKey = new Map(), vertexFeaturesByPointKey = new Map()) {
   const key = pointKey(point);
   const existing = nodeByKey.get(key);
   if (existing !== undefined) {
     mergeSourceVertexIds(nodes[existing], vertexIdsByPointKey.get(key) || []);
+    nodes[existing].features = {
+      ...(nodes[existing].features || {}),
+      ...(vertexFeaturesByPointKey.get(key) || {}),
+    };
     return existing;
   }
 
@@ -233,6 +287,9 @@ function getOrCreateNode(nodes, nodeByKey, point, vertexIdsByPointKey = new Map(
     routeIds: [],
     type: "junction",
     sourceVertexIds: [...(vertexIdsByPointKey.get(key) || [])],
+    features: {
+      ...(vertexFeaturesByPointKey.get(key) || {}),
+    },
   });
   nodeByKey.set(key, id);
   return id;
@@ -257,6 +314,18 @@ function rebuildNodeRouteIds(nodes, routes) {
 }
 
 function classifySegmentRoute(segment, lotById) {
+  if (segment.features?.routeType === "road" || segment.features?.road) {
+    return "road";
+  }
+  if (segment.features?.routeType === "street" || segment.features?.street) {
+    return "street";
+  }
+  if (segment.features?.routeType === "alley" || segment.features?.alley) {
+    return "alley";
+  }
+  if (segment.features?.routeType === "wild" || segment.features?.wild || segment.features?.blockedCrossing) {
+    return "wild";
+  }
   if (segment.features?.river) {
     return "river";
   }
@@ -292,7 +361,7 @@ function classifyNodeType(node, routes) {
   if (types.has("river") && (types.has("sea") || types.has("coast"))) {
     return "river_mouth";
   }
-  if (types.has("river") && types.has("road")) {
+  if (types.has("river") && (types.has("road") || types.has("street") || types.has("alley"))) {
     return "river_crossing";
   }
   if (types.has("coast")) {
@@ -304,7 +373,7 @@ function classifyNodeType(node, routes) {
   if (types.size === 1 && types.has("sea")) {
     return "sea";
   }
-  if (types.has("road")) {
+  if (types.has("road") || types.has("street")) {
     return "road";
   }
   if (types.has("river")) {

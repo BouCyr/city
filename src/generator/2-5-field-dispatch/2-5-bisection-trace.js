@@ -5,8 +5,8 @@
  */
 
 import { DEFAULT_SEGMENT_LENGTH, clonePoint, pointDistance } from "../map-model.js";
-import { inspectCurvedBisection } from "./2-4-curved-bisection.js";
-import { splitLotPolygonRecursively } from "./2-4-field-dispatch.js";
+import { inspectCurvedBisection } from "./2-5-curved-bisection.js";
+import { splitLotPolygonRecursively } from "./2-5-field-dispatch.js";
 
 const EPSILON = 0.0001;
 export const TUTORIAL_LOTS = {

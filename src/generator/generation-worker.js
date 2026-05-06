@@ -172,10 +172,15 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 11:
       return {
+        routeGraph: "parish-center-road-network",
+        bridgePenaltyMultiplier: 1.5,
+      };
+    case 12:
+      return {
         segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
         routeGraph: "rebuilt-after-segmentation",
       };
-    case 12:
+    case 13:
       return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,

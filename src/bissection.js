@@ -4,7 +4,7 @@
  * WHY: The page should explain the actual field-dispatch algorithms on real map output.
  */
 
-import { buildBisectionTutorialTrace } from "./generator/2-4-field-dispatch/2-4-bisection-trace.js";
+import { buildBisectionTutorialTrace } from "./generator/2-5-field-dispatch/2-5-bisection-trace.js";
 import { getBisectionDemoDataset } from "./tutorial-demo-data.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
