@@ -17,6 +17,7 @@ import {
   findShortestLandRoutePath,
   getDefaultRouteCrossingPenalty,
   isLandRouteNode,
+  isLotCenterRouteNode,
   isRouteGraphJunctionNode,
 } from "./generator/route-path.js";
 import { clearSvg, drawReplayFrame } from "./render/svg-renderer.js";
@@ -107,7 +108,8 @@ const CONTROL_HELP_TEXT = {
   primaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the primary river route. Lower values allow sharper bends, higher values keep the river straighter.",
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
-  routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node. Road route lengths count triple before this penalty.",
+  parishClusteringAlgorithm: "Choose how step 2.2 clusters parishes. Each option measures shortest weighted paths from lot center nodes over roads and center-to-corner alleys.",
+  routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node. Road lengths count triple and step 2.2 center alleys count sixfold.",
   tessellateAlgorithm: "Choose how step 2.4 dispatches fields. Straight bisection uses straight split chords, Curved bisection follows a circular arc constrained by the endpoint normals, and Poisson Voronoi seeds the lot with Poisson points plus existing boundary vertices before clipping Voronoi cells to the lot boundary.",
 };
 
@@ -622,7 +624,7 @@ function handleRouteNodePointerDown(event) {
 
 function setRouteStartFromEvent(event, source) {
   const node = getRouteNodeFromEvent(event);
-  if (!isLandRouteNode(currentFrame?.map?.routeGraph, node)) {
+  if (!isValidRouteStartNode(currentFrame?.map?.routeGraph, node)) {
     console.debug("[route-node] start rejected", {
       source,
       ...describeRouteNodeEvent(event),
@@ -875,7 +877,7 @@ function getRouteNodeFromEvent(event) {
   const target = event.target instanceof Element ? event.target.closest("[data-route-node-id]") : null;
   const nodeId = target ? Number(target.getAttribute("data-route-node-id")) : Number.NaN;
   const node = findRouteGraphNode(currentFrame.map.routeGraph, nodeId);
-  return isRouteGraphJunctionNode(node) ? node : null;
+  return isValidRouteInteractionNode(currentFrame.map.routeGraph, node) ? node : null;
 }
 
 function describeRouteNodeEvent(event) {
@@ -888,6 +890,7 @@ function describeRouteNodeEvent(event) {
     nodeType: node?.type || null,
     isJunction: isRouteGraphJunctionNode(node),
     isLand: isLandRouteNode(currentFrame?.map?.routeGraph, node),
+    isLotCenter: isLotCenterRouteNode(currentFrame?.map?.routeGraph, node),
     eventTarget: event.target instanceof Element ? event.target.tagName : typeof event.target,
   };
 }
@@ -936,7 +939,7 @@ function renderHoveredGeometry(hoverTarget) {
   hoveredCellData.className = "cell-data";
   hoveredCellData.innerHTML = [
     createCellDataRow("Id", formatGeometryId(item, kind)),
-    item.parishId !== null && item.parishId !== undefined ? createCellDataRow("Parish", String(item.parishId)) : "",
+    item.parishId !== null && item.parishId !== undefined ? createCellDataRow("Parish", formatParish(item)) : "",
     createCellDataRow("Features", formatFeatures(item.features)),
     createCellDataRow("Area", formatAreaSquareMeters(getGeometryArea(item))),
     createCellDataRow("Lots", formatContainedLotCount(item, kind)),
@@ -959,9 +962,9 @@ function renderHoveredRouteNode(node) {
   clearNeighborOverlay();
   clearRiverOverlay();
 
-  const isLandNode = isLandRouteNode(routeGraph, node);
+  const isLandNode = isValidRouteStartNode(routeGraph, node);
   const path = startRouteNodeId !== null && isLandNode
-    ? findShortestLandRoutePath(routeGraph, startRouteNodeId, node.id, { crossingPenalty: getRouteCrossingPenalty() })
+    ? findShortestLandRoutePath(routeGraph, startRouteNodeId, node.id, getRoutePathOptions())
     : null;
   drawRoutePathOverlay(path);
   drawStartRouteNodeOverlay();
@@ -970,6 +973,7 @@ function renderHoveredRouteNode(node) {
   hoveredCellData.innerHTML = [
     createCellDataRow("Node", String(node.id)),
     createCellDataRow("Type", formatNodeType(node.type)),
+    node.lotId !== null && node.lotId !== undefined ? createCellDataRow("Lot", String(node.lotId)) : "",
     createCellDataRow("Routes", String(node.routeIds?.length || 0)),
     createCellDataRow("Land node", isLandNode ? "yes" : "no"),
     createCellDataRow("START", startRouteNodeId === node.id ? "set here" : startRouteNodeId === null ? "not set" : `node ${startRouteNodeId}`),
@@ -1180,7 +1184,7 @@ function drawStartRouteNodeOverlay() {
   }
 
   const node = findRouteGraphNode(currentFrame.map.routeGraph, startRouteNodeId);
-  if (!isLandRouteNode(currentFrame.map.routeGraph, node)) {
+  if (!isValidRouteStartNode(currentFrame.map.routeGraph, node)) {
     return;
   }
 
@@ -1288,6 +1292,11 @@ function formatNeighborList(item, kind) {
     .join(", ");
 }
 
+function formatParish(item) {
+  const parish = item.parish || item.parishName || "";
+  return parish ? `${item.parishLetter || ""}${item.parishLetter ? " - " : ""}${parish}` : item.parishLetter || "";
+}
+
 function getSublots(map) {
   return map?.tessellation?.sublots || [];
 }
@@ -1360,6 +1369,28 @@ function isRouteGraphInteractionFrame(frame = currentFrame) {
   return Boolean(frame && frame.type === "map"
     && (frame.stepIndex === ROUTE_GRAPH_STEP_INDEX || frame.stepIndex === PARISH_CLUSTERING_STEP_INDEX)
     && frame.map?.routeGraph);
+}
+
+function isParishRouteInteractionFrame(frame = currentFrame) {
+  return Boolean(frame && frame.type === "map" && frame.stepIndex === PARISH_CLUSTERING_STEP_INDEX && frame.map?.routeGraph);
+}
+
+function isValidRouteInteractionNode(routeGraph, node) {
+  return isParishRouteInteractionFrame()
+    ? isLotCenterRouteNode(routeGraph, node)
+    : isRouteGraphJunctionNode(node);
+}
+
+function isValidRouteStartNode(routeGraph, node) {
+  return isParishRouteInteractionFrame()
+    ? isLotCenterRouteNode(routeGraph, node)
+    : isLandRouteNode(routeGraph, node);
+}
+
+function getRoutePathOptions() {
+  return isParishRouteInteractionFrame()
+    ? { crossingPenalty: getRouteCrossingPenalty(), routeTypes: ["road", "alley"], nodeValidator: isLotCenterRouteNode }
+    : { crossingPenalty: getRouteCrossingPenalty() };
 }
 
 function getRouteCrossingPenalty() {

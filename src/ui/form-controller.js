@@ -29,6 +29,7 @@ const MAX_POINT_COUNT = 1200;
 const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
 const DEFAULT_SCATTER_ALGORITHM = "random_scattering";
 const DEFAULT_TESSELLATE_ALGORITHM = "curved_bisection";
+const DEFAULT_PARISH_CLUSTERING_ALGORITHM = "graph_kmeans";
 const DEFAULT_POISSON_SPACING_RATIO = 1.15;
 const DEFAULT_POISSON_MAX_ATTEMPTS = 30;
 const DEFAULT_POISSON_PADDING_RATIO = 0.01;
@@ -116,6 +117,7 @@ export function readFormState(form) {
     seed: String(data.get("seed") || DEFAULT_SEED),
     stepAlgorithms: {
       scatterPoints: scatterAlgorithm,
+      parishClustering: normalizeParishClusteringAlgorithm(String(data.get("parishClusteringAlgorithm") || DEFAULT_PARISH_CLUSTERING_ALGORITHM)),
       tessellateLots: normalizeTessellateAlgorithm(String(data.get("tessellateAlgorithm") || DEFAULT_TESSELLATE_ALGORITHM)),
     },
     pointCount: normalizePointCountForScatterAlgorithm(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), scatterAlgorithm, MIN_POINT_COUNT, MAX_POINT_COUNT),
@@ -152,6 +154,13 @@ function normalizeTessellateAlgorithm(value) {
     return value;
   }
   return DEFAULT_TESSELLATE_ALGORITHM;
+}
+
+function normalizeParishClusteringAlgorithm(value) {
+  if (value === "route_growth" || value === "graph_kmedoids") {
+    return value;
+  }
+  return DEFAULT_PARISH_CLUSTERING_ALGORITHM;
 }
 
 function getSelectedScatterAlgorithm(form) {

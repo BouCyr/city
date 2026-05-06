@@ -130,6 +130,82 @@ export function addAlleyRoutesToRouteGraph(map, tessellation) {
   };
 }
 
+export function addLotCenterAlleyRoutesToRouteGraph(map) {
+  const graph = cloneRouteGraph(map.routeGraph || buildRouteGraph(map));
+  const eligibleNodeIds = findLotCenterAlleyTargetNodeIds(graph);
+  const nodes = graph.nodes.map((node) => ({
+    ...node,
+    routeIds: [],
+    sourceVertexIds: [...(node.sourceVertexIds || [])],
+  }));
+  const routes = graph.routes.map((route) => cloneRoute(route));
+  const nodeByKey = new Map(nodes.map((node) => [pointKey(node), node.id]));
+
+  (map.lots || []).forEach((lot) => {
+    if (!lot.features?.land || lot.features?.sea || !lot.centroid || !Array.isArray(lot.polygon)) {
+      return;
+    }
+
+    const centerNodeId = getOrCreateNode(nodes, nodeByKey, lot.centroid);
+    nodes[centerNodeId].type = "lot_center";
+    nodes[centerNodeId].lotId = lot.id;
+    nodes[centerNodeId].features = {
+      ...(nodes[centerNodeId].features || {}),
+      lotCenter: true,
+    };
+
+    lot.polygon.forEach((corner) => {
+      const cornerNodeId = nodeByKey.get(pointKey(corner));
+      if (cornerNodeId === undefined || !eligibleNodeIds.has(cornerNodeId)) {
+        return;
+      }
+      if (centerNodeId === cornerNodeId) {
+        return;
+      }
+      routes.push({
+        id: `route:${routes.length}`,
+        fromNodeId: centerNodeId,
+        toNodeId: cornerNodeId,
+        type: "alley",
+        length: pointDistance(lot.centroid, corner),
+        midpoint: midpointBetween(lot.centroid, corner),
+        sourceSegmentId: null,
+        leftLotId: lot.id,
+        rightLotId: null,
+        leftSublotId: null,
+        rightSublotId: null,
+        features: {
+          alley: true,
+          lotCenterAlley: true,
+        },
+      });
+    });
+  });
+
+  rebuildNodeRouteIds(nodes, routes);
+  return {
+    nodes: nodes.map((node) => ({
+      ...node,
+      type: node.features?.lotCenter ? "lot_center" : classifyNodeType(node, routes),
+    })),
+    routes,
+  };
+}
+
+function findLotCenterAlleyTargetNodeIds(graph) {
+  const routesById = new Map((graph.routes || []).map((route) => [route.id, route]));
+  const blockedRouteTypes = new Set(["coast", "river", "sea"]);
+  return new Set((graph.nodes || [])
+    .filter((node) => {
+      const routeTypes = (node.routeIds || []).map((routeId) => routesById.get(routeId)?.type).filter(Boolean);
+      if (routeTypes.some((type) => blockedRouteTypes.has(type))) {
+        return false;
+      }
+      return routeTypes.filter((type) => type === "road").length >= 3;
+    })
+    .map((node) => node.id));
+}
+
 function buildVertexIdsByPointKey(vertices) {
   const idsByKey = new Map();
   vertices.forEach((vertex) => {
@@ -251,7 +327,7 @@ function cloneRouteGraph(routeGraph) {
 function cloneRoute(route) {
   return {
     ...route,
-    midpoint: clonePoint(route.midpoint),
+    midpoint: route.midpoint ? clonePoint(route.midpoint) : null,
     features: {
       ...(route.features || {}),
     },

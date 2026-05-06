@@ -7,7 +7,9 @@
 const CROSSING_NODE_TYPE = "river_crossing";
 const DEFAULT_CROSSING_PENALTY = 1500;
 const ROAD_ROUTE_WEIGHT_FACTOR = 3;
+const ALLEY_ROUTE_WEIGHT_FACTOR = 6;
 const TRAVERSABLE_ROUTE_TYPE = "road";
+const CENTER_ROUTE_NODE_TYPE = "lot_center";
 const INVALID_LAND_NODE_TYPES = new Set(["sea", "coast", "river_mouth", "river"]);
 
 export function isRouteGraphJunctionNode(node) {
@@ -24,8 +26,20 @@ export function isLandRouteNode(routeGraph, nodeOrId) {
   return (node.routeIds || []).some((routeId) => routesById.get(routeId)?.type === TRAVERSABLE_ROUTE_TYPE);
 }
 
+export function isLotCenterRouteNode(routeGraph, nodeOrId) {
+  const node = typeof nodeOrId === "object" ? nodeOrId : findRouteGraphNode(routeGraph, nodeOrId);
+  if (!node || node.type !== CENTER_ROUTE_NODE_TYPE || node.lotId === null || node.lotId === undefined) {
+    return false;
+  }
+
+  const routesById = new Map((routeGraph?.routes || []).map((route) => [route.id, route]));
+  return (node.routeIds || []).some((routeId) => routesById.get(routeId)?.type === "alley");
+}
+
 export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId, options = {}) {
   const crossingPenalty = options.crossingPenalty ?? DEFAULT_CROSSING_PENALTY;
+  const routeTypes = options.routeTypes || [TRAVERSABLE_ROUTE_TYPE];
+  const isValidNode = options.nodeValidator || isLandRouteNode;
   const startId = normalizeNodeId(startNodeId);
   const targetId = normalizeNodeId(targetNodeId);
   if (startId === null || targetId === null || !routeGraph) {
@@ -33,7 +47,7 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
   }
 
   const nodesById = new Map((routeGraph.nodes || []).map((node) => [node.id, node]));
-  if (!isLandRouteNode(routeGraph, startId) || !isLandRouteNode(routeGraph, targetId)) {
+  if (!isValidNode(routeGraph, startId) || !isValidNode(routeGraph, targetId)) {
     return null;
   }
   if (startId === targetId) {
@@ -42,7 +56,7 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
   }
 
   const routesById = new Map((routeGraph.routes || []).map((route) => [route.id, route]));
-  const adjacency = buildRoadAdjacency(routeGraph);
+  const adjacency = buildRouteAdjacency(routeGraph, routeTypes);
   const distances = new Map([[startId, 0]]);
   const previous = new Map();
   const queue = new MinPriorityQueue();
@@ -62,7 +76,10 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
       if (!nextNode) {
         return;
       }
-      const nodePenalty = nextNode.type === CROSSING_NODE_TYPE && edge.toNodeId !== targetId && edge.toNodeId !== startId
+      const nodePenalty = edge.routeType === TRAVERSABLE_ROUTE_TYPE
+        && nextNode.type === CROSSING_NODE_TYPE
+        && edge.toNodeId !== targetId
+        && edge.toNodeId !== startId
         ? crossingPenalty
         : 0;
       const nextDistance = current.priority + edge.weight + nodePenalty;
@@ -110,7 +127,13 @@ export function findShortestLandRoutePath(routeGraph, startNodeId, targetNodeId,
 }
 
 export function getRouteWeightedLength(route) {
-  return (route?.length || 0) * (route?.type === TRAVERSABLE_ROUTE_TYPE ? ROAD_ROUTE_WEIGHT_FACTOR : 1);
+  if (route?.type === TRAVERSABLE_ROUTE_TYPE) {
+    return (route.length || 0) * ROAD_ROUTE_WEIGHT_FACTOR;
+  }
+  if (route?.type === "alley") {
+    return (route.length || 0) * ALLEY_ROUTE_WEIGHT_FACTOR;
+  }
+  return route?.length || 0;
 }
 
 export function getDefaultRouteCrossingPenalty() {
@@ -125,21 +148,24 @@ export function findRouteGraphNode(routeGraph, nodeId) {
   return (routeGraph?.nodes || []).find((node) => node.id === normalizedId) || null;
 }
 
-function buildRoadAdjacency(routeGraph) {
+function buildRouteAdjacency(routeGraph, routeTypes) {
+  const traversableTypes = new Set(routeTypes);
   const adjacency = new Map();
   (routeGraph.routes || []).forEach((route) => {
-    if (route.type !== TRAVERSABLE_ROUTE_TYPE) {
+    if (!traversableTypes.has(route.type)) {
       return;
     }
     appendAdjacency(adjacency, route.fromNodeId, {
       toNodeId: route.toNodeId,
       routeId: route.id,
+      routeType: route.type,
       length: route.length,
       weight: getRouteWeightedLength(route),
     });
     appendAdjacency(adjacency, route.toNodeId, {
       toNodeId: route.fromNodeId,
       routeId: route.id,
+      routeType: route.type,
       length: route.length,
       weight: getRouteWeightedLength(route),
     });

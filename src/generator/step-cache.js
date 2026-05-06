@@ -64,9 +64,10 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 10:
       return stableSignature({
+        parishAlgorithm: options.stepAlgorithms?.parishClustering || "graph_kmeans",
         parishCount: options.parishCount,
         routeCrossingCost: options.routeCrossingCost,
-        routeDistanceModel: "road-length-x3-plus-crossing-cost",
+        routeDistanceModel: "center-node-road-x3-alley-x6-plus-crossing-cost",
       });
     case 11:
       return stableSignature({

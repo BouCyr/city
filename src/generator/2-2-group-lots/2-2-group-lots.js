@@ -1,15 +1,72 @@
 /*
- * WHAT: Group land lots into parish clusters using route-graph distances.
- * HOW: Pick graph-spread seeds, then grow parishes by weighted road-route distance from step 2.1.
- * WHY: Parishes provide a higher-level organizational structure for the city.
+ * WHAT: Group land lots into parish clusters using center-node route distances.
+ * HOW: Add lot-center alleys, then run the selected graph clustering algorithm over weighted routes.
+ * WHY: Parish distance should reflect travel from lot centers rather than shared-boundary shortcuts.
  */
 
 import { pointDistance } from "../map-model.js";
+import { addLotCenterAlleyRoutesToRouteGraph } from "../route-graph.js";
 import { getDefaultRouteCrossingPenalty, getRouteWeightedLength } from "../route-path.js";
+
+const DEFAULT_PARISH_ALGORITHM = "graph_kmeans";
+const MAX_KMEANS_ITERATIONS = 20;
+const TRAVERSABLE_ROUTE_TYPES = new Set(["road", "alley"]);
+const PARISH_NAMES = [
+  "Santo Adriano",
+  "Santa Alessia",
+  "Santo Alonso",
+  "Santa Amalia",
+  "Santo Antonio",
+  "Santa Beatriz",
+  "Santo Benedetto",
+  "Santa Bianca",
+  "Santo Bruno",
+  "Santa Camila",
+  "Santo Carlo",
+  "Santa Carmela",
+  "Santo Cesare",
+  "Santa Catalina",
+  "Santo Diego",
+  "Santa Chiara",
+  "Santo Domenico",
+  "Santa Elena",
+  "Santo Emilio",
+  "Santa Esmeralda",
+  "Santo Enrico",
+  "Santa Fabiana",
+  "Santo Esteban",
+  "Santa Federica",
+  "Santo Fabio",
+  "Santa Gianna",
+  "Santo Felipe",
+  "Santa Graciela",
+  "Santo Francesco",
+  "Santa Ines",
+  "Santo Gabriel",
+  "Santa Isabella",
+  "Santo Giacomo",
+  "Santa Josefina",
+  "Santo Ignacio",
+  "Santa Lucia",
+  "Santo Javier",
+  "Santa Marcella",
+  "Santo Lorenzo",
+  "Santa Marisol",
+  "Santo Luciano",
+  "Santa Natalia",
+  "Santo Marco",
+  "Santa Paloma",
+  "Santo Mateo",
+  "Santa Rafaela",
+  "Santo Paolo",
+  "Santa Rosalia",
+  "Santo Rafael",
+  "Santa Valentina",
+];
 
 export function runGroupLotsStep(map) {
   const lots = map.lots || [];
-  const landLots = lots.filter(lot => lot.features?.land && !lot.features?.sea);
+  const landLots = lots.filter((lot) => lot.features?.land && !lot.features?.sea);
 
   if (landLots.length === 0) {
     return {
@@ -18,22 +75,32 @@ export function runGroupLotsStep(map) {
     };
   }
 
+  const routeGraph = addLotCenterAlleyRoutesToRouteGraph(map);
+  const workingMap = { ...map, routeGraph };
   const k = Math.min(landLots.length, map.init?.params?.parishCount || 15);
-  const clusters = runRouteGraphClustering(map, landLots, k);
+  const graph = buildCenterRouteGraph(workingMap, landLots);
+  const algorithm = normalizeParishAlgorithm(map.init?.params?.stepAlgorithms?.parishClustering);
+  const result = runSelectedClustering(graph, algorithm, k);
+  const clusterByLotId = buildClusterByLotId(graph, result.assignments);
 
-  const nextLots = lots.map(lot => {
-    const clusterIndex = clusters.findIndex(c => c.includes(lot.id));
+  const nextLots = lots.map((lot) => {
+    const parishId = clusterByLotId.get(lot.id);
+    const letter = parishId === undefined ? null : parishLetter(parishId);
+    const parishName = parishId === undefined ? null : parishNameForId(parishId);
     return {
       ...lot,
-      parishId: clusterIndex !== -1 ? clusterIndex : null
+      parishId: parishId ?? null,
+      parishLetter: letter,
+      parishName,
+      parish: parishName,
     };
   });
 
   const parishColors = assignParishColors(nextLots, k);
-  const parishCenters = computeParishCenters(map, nextLots, clusters, parishColors);
+  const parishCenters = computeParishCenters(graph, nextLots, result.centerNodeIds, parishColors);
 
   const nextMap = {
-    ...map,
+    ...workingMap,
     lots: nextLots,
     parishColors,
     parishCenters,
@@ -45,299 +112,368 @@ export function runGroupLotsStep(map) {
   };
 }
 
-function runRouteGraphClustering(map, landLots, k) {
-  const n = landLots.length;
-  const adj = buildLotGraph(map, landLots);
-  const kFinal = Math.min(k, n);
-
-  // Identify the most centered land lot to anchor the main landmass.
-  const mapSize = map.meta?.size || 1000;
-  const center = { x: mapSize / 2, y: mapSize / 2 };
-  let bestIdx = 0;
-  let minDistToCenter = Infinity;
-  landLots.forEach((lot, i) => {
-    const d = pointDistance(lot.centroid, center);
-    if (d < minDistToCenter) {
-      minDistToCenter = d;
-      bestIdx = i;
-    }
-  });
-
-  const seedIndices = chooseRouteGraphSeeds(adj, bestIdx, kFinal);
-  const assignments = assignLotsFromSeeds(adj, seedIndices);
-  const clusters = Array.from({ length: k }, () => []);
-  for (let index = 0; index < n; index += 1) {
-    if (assignments[index] >= 0) {
-      clusters[assignments[index]].push(landLots[index].id);
-    }
+function runSelectedClustering(graph, algorithm, k) {
+  if (algorithm === "route_growth") {
+    return runRouteGrowthClustering(graph, k);
   }
-
-  const islandIndices = [];
-  for (let index = 0; index < n; index += 1) {
-    if (assignments[index] < 0) {
-      islandIndices.push(index);
-    }
+  if (algorithm === "graph_kmedoids") {
+    return runGraphKmedoids(graph, k);
   }
-  if (islandIndices.length > 0) {
-    const parishCentroids = clusters.map((ids) => {
-      if (ids.length === 0) return null;
-      let x = 0, y = 0;
-      ids.forEach(id => {
-        const lot = landLots.find(l => l.id === id);
-        x += lot.centroid.x;
-        y += lot.centroid.y;
-      });
-      return { x: x / ids.length, y: y / ids.length };
-    });
-
-    islandIndices.forEach(idx => {
-      const lot = landLots[idx];
-      let minDist = Infinity;
-      let bestParish = 0;
-      parishCentroids.forEach((centroid, parishIdx) => {
-        if (!centroid) return;
-        const d = pointDistance(lot.centroid, centroid);
-        if (d < minDist) {
-          minDist = d;
-          bestParish = parishIdx;
-        }
-      });
-      clusters[bestParish].push(lot.id);
-    });
-  }
-
-  return clusters;
+  return runGraphKmeans(graph, k);
 }
 
-function chooseRouteGraphSeeds(adj, firstSeed, k) {
-  const seeds = [firstSeed];
-  let bestDistances = computeSingleSourceDistances(adj, firstSeed);
+function runGraphKmeans(graph, k) {
+  let centerNodeIds = chooseInitialCenterNodeIds(graph, k);
+  let assignments = new Int32Array(graph.lotEntries.length).fill(-1);
+
+  for (let iteration = 0; iteration < MAX_KMEANS_ITERATIONS; iteration += 1) {
+    assignments = assignLotsToCenterNodes(graph, centerNodeIds);
+    const nextCenterNodeIds = repairCenterNodeIds(graph, centerNodeIds.map((centerNodeId, parishId) => {
+      const assignedLots = graph.lotEntries.filter((entry, index) => assignments[index] === parishId);
+      if (!assignedLots.length) {
+        return null;
+      }
+      const average = averageLotCentroid(assignedLots);
+      return findNearestLotCenterNodeId(graph, average);
+    }), assignments);
+
+    if (sameNodeIds(centerNodeIds, nextCenterNodeIds)) {
+      break;
+    }
+    centerNodeIds = nextCenterNodeIds;
+  }
+
+  assignments = assignLotsToCenterNodes(graph, centerNodeIds);
+  return { assignments, centerNodeIds };
+}
+
+function runGraphKmedoids(graph, k) {
+  let centerNodeIds = chooseInitialCenterNodeIds(graph, k);
+  let assignments = new Int32Array(graph.lotEntries.length).fill(-1);
+
+  for (let iteration = 0; iteration < MAX_KMEANS_ITERATIONS; iteration += 1) {
+    assignments = assignLotsToCenterNodes(graph, centerNodeIds);
+    const nextCenterNodeIds = repairCenterNodeIds(graph, centerNodeIds.map((centerNodeId, parishId) => {
+      const assignedIndices = graph.lotEntries
+        .map((entry, index) => assignments[index] === parishId ? index : -1)
+        .filter((index) => index >= 0);
+      if (!assignedIndices.length) {
+        return null;
+      }
+      return chooseMedoidNodeId(graph, assignedIndices);
+    }), assignments);
+
+    if (sameNodeIds(centerNodeIds, nextCenterNodeIds)) {
+      break;
+    }
+    centerNodeIds = nextCenterNodeIds;
+  }
+
+  assignments = assignLotsToCenterNodes(graph, centerNodeIds);
+  return { assignments, centerNodeIds };
+}
+
+function runRouteGrowthClustering(graph, k) {
+  const centerNodeIds = chooseInitialCenterNodeIds(graph, k);
+  return {
+    centerNodeIds,
+    assignments: assignLotsToCenterNodes(graph, centerNodeIds),
+  };
+}
+
+function chooseInitialCenterNodeIds(graph, k) {
+  const firstNodeId = findNearestLotCenterNodeId(graph, {
+    x: (graph.mapSize || 1000) / 2,
+    y: (graph.mapSize || 1000) / 2,
+  });
+  const seeds = [firstNodeId];
+  let bestDistances = computeSingleSourceDistances(graph, firstNodeId);
 
   while (seeds.length < k) {
-    let nextSeed = -1;
+    let nextNodeId = null;
     let nextDistance = -Infinity;
-    for (let index = 0; index < bestDistances.length; index += 1) {
-      if (seeds.includes(index) || !Number.isFinite(bestDistances[index])) {
-        continue;
+    graph.lotEntries.forEach((entry) => {
+      if (seeds.includes(entry.nodeId)) {
+        return;
       }
-      if (bestDistances[index] > nextDistance) {
-        nextDistance = bestDistances[index];
-        nextSeed = index;
+      const distance = bestDistances.get(entry.nodeId) ?? Infinity;
+      if (!Number.isFinite(distance)) {
+        return;
       }
-    }
-    if (nextSeed < 0) {
+      if (distance > nextDistance) {
+        nextDistance = distance;
+        nextNodeId = entry.nodeId;
+      }
+    });
+    if (nextNodeId === null) {
       break;
     }
 
-    seeds.push(nextSeed);
-    const distances = computeSingleSourceDistances(adj, nextSeed);
-    for (let index = 0; index < bestDistances.length; index += 1) {
-      bestDistances[index] = Math.min(bestDistances[index], distances[index]);
-    }
+    seeds.push(nextNodeId);
+    const distances = computeSingleSourceDistances(graph, nextNodeId);
+    graph.lotEntries.forEach((entry) => {
+      bestDistances.set(entry.nodeId, Math.min(bestDistances.get(entry.nodeId) ?? Infinity, distances.get(entry.nodeId) ?? Infinity));
+    });
   }
 
-  return seeds;
+  return repairCenterNodeIds(graph, seeds, new Int32Array(graph.lotEntries.length).fill(-1)).slice(0, k);
 }
 
-function assignLotsFromSeeds(adj, seeds) {
-  const assignments = new Int32Array(adj.length).fill(-1);
-  const distances = new Float32Array(adj.length).fill(Infinity);
-  const visited = new Uint8Array(adj.length);
+function assignLotsToCenterNodes(graph, centerNodeIds) {
+  const centerDistances = centerNodeIds.map((nodeId) => computeSingleSourceDistances(graph, nodeId));
+  const assignments = new Int32Array(graph.lotEntries.length).fill(-1);
 
-  seeds.forEach((seed, parishIndex) => {
-    assignments[seed] = parishIndex;
-    distances[seed] = 0;
-  });
-
-  while (true) {
-    const node = findNearestUnvisited(distances, visited);
-    if (node < 0) break;
-
-    visited[node] = 1;
-    for (const edge of adj[node]) {
-      const newDist = distances[node] + edge.weight;
-      if (newDist < distances[edge.to]) {
-        distances[edge.to] = newDist;
-        assignments[edge.to] = assignments[node];
+  graph.lotEntries.forEach((entry, index) => {
+    let bestParish = -1;
+    let bestDistance = Infinity;
+    centerDistances.forEach((distances, parishId) => {
+      const distance = distances.get(entry.nodeId) ?? Infinity;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestParish = parishId;
       }
+    });
+    if (bestParish < 0) {
+      bestParish = findNearestEuclideanCenterIndex(graph, entry, centerNodeIds);
     }
-  }
+    assignments[index] = bestParish;
+  });
 
   return assignments;
 }
 
-function buildLotGraph(map, landLots) {
-  const lotIdToIndex = new Map(landLots.map((lot, i) => [lot.id, i]));
-  const n = landLots.length;
-  const adj = Array.from({ length: n }, () => []);
-  const routeGraph = map.routeGraph || null;
-  const routeGraphRoutes = routeGraph?.routes || [];
-  const graphRoutes = routeGraphRoutes.length ? routeGraphRoutes : map.segments || [];
-  const nodesById = new Map((routeGraph?.nodes || []).map((node) => [node.id, node]));
-  const routesById = new Map(routeGraphRoutes.map((route) => [route.id, route]));
-  const crossingPenalty = map.init?.params?.routeCrossingCost ?? getDefaultRouteCrossingPenalty();
-
-  graphRoutes.forEach(route => {
-    if (route.type && route.type !== "road") {
+function findNearestEuclideanCenterIndex(graph, entry, centerNodeIds) {
+  let bestIndex = 0;
+  let bestDistance = Infinity;
+  centerNodeIds.forEach((nodeId, index) => {
+    const node = graph.nodesById.get(nodeId);
+    if (!node) {
       return;
     }
+    const distance = pointDistance(entry.lot.centroid, node);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
+}
 
-    const l1 = route.leftLotId;
-    const r1 = route.rightLotId;
-    if (lotIdToIndex.has(l1) && lotIdToIndex.has(r1)) {
-      const i = lotIdToIndex.get(l1);
-      const j = lotIdToIndex.get(r1);
-      const crossingCount = [nodesById.get(route.fromNodeId), nodesById.get(route.toNodeId)]
-        .filter((node) => node?.type === "river_crossing")
-        .length;
-      const weight = getRouteWeightedLength(route) + (crossingPenalty * crossingCount);
-
-      adj[i].push({ to: j, weight });
-      adj[j].push({ to: i, weight });
+function repairCenterNodeIds(graph, proposedNodeIds, assignments) {
+  const repaired = [];
+  proposedNodeIds.forEach((nodeId) => {
+    if (nodeId !== null && nodeId !== undefined && !repaired.includes(nodeId)) {
+      repaired.push(nodeId);
     }
   });
 
-  connectRiverCrossingLots(adj, lotIdToIndex, nodesById, routesById, crossingPenalty);
-  return adj;
+  while (repaired.length < graph.k) {
+    const replacement = findFarthestUnchosenCenterNodeId(graph, repaired, assignments);
+    if (replacement === null) {
+      break;
+    }
+    repaired.push(replacement);
+  }
+
+  return repaired;
 }
 
-function connectRiverCrossingLots(adj, lotIdToIndex, nodesById, routesById, crossingPenalty) {
-  nodesById.forEach((node) => {
-    if (node.type !== "river_crossing") {
+function findFarthestUnchosenCenterNodeId(graph, chosenNodeIds, assignments) {
+  let bestNodeId = null;
+  let bestDistance = -Infinity;
+  const chosenDistances = chosenNodeIds.map((nodeId) => computeSingleSourceDistances(graph, nodeId));
+
+  graph.lotEntries.forEach((entry, index) => {
+    if (chosenNodeIds.includes(entry.nodeId)) {
       return;
     }
-
-    const lotIndices = new Set();
-    (node.routeIds || []).forEach((routeId) => {
-      const route = routesById.get(routeId);
-      if (!route || route.type !== "road") {
-        return;
-      }
-      if (lotIdToIndex.has(route.leftLotId)) {
-        lotIndices.add(lotIdToIndex.get(route.leftLotId));
-      }
-      if (lotIdToIndex.has(route.rightLotId)) {
-        lotIndices.add(lotIdToIndex.get(route.rightLotId));
-      }
-    });
-
-    const indices = [...lotIndices];
-    for (let firstIndex = 0; firstIndex < indices.length; firstIndex += 1) {
-      for (let secondIndex = firstIndex + 1; secondIndex < indices.length; secondIndex += 1) {
-        const from = indices[firstIndex];
-        const to = indices[secondIndex];
-        adj[from].push({ to, weight: crossingPenalty });
-        adj[to].push({ to: from, weight: crossingPenalty });
-      }
+    const isEmptyRepair = assignments[index] < 0;
+    const distance = chosenDistances.length
+      ? Math.min(...chosenDistances.map((distances) => distances.get(entry.nodeId) ?? Infinity))
+      : Infinity;
+    const score = isEmptyRepair ? Infinity : distance;
+    if (score > bestDistance) {
+      bestDistance = score;
+      bestNodeId = entry.nodeId;
     }
   });
+
+  return bestNodeId;
 }
 
-function computeSingleSourceDistances(adj, start) {
-  const distances = new Float32Array(adj.length).fill(Infinity);
-  const visited = new Uint8Array(adj.length);
-  distances[start] = 0;
+function chooseMedoidNodeId(graph, lotIndices) {
+  let bestNodeId = graph.lotEntries[lotIndices[0]].nodeId;
+  let bestDistance = Infinity;
+
+  lotIndices.forEach((candidateIndex) => {
+    const candidate = graph.lotEntries[candidateIndex];
+    const distances = computeSingleSourceDistances(graph, candidate.nodeId);
+    const totalDistance = lotIndices.reduce((sum, lotIndex) => sum + (distances.get(graph.lotEntries[lotIndex].nodeId) ?? Infinity), 0);
+    if (totalDistance < bestDistance) {
+      bestDistance = totalDistance;
+      bestNodeId = candidate.nodeId;
+    }
+  });
+
+  return bestNodeId;
+}
+
+function computeSingleSourceDistances(graph, startNodeId) {
+  const distances = new Map([[startNodeId, 0]]);
+  const visited = new Set();
 
   while (true) {
-    const node = findNearestUnvisited(distances, visited);
-    if (node < 0) break;
-
-    visited[node] = 1;
-    for (const edge of adj[node]) {
-      const newDist = distances[node] + edge.weight;
-      if (newDist < distances[edge.to]) {
-        distances[edge.to] = newDist;
-      }
+    const nodeId = findNearestUnvisited(distances, visited);
+    if (nodeId === null) {
+      break;
     }
+    visited.add(nodeId);
+
+    (graph.adjacency.get(nodeId) || []).forEach((edge) => {
+      const nextDistance = (distances.get(nodeId) ?? Infinity) + edge.weight;
+      if (nextDistance < (distances.get(edge.toNodeId) ?? Infinity)) {
+        distances.set(edge.toNodeId, nextDistance);
+      }
+    });
   }
 
   return distances;
 }
 
 function findNearestUnvisited(distances, visited) {
-  let bestIndex = -1;
+  let bestNodeId = null;
   let bestDistance = Infinity;
-  for (let index = 0; index < distances.length; index += 1) {
-    if (visited[index] || distances[index] >= bestDistance) {
-      continue;
+  distances.forEach((distance, nodeId) => {
+    if (!visited.has(nodeId) && distance < bestDistance) {
+      bestDistance = distance;
+      bestNodeId = nodeId;
     }
-    bestIndex = index;
-    bestDistance = distances[index];
-  }
-  return Number.isFinite(bestDistance) ? bestIndex : -1;
+  });
+  return Number.isFinite(bestDistance) ? bestNodeId : null;
 }
 
-function computeParishCenters(map, lots, clusters, parishColors) {
-  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
-  const routeGraph = map.routeGraph || null;
-  const routeById = new Map((routeGraph?.routes || []).map((route) => [route.id, route]));
-  const routeNodeCandidates = new Map();
+function buildCenterRouteGraph(map, landLots) {
+  const routeGraph = map.routeGraph || { nodes: [], routes: [] };
+  const nodesById = new Map(routeGraph.nodes.map((node) => [node.id, node]));
+  const lotById = new Map(landLots.map((lot) => [lot.id, lot]));
+  const lotEntries = routeGraph.nodes
+    .filter((node) => node.type === "lot_center" && lotById.has(node.lotId))
+    .map((node) => ({
+      lot: lotById.get(node.lotId),
+      lotId: node.lotId,
+      nodeId: node.id,
+    }))
+    .sort((first, second) => first.lotId - second.lotId);
+  const crossingPenalty = map.init?.params?.routeCrossingCost ?? getDefaultRouteCrossingPenalty();
+  const adjacency = new Map();
 
-  (routeGraph?.nodes || []).forEach((node) => {
-    const lotIds = new Set();
-    (node.routeIds || []).forEach((routeId) => {
-      const route = routeById.get(routeId);
-      if (!route || route.type !== "road") {
-        return;
-      }
-      if (route.leftLotId !== null && route.leftLotId !== undefined) lotIds.add(route.leftLotId);
-      if (route.rightLotId !== null && route.rightLotId !== undefined) lotIds.add(route.rightLotId);
-    });
-
-    lotIds.forEach((lotId) => {
-      const parishId = lotById.get(lotId)?.parishId;
-      if (parishId === null || parishId === undefined) {
-        return;
-      }
-      const nodes = routeNodeCandidates.get(parishId) || [];
-      nodes.push(node);
-      routeNodeCandidates.set(parishId, nodes);
-    });
+  routeGraph.routes.forEach((route) => {
+    if (!TRAVERSABLE_ROUTE_TYPES.has(route.type)) {
+      return;
+    }
+    appendRouteEdge(adjacency, nodesById, route, route.fromNodeId, route.toNodeId, crossingPenalty);
+    appendRouteEdge(adjacency, nodesById, route, route.toNodeId, route.fromNodeId, crossingPenalty);
   });
 
-  return clusters
-    .map((lotIds, parishId) => {
-      const parishLots = lotIds.map((lotId) => lotById.get(lotId)).filter(Boolean);
-      if (!parishLots.length) {
+  return {
+    adjacency,
+    k: Math.min(lotEntries.length, map.init?.params?.parishCount || 15),
+    lotEntries,
+    mapSize: map.meta?.size || 1000,
+    nodesById,
+  };
+}
+
+function appendRouteEdge(adjacency, nodesById, route, fromNodeId, toNodeId, crossingPenalty) {
+  const toNode = nodesById.get(toNodeId);
+  const crossingCost = route.type === "road" && toNode?.type === "river_crossing" ? crossingPenalty : 0;
+  const edges = adjacency.get(fromNodeId) || [];
+  edges.push({
+    toNodeId,
+    routeId: route.id,
+    weight: getRouteWeightedLength(route) + crossingCost,
+  });
+  adjacency.set(fromNodeId, edges);
+}
+
+function buildClusterByLotId(graph, assignments) {
+  const clusterByLotId = new Map();
+  graph.lotEntries.forEach((entry, index) => {
+    if (assignments[index] >= 0) {
+      clusterByLotId.set(entry.lotId, assignments[index]);
+    }
+  });
+  return clusterByLotId;
+}
+
+function computeParishCenters(graph, lots, centerNodeIds, parishColors) {
+  const lotsById = new Map(lots.map((lot) => [lot.id, lot]));
+  return centerNodeIds
+    .map((nodeId, parishId) => {
+      const node = graph.nodesById.get(nodeId);
+      const lot = lotsById.get(node?.lotId);
+      if (!node || !lot) {
         return null;
       }
-
-      const centroid = computeAverageCentroid(parishLots);
-      const centerLot = parishLots
-        .map((lot) => ({ lot, distance: pointDistance(lot.centroid, centroid) }))
-        .sort((first, second) => first.distance - second.distance)[0]?.lot || parishLots[0];
-      const centerNode = (routeNodeCandidates.get(parishId) || [])
-        .map((node) => ({ node, distance: pointDistance(node, centroid) }))
-        .sort((first, second) => first.distance - second.distance)[0]?.node || null;
-
+      const parishLots = lots.filter((item) => item.parishId === parishId);
       return {
         parishId,
-        lotId: centerLot.id,
-        nodeId: centerNode?.id ?? null,
-        centroid,
-        x: centerLot.centroid.x,
-        y: centerLot.centroid.y,
+        letter: parishLetter(parishId),
+        name: parishNameForId(parishId),
+        lotId: lot.id,
+        nodeId: node.id,
+        centroid: averageLotCentroid(parishLots.length ? parishLots.map((item) => ({ lot: item })) : [{ lot }]),
+        x: node.x,
+        y: node.y,
         color: parishColors[parishId]?.border || parishColors[parishId]?.fill || null,
       };
     })
     .filter(Boolean);
 }
 
-function computeAverageCentroid(lots) {
+function findNearestLotCenterNodeId(graph, point) {
+  let bestNodeId = graph.lotEntries[0]?.nodeId ?? null;
+  let bestDistance = Infinity;
+  graph.lotEntries.forEach((entry) => {
+    const distance = pointDistance(entry.lot.centroid, point);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestNodeId = entry.nodeId;
+    }
+  });
+  return bestNodeId;
+}
+
+function averageLotCentroid(entries) {
   return {
-    x: lots.reduce((sum, lot) => sum + lot.centroid.x, 0) / lots.length,
-    y: lots.reduce((sum, lot) => sum + lot.centroid.y, 0) / lots.length,
+    x: entries.reduce((sum, entry) => sum + entry.lot.centroid.x, 0) / entries.length,
+    y: entries.reduce((sum, entry) => sum + entry.lot.centroid.y, 0) / entries.length,
   };
 }
 
-function assignParishColors(lots, k) {
-  // Build parish adjacency graph
-  const adj = Array.from({ length: k }, () => new Set());
-  const lotById = new Map(lots.map(l => [l.id, l]));
+function sameNodeIds(first, second) {
+  return first.length === second.length && first.every((nodeId, index) => nodeId === second[index]);
+}
 
-  lots.forEach(lot => {
+function normalizeParishAlgorithm(value) {
+  return value === "route_growth" || value === "graph_kmedoids" ? value : DEFAULT_PARISH_ALGORITHM;
+}
+
+function parishLetter(parishId) {
+  return String.fromCharCode(65 + (parishId % 26));
+}
+
+function parishNameForId(parishId) {
+  return PARISH_NAMES[parishId % PARISH_NAMES.length];
+}
+
+function assignParishColors(lots, k) {
+  const adj = Array.from({ length: k }, () => new Set());
+  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+
+  lots.forEach((lot) => {
     if (lot.parishId === null) return;
-    (lot.neighborLotIds || []).forEach(neighborId => {
+    (lot.neighborLotIds || []).forEach((neighborId) => {
       const neighbor = lotById.get(neighborId);
       if (neighbor && neighbor.parishId !== null && neighbor.parishId !== lot.parishId) {
         adj[lot.parishId].add(neighbor.parishId);
@@ -346,28 +482,22 @@ function assignParishColors(lots, k) {
     });
   });
 
-  // Greedily color the graph
   const colors = new Int32Array(k).fill(-1);
-  for (let i = 0; i < k; i++) {
+  for (let i = 0; i < k; i += 1) {
     const usedColors = new Set();
-    adj[i].forEach(neighbor => {
+    adj[i].forEach((neighbor) => {
       if (colors[neighbor] !== -1) usedColors.add(colors[neighbor]);
     });
     let color = 0;
-    while (usedColors.has(color)) color++;
+    while (usedColors.has(color)) color += 1;
     colors[i] = color;
   }
 
-  // Map each parish to a unique color using the golden angle for hue distribution.
-  // Rescale the hue to avoid the yellow/brown range (35° to 95°).
   return Array.from({ length: k }, (_, i) => {
-    // Golden angle distribution over 300 degrees instead of 360
     const rawHue = (i * 137.5) % 300;
-    // Map [0, 300] to [95, 395] (which is [95, 360] + [0, 35])
     const hue = (rawHue + 95) % 360;
-
-    const saturation = 50 + (i % 3) * 15; // 50%, 65%, 80%
-    const lightness = 65 + (i % 2) * 15; // 65%, 80%
+    const saturation = 50 + (i % 3) * 15;
+    const lightness = 65 + (i % 2) * 15;
     return {
       fill: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.5)`,
       border: `hsla(${hue}, ${saturation + 10}%, ${lightness - 30}%, 0.4)`

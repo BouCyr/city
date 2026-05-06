@@ -33,13 +33,14 @@ const COLORS = {
   seaFill: "#7ebbd4",
   seaEdge: "#1f4e72",
   riverHit: "rgba(0, 0, 0, 0)",
-  tessellation: "rgba(42, 30, 20, 0.36)",
+  tessellation: "rgba(119, 119, 119, 0.62)",
   routeNode: "#18232b",
   routeNodeHit: "rgba(0, 0, 0, 0)",
   routeNodeSea: "#2f7fa1",
   routeNodeCoast: "#f4efe5",
   routeNodeRiver: "#2d77c6",
   routeNodeCrossing: "#f08a24",
+  alley: "#777777",
 };
 
 /**
@@ -128,7 +129,8 @@ function createMapLayer(map) {
   layer.append(
     createLotsGroup(lots, map),
     createTessellationGroup(map.tessellation, map),
-    createSegmentsGroup(segments),
+    createSegmentsGroup(segments, map),
+    createRouteGraphAlleyGroup(map),
     useRiverStrokeDebug
       ? createRiverDistanceDebugGroup(map)
       : createElement("g"),
@@ -150,7 +152,7 @@ function createParishCentersGroup(map) {
   const group = createElement("g", {
     "pointer-events": "none",
   });
-  if ((map.meta?.stepIndex ?? -1) !== PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.parishCenters)) {
+  if ((map.meta?.stepIndex ?? -1) < PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.parishCenters)) {
     return group;
   }
 
@@ -168,6 +170,18 @@ function createParishCentersGroup(map) {
         "data-center-lot-id": center.lotId,
         "data-center-node-id": center.nodeId ?? "",
       }),
+      createElement("text", {
+        x: center.x,
+        y: center.y + 10,
+        fill: "#f7f3e8",
+        stroke: "#18232b",
+        "stroke-width": 4,
+        "paint-order": "stroke",
+        "font-size": 32,
+        "font-weight": 800,
+        "text-anchor": "middle",
+        "pointer-events": "none",
+      }, center.letter || String(center.parishId)),
     );
   });
 
@@ -188,7 +202,7 @@ function createRouteGraphNodesGroup(map) {
     "pointer-events": "all",
   });
 
-  const nodes = map.routeGraph.nodes.filter(isInteractiveRouteNode);
+  const nodes = map.routeGraph.nodes.filter((node) => isInteractiveRouteNode(node, stepIndex));
   createRouteNodeVoronoiHitPolygons(nodes, map.meta?.size).forEach((hitPolygon) => {
     hitGroup.append(
       createElement("polygon", {
@@ -265,11 +279,17 @@ function routeNodeRadius(node) {
   return node.routeIds?.length > 2 ? 4.4 : 3.2;
 }
 
-function isInteractiveRouteNode(node) {
+function isInteractiveRouteNode(node, stepIndex) {
+  if (stepIndex === PARISH_CLUSTERING_STEP_INDEX) {
+    return node.type === "lot_center";
+  }
   return node.type === "river_crossing" || node.type === "river_mouth" || (node.routeIds || []).length > 2;
 }
 
 function routeNodeFill(node) {
+  if (node.type === "lot_center") {
+    return COLORS.routeNode;
+  }
   if (node.type === "sea") {
     return COLORS.routeNodeSea;
   }
@@ -393,14 +413,17 @@ function seaDistanceFill(seaDistance, maxLandSeaDistance) {
   return mixHex(COLORS.seaDistanceNear, COLORS.seaDistanceFar, ratio);
 }
 
-function createSegmentsGroup(segments) {
+function createSegmentsGroup(segments, map) {
+  const stepIndex = map.meta?.stepIndex ?? -1;
+  const hideDots = stepIndex >= PARISH_CLUSTERING_STEP_INDEX;
+  const strokeWidth = stepIndex >= PARISH_CLUSTERING_STEP_INDEX ? EDGE_STROKE_WIDTH * 1.55 : EDGE_STROKE_WIDTH;
   const group = createElement("g", {
     "pointer-events": "none",
   });
   const lineGroup = createElement("g", {
     fill: "none",
     "stroke-linecap": "round",
-    "stroke-width": EDGE_STROKE_WIDTH,
+    "stroke-width": strokeWidth,
   });
   const riverLineGroup = createElement("g", {
     fill: "none",
@@ -419,21 +442,25 @@ function createSegmentsGroup(segments) {
 
     if (isRiver) {
       riverLineGroup.append(
-        createSegmentLine(segment, COLORS.seaEdge, EDGE_STROKE_WIDTH*3, leftId, rightId),
-        createSegmentLine(segment, COLORS.seaFill, EDGE_STROKE_WIDTH, leftId, rightId),
+        createSegmentLine(segment, COLORS.seaEdge, strokeWidth * 3, leftId, rightId),
+        createSegmentLine(segment, COLORS.seaFill, strokeWidth, leftId, rightId),
       );
-      riverDotGroup.append(
-        createSegmentDot(segment.from, COLORS.seaFill, 3*EDGE_STROKE_WIDTH / 2, COLORS.seaEdge),
-        createSegmentDot(segment.to, COLORS.seaFill, 3*EDGE_STROKE_WIDTH / 2, COLORS.seaEdge),
-      );
+      if (!hideDots) {
+        riverDotGroup.append(
+          createSegmentDot(segment.from, COLORS.seaFill, 3 * strokeWidth / 2, COLORS.seaEdge),
+          createSegmentDot(segment.to, COLORS.seaFill, 3 * strokeWidth / 2, COLORS.seaEdge),
+        );
+      }
       return;
     }
 
-    const line = createSegmentLine(segment, stroke, EDGE_STROKE_WIDTH, leftId, rightId);
+    const line = createSegmentLine(segment, stroke, strokeWidth, leftId, rightId);
     const fromDot = createSegmentDot(segment.from, stroke, SEGMENT_ENDPOINT_RADIUS);
     const toDot = createSegmentDot(segment.to, stroke, SEGMENT_ENDPOINT_RADIUS);
     lineGroup.append(line);
-    dotGroup.append(fromDot, toDot);
+    if (!hideDots) {
+      dotGroup.append(fromDot, toDot);
+    }
   });
   group.append(lineGroup, dotGroup, riverLineGroup, riverDotGroup);
   return group;
@@ -468,6 +495,42 @@ function createSegmentDot(point, fill, radius, stroke = null) {
     attributes["stroke-width"] = 2;
   }
   return createElement("circle", attributes);
+}
+
+function createRouteGraphAlleyGroup(map) {
+  const group = createElement("g", {
+    fill: "none",
+    "stroke-linecap": "round",
+    "pointer-events": "none",
+  });
+  if ((map.meta?.stepIndex ?? -1) < PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.routeGraph?.routes)) {
+    return group;
+  }
+
+  const nodesById = new Map(map.routeGraph.nodes.map((node) => [node.id, node]));
+  map.routeGraph.routes
+    .filter((route) => route.type === "alley" && route.features?.lotCenterAlley)
+    .forEach((route) => {
+      const from = nodesById.get(route.fromNodeId);
+      const to = nodesById.get(route.toNodeId);
+      if (!from || !to) {
+        return;
+      }
+      group.append(
+        createElement("line", {
+          x1: from.x,
+          y1: from.y,
+          x2: to.x,
+          y2: to.y,
+          stroke: COLORS.alley,
+          "stroke-width": EDGE_STROKE_WIDTH * 1.25,
+          opacity: 0.78,
+          "data-route-id": route.id,
+        }),
+      );
+    });
+
+  return group;
 }
 
 function createTessellationGroup(tessellation, map) {
@@ -803,12 +866,15 @@ function hexToRgb(hex) {
   return [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));
 }
 
-function createElement(tagName, attributes = {}) {
+function createElement(tagName, attributes = {}, text = null) {
   const element = document.createElementNS(SVG_NS, tagName);
 
   Object.entries(attributes).forEach(([name, value]) => {
     element.setAttribute(name, String(value));
   });
+  if (text !== null && text !== undefined) {
+    element.textContent = String(text);
+  }
 
   return element;
 }

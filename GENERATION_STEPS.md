@@ -487,8 +487,8 @@ Function input:
 ```js
 {
   lots: [{ id: 0, centroid: { x: 100, y: 100 }, features: { land: true, sea: false }, ... }, ...],
-  routeGraph: { routes: [{ id: "route:0", leftLotId: 0, rightLotId: 1, type: "road", ... }, ...] },
-  init: { params: { parishCount: 15, routeCrossingCost: 1500 } }
+  routeGraph: { nodes: [{ id: 0, type: "road", ... }], routes: [{ id: "route:0", type: "road", ... }, ...] },
+  init: { params: { parishCount: 15, routeCrossingCost: 1500, stepAlgorithms: { parishClustering: "graph_kmeans" } } }
 }
 ```
 
@@ -496,18 +496,27 @@ Function output:
 
 ```js
 {
-  lots: [{ id: 0, parishId: 3, ... }, ...],
+  lots: [{ id: 0, parishId: 3, parishLetter: "D", parishName: "Santa Elena", parish: "Santa Elena", ... }, ...],
   parishColors: ["hsla(0, 60%, 70%, 0.4)", ...],
-  parishCenters: [{ parishId: 0, lotId: 12, nodeId: 88, x: 100, y: 200, centroid: { x: 95, y: 205 } }, ...]
+  parishCenters: [{ parishId: 0, letter: "A", lotId: 12, nodeId: 88, x: 100, y: 200, centroid: { x: 95, y: 205 } }, ...],
+  routeGraph: { nodes: [{ type: "lot_center", lotId: 12, ... }], routes: [{ type: "alley", features: { lotCenterAlley: true }, ... }, ...] }
 }
 ```
 
 Rules:
 - Land lots are grouped into exactly `parishCount` clusters (if enough lots exist).
-- `route_growth` picks graph-spread seeds and grows parishes by weighted route distance.
-- Road route length is weighted by 3 and intermediate river crossings add `routeCrossingCost`.
-- Parish centers identify the nearest central lot and route node for display.
+- Step 2.2 adds one `lot_center` route node per land lot and `alley` routes from that center only to existing lot-corner graph nodes that already link at least three road routes.
+- Coast, river, sea, and river-crossing nodes are not connected by center alleys.
+- Parish distance is computed between lot center nodes over the route graph.
+- Road route length is weighted by 3, center-junction alley route length is weighted by 6, and river crossing nodes add `routeCrossingCost` only when reached by road routes.
+- `graph_kmeans` assigns lots to nearest parish center node by weighted graph distance, recomputes each center from the average lot centroid, then snaps that point to the nearest land lot center node.
+- `route_growth` picks graph-spread center-node seeds and grows parishes by weighted route distance.
+- `graph_kmedoids` assigns lots by weighted graph distance and chooses each parish center as the assigned lot center minimizing in-cluster graph distance.
+- Parish centers identify the selected center lot and center node for display.
+- Parishes are lettered `A` through `Z` and named from a static list of 50 `Santo ...` / `Santa ...` names; each assigned lot stores `parishId`, `parishLetter`, `parishName`, and `parish`.
 - Parishes are colored greedily to avoid adjacent parishes sharing the same color index from the generated HSL palette.
+- Step 2.2 only accepts lot center nodes as route START points.
+- From step 2.2 onward, route endpoint dots are hidden, route lines are wider, alley routes are medium gray, and parish centers remain visible.
 
 ## 2.3 Build Land-Edge Geometry
 
