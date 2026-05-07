@@ -42,7 +42,7 @@ export async function getCoastlineDemoDataset() {
     pointCount: 30,
     mapSize: 700,
     waterSides: waterSides({ north: true }),
-  }, 6);
+  }, 7);
   return {
     id: "generatedCoastline",
     name: "Generated coastline",
@@ -59,7 +59,7 @@ export async function getRiverDemoDataset() {
     pointCount: 40,
     mapSize: 720,
     waterSides: waterSides({ north: true }),
-  }, 7);
+  }, 8);
   return {
     id: "generatedRiver",
     name: "Generated river",
@@ -75,7 +75,7 @@ export async function getParishSmoothingDemoDataset() {
     pointCount: 15,
     mapSize: 720,
     waterSides: waterSides({}),
-  }, 11);
+  }, 12);
   return {
     id: "generatedParishes",
     name: "Generated parishes",
@@ -91,7 +91,7 @@ export async function getRoadNetworkDemoDataset() {
     pointCount: 15,
     mapSize: 720,
     waterSides: waterSides({}),
-  }, 10);
+  }, 11);
   return {
     id: "generatedRoadNetwork",
     name: "Generated road network",
@@ -107,7 +107,7 @@ export async function getBisectionDemoDataset() {
     pointCount: 90,
     mapSize: 900,
     waterSides: waterSides({ north: true }),
-  }, 12);
+  }, 13);
   const lots = (map.lots || [])
     .filter((lot) => lot.features?.land && !lot.features?.sea && !lot.features?.boundary && Array.isArray(lot.polygon) && lot.polygon.length >= 4)
     .map((lot) => ({

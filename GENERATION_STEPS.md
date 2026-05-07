@@ -12,6 +12,7 @@ Each step is a simple function. Its input is exactly the previous step output, e
 1.3 Relaxed cells
 1.4 Collapsed edges
 1.5 Sea mask
+1.6 Noise
 1.7 Primary river
 1.8 River branch
 1.9 Coastline mesh
@@ -30,7 +31,7 @@ Through step 1.8 the map is cell geometry:
 
 ```js
 {
-  meta: { size: 3000, stepIndex: 5, stepLabel: "Primary river" },
+  meta: { size: 3000, stepIndex: 6, stepLabel: "Primary river" },
   points: [{ id: 0, x: 120, y: 240 }, ...],
   vertices: [{ id: 0, x: 10, y: 20, edgeIds: ["0-1-..."] }, ...],
   edges: [{
@@ -274,6 +275,42 @@ Rules:
 - Water expands through cell neighbors using the seeded RNG.
 - Cell `features.land` is the inverse of `features.sea`.
 - Edge `features.sea` is true only when both neighboring cells are sea.
+
+## 1.6 Add Cell Edge Noise
+
+Source: `src/generator/1-6-noise/1-6-noise.js`
+
+Function input:
+
+```js
+{
+  vertices: [{ id: 0, edgeIds: [...] }, ...],
+  edges: [{ id: "collapsed:0", fromVertexId: 0, toVertexId: 1, leftCellId: 0, rightCellId: 1, features: { boundary: false, sea: false, ... } }, ...],
+  cells: [{ id: 0, polygon: [...], centroid: { x: 100, y: 200 }, features: { land: true, sea: false, ... } }, ...]
+}
+```
+
+Function output:
+
+```js
+{
+  vertices: [{ id: 0, x: 102, y: 201.5, edgeIds: ["noise:0", "noise:9"] }, ...],
+  edges: [{ id: "noise:0", fromVertexId: 0, toVertexId: 4, leftCellId: 0, rightCellId: 1, features: { boundary: false, sea: false, river: false } }, ...],
+  cells: [{ id: 0, vertexIds: [0, 4, 8, ...], polygon: [...], centroid: { x: 120, y: 210 }, ... }, ...],
+  noise: { splitCount: 42, minimumEdgeLength: 100, displacementRatioRange: [0.1, 0.2], areaDeltaByCellId: { 0: -123.4 } }
+}
+```
+
+Rules:
+- Run after sea classification so coast edges can be derived from one land cell and one sea cell.
+- Candidate edges are non-boundary edges longer than 100 where both neighboring cells are present and the edge is either land-land or land-sea.
+- Pure sea-sea edges are not candidates.
+- Candidate order is shuffled with the seeded RNG.
+- Each candidate receives one new shared midpoint vertex displaced toward one adjacent cell centroid by 10%-20% of the original edge length.
+- If one adjacent cell has lost more cumulative area in this step, displace away from that cell by moving toward the other cell.
+- If cumulative area loss is tied, move toward the adjacent cell with the larger current area; if still tied, choose by seeded RNG.
+- Track cumulative `newArea - oldArea` per affected cell in `noise.areaDeltaByCellId`.
+- Rebuild cell polygons, centroids, edges, edge ownership, vertex edge lists, and cell neighbors after all splits.
 
 ## 1.7 Trace The First River
 

@@ -40,19 +40,20 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 5:
       return stableSignature({
+        noiseMinimumEdgeLength: 100,
+        noiseDisplacementRatioRange: [0.1, 0.2],
+      });
+    case 6:
+      return stableSignature({
         primaryRiverWidth: options.primaryRiverWidth,
         primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
       });
-    case 6:
+    case 7:
       return stableSignature({
         primaryRiverWidth: options.primaryRiverWidth,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
         tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
-      });
-    case 7:
-      return stableSignature({
-        segmentLength: "default",
       });
     case 8:
       return stableSignature({
@@ -60,32 +61,36 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 9:
       return stableSignature({
-        routeGraph: "segments",
+        segmentLength: "default",
       });
     case 10:
+      return stableSignature({
+        routeGraph: "segments",
+      });
+    case 11:
       return stableSignature({
         parishAlgorithm: options.stepAlgorithms?.parishClustering || "graph_kmeans",
         parishCount: options.parishCount,
         routeCrossingCost: options.routeCrossingCost,
         routeDistanceModel: "center-node-road-x3-alley-x6-plus-crossing-cost",
       });
-    case 11:
+    case 12:
       return stableSignature({
         roadNetworkAlgorithm: options.stepAlgorithms?.roadNetwork || "boundary_connectors",
         routeGraph: "parish-center-road-network",
         routeCrossingCost: options.routeCrossingCost,
         bridgePenaltyMultiplier: 1.5,
       });
-    case 12:
+    case 13:
       return stableSignature({
         parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
       });
-    case 13:
+    case 14:
       return stableSignature({
         segmentLength: "default",
         routeGraph: "rebuilt-after-land-edge-segmentation",
       });
-    case 14:
+    case 15:
       return stableSignature({
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         splitSegmentLength: "default",

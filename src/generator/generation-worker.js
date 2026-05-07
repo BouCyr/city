@@ -7,7 +7,7 @@
 import { generateCity, generateCityThroughStep } from "./city-generator.js";
 import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
 
-const RIVER_EVALUATION_STEP_INDEX = 6;
+const RIVER_EVALUATION_STEP_INDEX = 7;
 
 self.addEventListener("message", async (event) => {
   const message = event.data;
@@ -145,15 +145,16 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 5:
       return {
-        primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
+        noiseMinimumEdgeLength: 100,
+        noiseDisplacementRatioRange: [0.1, 0.2],
       };
     case 6:
       return {
-        tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
+        primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
       };
     case 7:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
+        tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
       };
     case 8:
       return {
@@ -161,31 +162,35 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 9:
       return {
-        routeGraph: "segments",
+        segmentLength: DEFAULT_SEGMENT_LENGTH,
       };
     case 10:
+      return {
+        routeGraph: "segments",
+      };
+    case 11:
       return {
         parishAlgorithm: options.stepAlgorithms?.parishClustering || "graph_kmeans",
         parishCount: options.parishCount,
         routeCrossingCost: options.routeCrossingCost,
         routeDistanceModel: "center-node-road-x3-alley-x6-plus-crossing-cost",
       };
-    case 11:
+    case 12:
       return {
         roadNetworkAlgorithm: options.stepAlgorithms?.roadNetwork || "boundary_connectors",
         routeGraph: "parish-center-road-network",
         bridgePenaltyMultiplier: 1.5,
       };
-    case 12:
+    case 13:
       return {
         parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
       };
-    case 13:
+    case 14:
       return {
         segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
         routeGraph: "rebuilt-after-land-edge-segmentation",
       };
-    case 14:
+    case 15:
       return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,

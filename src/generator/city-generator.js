@@ -8,6 +8,7 @@ import { createSeededRandom } from "./random.js";
 import { BLANK_STEP_INDEX, createFrame, createInitialMap, withStepMetadata } from "./map-model.js";
 import { runBuildVoronoiStep } from "./1-2-build-voronoi/1-2-build-voronoi.js";
 import { runApplyWaterStep } from "./1-5-apply-water/1-5-apply-water.js";
+import { runNoiseStep } from "./1-6-noise/1-6-noise.js";
 import { runFirstRiverStep } from "./1-7-first-river/1-7-first-river.js";
 import { runFirstTributaryStep } from "./1-8-first-tributary/1-8-first-tributary.js";
 import { runBuildCoastlineGeometryStep } from "./1-9-build-coastline-geometry/1-9-build-coastline-geometry.js";
@@ -29,6 +30,7 @@ const GENERATION_PIPELINE = [
   { status: "Lloyd", run: runRelaxPointsStep },
   { status: "Simplify", run: runCollapseShortEdgesStep },
   { status: "Water", run: runApplyWaterStep },
+  { status: "Noise", run: runNoiseStep },
   { status: "River", run: runFirstRiverStep },
   { status: "Tributary", run: runFirstTributaryStep },
   { status: "Coastlines", run: runBuildCoastlineGeometryStep },
