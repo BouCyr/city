@@ -27,7 +27,7 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 3:
       return stableSignature({
-        segmentLength: "default",
+        collapseShortEdgeLength: options.collapseShortEdgeLength ?? 35,
       });
     case 4:
       return stableSignature({
@@ -71,17 +71,21 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 11:
       return stableSignature({
+        roadNetworkAlgorithm: options.stepAlgorithms?.roadNetwork || "boundary_connectors",
         routeGraph: "parish-center-road-network",
         routeCrossingCost: options.routeCrossingCost,
         bridgePenaltyMultiplier: 1.5,
       });
     case 12:
       return stableSignature({
-        segmentLength: "default",
-        routeGraph: "rebuilt-after-land-edge-and-parish-border-smoothing",
         parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
       });
     case 13:
+      return stableSignature({
+        segmentLength: "default",
+        routeGraph: "rebuilt-after-land-edge-segmentation",
+      });
+    case 14:
       return stableSignature({
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         splitSegmentLength: "default",

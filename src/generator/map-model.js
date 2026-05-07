@@ -33,12 +33,14 @@ export function createInitialMap(options) {
         waterPressureRangeRatio: options.waterPressureRangeRatio,
         waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
         relaxPaddingRatio: options.relaxPaddingRatio,
+        collapseShortEdgeLength: options.collapseShortEdgeLength,
         primaryRiverWidth: options.primaryRiverWidth,
         primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
         tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
         tributaryWidthRatio: options.tributaryWidthRatio,
         primaryMergeWidthGain: options.primaryMergeWidthGain,
         parishCount: options.parishCount,
+        routeCrossingCost: options.routeCrossingCost,
         waterSides: options.waterSides.map((side) => ({ ...side })),
         mapSize: options.mapSize,
       },
@@ -192,7 +194,27 @@ export function convertCellGeometryToCoastlineLotGeometry(map, segmentLength = D
   });
 }
 
+export function convertLotGeometryToParishBorderGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
+  return convertLotGeometryWithParishBorders(map, segmentLength, {
+    segmentLandEdges: false,
+  });
+}
+
 export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
+  return convertLotGeometryWithParishBorders(map, segmentLength, {
+    applyParishBorders: true,
+    segmentLandEdges: true,
+  });
+}
+
+export function convertLotGeometryToLandEdgeSegmentation(map, segmentLength = DEFAULT_SEGMENT_LENGTH) {
+  return convertLotGeometryWithParishBorders(map, segmentLength, {
+    applyParishBorders: false,
+    segmentLandEdges: true,
+  });
+}
+
+function convertLotGeometryWithParishBorders(map, segmentLength = DEFAULT_SEGMENT_LENGTH, { applyParishBorders = true, segmentLandEdges = true } = {}) {
   if (!Array.isArray(map.lots) || !Array.isArray(map.segments)) {
     return map;
   }
@@ -208,7 +230,9 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
   const vertexByKey = new Map();
   const segments = [];
   const segmentPathById = new Map();
-  const parishBorderTrace = buildParishBorderTrace(map, { segmentLength });
+  const parishBorderTrace = applyParishBorders
+    ? buildParishBorderTrace(map, { segmentLength })
+    : createEmptyParishBorderTrace();
 
   (map.segments || []).forEach((segment) => {
     const replacementPath = parishBorderTrace.edgePathById.get(segment.id);
@@ -216,8 +240,9 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
     const to = parishBorderTrace.replacementPointByVertexKey.get(pointKey(segment.to)) || segment.to;
     const path = normalizePolyline(replacementPath || replacePathEndpoints(segment.path?.length ? segment.path : [segment.from, segment.to], from, to));
     const keepAsIs = Boolean(segment.features?.coast) || Boolean(segment.features?.sea);
-    const preservePath = keepAsIs || parishBorderTrace.smoothedSegmentIds.has(segment.id);
-    const sampledPoints = preservePath
+    const isParishBoundarySmoothed = parishBorderTrace.smoothedSegmentIds.has(segment.id) || Boolean(segment.features?.parishBoundarySmoothed);
+    const preservePath = keepAsIs || isParishBoundarySmoothed;
+    const sampledPoints = preservePath || !segmentLandEdges
       ? path
       : resamplePolyline(path, Math.max(1, Math.ceil(polylineLength(path) / segmentLength)));
     segmentPathById.set(segment.id, sampledPoints);
@@ -242,8 +267,8 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
         rightLotId,
         features: {
           ...segment.features,
-          parishBoundary: parishBorderTrace.parishBoundarySegmentIds.has(segment.id),
-          parishBoundarySmoothed: parishBorderTrace.smoothedSegmentIds.has(segment.id),
+          parishBoundary: parishBorderTrace.parishBoundarySegmentIds.has(segment.id) || Boolean(segment.features?.parishBoundary),
+          parishBoundarySmoothed: isParishBoundarySmoothed,
           sea: keepAsIs && Boolean(segment.features?.sea),
         },
       };
@@ -270,6 +295,15 @@ export function convertLotGeometryToLandEdgeGeometry(map, segmentLength = DEFAUL
     vertices,
     lots,
     segments,
+  };
+}
+
+function createEmptyParishBorderTrace() {
+  return {
+    edgePathById: new Map(),
+    replacementPointByVertexKey: new Map(),
+    parishBoundarySegmentIds: new Set(),
+    smoothedSegmentIds: new Set(),
   };
 }
 

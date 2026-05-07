@@ -22,7 +22,7 @@ const RIVER_LOT_GEOMETRY_STEP_INDEX = 9;
 const ROUTE_GRAPH_STEP_INDEX = 9;
 const PARISH_CLUSTERING_STEP_INDEX = 10;
 const ROAD_NETWORK_STEP_INDEX = 11;
-const LAND_EDGE_PARISH_BORDER_STEP_INDEX = 12;
+const LAND_EDGE_SEGMENTATION_STEP_INDEX = 13;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -355,7 +355,7 @@ function createLotsGroup(lots, map) {
     );
   });
 
-  // 2. Identify boundary segments per parish
+  // 2. Identify complete outline segments per parish
   const parishBoundarySegments = new Map(); // parishId -> Array of segments
   segments.forEach(s => {
     const lId = s.leftLotId ?? s.leftCellId;
@@ -363,9 +363,11 @@ function createLotsGroup(lots, map) {
     const lParish = lId !== null ? lotParishMap.get(lId) : null;
     const rParish = rId !== null ? lotParishMap.get(rId) : null;
 
-    if (lParish !== null && lParish !== undefined && rParish !== null && rParish !== undefined && lParish !== rParish) {
+    if (lParish !== null && lParish !== undefined && lParish !== rParish) {
       if (!parishBoundarySegments.has(lParish)) parishBoundarySegments.set(lParish, []);
       parishBoundarySegments.get(lParish).push(s);
+    }
+    if (rParish !== null && rParish !== undefined && rParish !== lParish) {
       if (!parishBoundarySegments.has(rParish)) parishBoundarySegments.set(rParish, []);
       parishBoundarySegments.get(rParish).push(s);
     }
@@ -426,7 +428,7 @@ function seaDistanceFill(seaDistance, maxLandSeaDistance) {
 
 function createSegmentsGroup(segments, map) {
   const stepIndex = map.meta?.stepIndex ?? -1;
-  const hideDots = stepIndex > LAND_EDGE_PARISH_BORDER_STEP_INDEX;
+  const hideDots = stepIndex > LAND_EDGE_SEGMENTATION_STEP_INDEX;
   const strokeWidth = stepIndex >= PARISH_CLUSTERING_STEP_INDEX ? EDGE_STROKE_WIDTH * 1.55 : EDGE_STROKE_WIDTH;
   const group = createElement("g", {
     "pointer-events": "none",

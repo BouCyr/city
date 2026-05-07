@@ -20,8 +20,9 @@ Each step is a simple function. Its input is exactly the previous step output, e
 2.1 Route graph
 2.2 Parish clustering
 2.3 Road network
-2.4 Land edges + parish borders
-2.5 Field dispatch
+2.4 Parish borders
+2.5 Land edges segmentation
+2.6 Field dispatch
 
 ## Geometry Rules
 
@@ -234,11 +235,12 @@ Function output:
 Rules:
 - Sort candidate cell edges by geometric length.
 - Take the shortest candidate edge.
-- If its length is lower than `DEFAULT_SEGMENT_LENGTH`, delete that edge by merging its two vertices.
+- If its length is lower than `collapseShortEdgeLength`, delete that edge by merging its two vertices.
 - Interior vertices merge at their midpoint.
 - If either merged vertex is on the square map boundary, the merged vertex must also be on the same boundary side.
 - If the merged vertices include a corner constraint, the merged vertex stays on that corner so the map remains a perfect square.
-- Repeat until no remaining edge is lower than `DEFAULT_SEGMENT_LENGTH`.
+- Repeat until no remaining edge is lower than `collapseShortEdgeLength`.
+- `collapseShortEdgeLength` defaults to 35 and is clamped to the 0-100 range.
 - Rebuild cell polygons, edges, edge ownership, vertex edge lists, and cell neighbors from the simplified vertex rings.
 - Merged vertices may legally be part of three or more edges.
 
@@ -525,34 +527,48 @@ Source: `src/generator/2-3-build-road-network/2-3-build-road-network.js`
 
 Rules:
 - Existing physical land `road` routes are demoted to `alley`; river, sea, and coast routes keep their route types.
+- The selectable algorithms are `boundary_connectors` and `parish_center_spine`; `boundary_connectors` is the default.
 - Temporary parish-center alleys are added only for the selected parish-center lots, using the same eligible junction rule as step 2.2.
+- In `boundary_connectors`, routes that follow a parish boundary have doubled pathfinding cost.
+- In `boundary_connectors`, parish-boundary lots receive a temporary centroid node with virtual alleys from each boundary route node to the centroid and from the centroid to same-lot route nodes that are not on the parish boundary.
 - The parish center closest to the map midpoint becomes the center parish.
 - Each iteration finds the cheapest weighted path from the center parish to any unlinked parish center over roads and alleys.
 - The nearest unlinked parish path is promoted to road, and subsequent iterations include those cheaper road weights.
 - River crossing nodes on promoted paths become bridges and add no further crossing penalty.
 - Each newly added bridge multiplies the future river crossing penalty by 1.5.
 - Temporary parish-center alleys used by a selected path become persistent `street` routes and are treated like roads.
+- Temporary boundary-lot virtual alleys used by a selected path become persistent `road` routes.
 - Unused temporary parish-center alleys are removed from the final route graph.
+- Unused temporary boundary-lot virtual alleys are removed from the final route graph.
 - Final physical routes keep either `road` or `alley` type/features for later geometry rebuilds.
 
-## 2.4 Build Land-Edge Geometry + Parish Borders
+## 2.4 Build Parish Borders
 
-Source: `src/generator/2-4-build-land-edge-geometry/2-4-build-land-edge-geometry.js`
+Source: `src/generator/2-4-build-parish-borders/2-4-build-parish-borders.js`
 
 Rules:
 - Coastline and sea segments are preserved.
 - Segments between two different parishes are marked with `features.parishBoundary`.
+- Displayed parish outlines include inter-parish borders plus coast, sea, and map-boundary edges adjacent to the parish.
 - Only same-parish-pair border chains are smoothed, using the same midpoint-control quadratic sampling strategy used for rivers and coasts.
 - Nodes touching coast, river, sea, or map-boundary segments stay fixed.
 - Protected parish-border vertices break smoothing chains; single-segment borders stay straight.
 - Smoothed parish-border spans are marked with `features.parishBoundarySmoothed`.
+- Lot polygons, vertex ids, segment ids, adjacency, and route graph are rebuilt from the parish-border-smoothed geometry.
+
+## 2.5 Build Land-Edge Segmentation
+
+Source: `src/generator/2-5-build-land-edge-geometry/2-5-build-land-edge-geometry.js`
+
+Rules:
+- Coastline, sea segments, and already-smoothed parish-border paths are preserved.
 - Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
 - Lot polygons, vertex ids, segment ids, and adjacency are rebuilt from the normalized geometry.
 - `routeGraph` is rebuilt from the updated canonical segments, preserving `parishBoundary` and `parishBoundarySmoothed` on routes for later steps.
 
-## 2.5 Field Dispatch
+## 2.6 Field Dispatch
 
-Source: `src/generator/2-5-field-dispatch/2-5-field-dispatch.js`
+Source: `src/generator/2-6-field-dispatch/2-6-field-dispatch.js`
 
 Function input:
 

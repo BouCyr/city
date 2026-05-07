@@ -132,7 +132,7 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 3:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
+        collapseShortEdgeLength: options.collapseShortEdgeLength ?? 35,
       };
     case 4:
       return {
@@ -172,15 +172,20 @@ function getStepParametersForStep(stepIndex, options) {
       };
     case 11:
       return {
+        roadNetworkAlgorithm: options.stepAlgorithms?.roadNetwork || "boundary_connectors",
         routeGraph: "parish-center-road-network",
         bridgePenaltyMultiplier: 1.5,
       };
     case 12:
       return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
-        routeGraph: "rebuilt-after-segmentation",
+        parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
       };
     case 13:
+      return {
+        segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
+        routeGraph: "rebuilt-after-land-edge-segmentation",
+      };
+    case 14:
       return {
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         minimumSplitChildAreaRatio: 0.4,

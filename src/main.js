@@ -106,12 +106,14 @@ const CONTROL_HELP_TEXT = {
   waterPressureRangeRatio: "Distance range where edge pressure meaningfully affects water spread.",
   waterCenterBiasRadiusRatio: "Bias against flooding the map center. Higher values keep center landier for longer.",
   relaxPaddingRatio: "Padding ratio applied during Lloyd relaxation to keep adjusted points away from map edges.",
+  collapseShortEdgeLength: "Minimum edge length kept after Lloyd relaxation. Step 1.4 collapses shorter Voronoi edges before water and lot geometry are built.",
   primaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the primary river route. Lower values allow sharper bends, higher values keep the river straighter.",
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
   parishClusteringAlgorithm: "Choose how step 2.2 clusters parishes. Each option measures shortest weighted paths from lot center nodes over roads and center-to-corner alleys.",
+  roadNetworkAlgorithm: "Choose how step 2.3 links parish centers. Boundary connectors add temporary roads through parish-border lots and make boundary-following routes costlier.",
   routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node. Road lengths count triple and step 2.2 center alleys count sixfold.",
-  tessellateAlgorithm: "Choose how step 2.5 dispatches fields. Straight bisection uses straight split chords, and Curved bisection follows a circular arc constrained by the endpoint normals.",
+  tessellateAlgorithm: "Choose how step 2.6 dispatches fields. Straight bisection uses straight split chords, and Curved bisection follows a circular arc constrained by the endpoint normals.",
 };
 
 bindFormInteractions(form);

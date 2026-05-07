@@ -17,6 +17,7 @@ const DEFAULTS = {
   waterPressureRangeRatio: 0.42,
   waterCenterBiasRadiusRatio: 0.68,
   relaxPaddingRatio: 0.04,
+  collapseShortEdgeLength: 35,
   primaryRiverWidth: 18,
   primaryRiverTurnAngleDegrees: 30,
   tributaryRiverTurnAngleDegrees: 30,
@@ -27,6 +28,7 @@ const DEFAULTS = {
   stepAlgorithms: {
     scatterPoints: "random_scattering",
     parishClustering: "graph_kmeans",
+    roadNetwork: "boundary_connectors",
     tessellateLots: "curved_bisection",
   },
 };

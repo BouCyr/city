@@ -16,6 +16,7 @@ const RANGE_FIELDS = [
   "waterPressureRangeRatio",
   "waterCenterBiasRadiusRatio",
   "relaxPaddingRatio",
+  "collapseShortEdgeLength",
   "primaryRiverTurnAngleDegrees",
   "tributaryRiverTurnAngleDegrees",
   "parishCount",
@@ -30,6 +31,7 @@ const DEFAULT_SCATTER_PADDING_RATIO = 0.01;
 const DEFAULT_SCATTER_ALGORITHM = "random_scattering";
 const DEFAULT_TESSELLATE_ALGORITHM = "curved_bisection";
 const DEFAULT_PARISH_CLUSTERING_ALGORITHM = "graph_kmeans";
+const DEFAULT_ROAD_NETWORK_ALGORITHM = "boundary_connectors";
 const DEFAULT_POISSON_SPACING_RATIO = 1.15;
 const DEFAULT_POISSON_MAX_ATTEMPTS = 30;
 const DEFAULT_POISSON_PADDING_RATIO = 0.01;
@@ -39,6 +41,7 @@ const DEFAULT_WATER_EXPANSION_EDGE_WEIGHT = 0.52;
 const DEFAULT_WATER_PRESSURE_RANGE_RATIO = 0.42;
 const DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO = 0.68;
 const DEFAULT_RELAX_PADDING_RATIO = 0.04;
+const DEFAULT_COLLAPSE_SHORT_EDGE_LENGTH = 35;
 const DEFAULT_PRIMARY_RIVER_TURN_ANGLE_DEGREES = 30;
 const DEFAULT_TRIBUTARY_RIVER_TURN_ANGLE_DEGREES = 30;
 const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
@@ -118,6 +121,7 @@ export function readFormState(form) {
     stepAlgorithms: {
       scatterPoints: scatterAlgorithm,
       parishClustering: normalizeParishClusteringAlgorithm(String(data.get("parishClusteringAlgorithm") || DEFAULT_PARISH_CLUSTERING_ALGORITHM)),
+      roadNetwork: normalizeRoadNetworkAlgorithm(String(data.get("roadNetworkAlgorithm") || DEFAULT_ROAD_NETWORK_ALGORITHM)),
       tessellateLots: normalizeTessellateAlgorithm(String(data.get("tessellateAlgorithm") || DEFAULT_TESSELLATE_ALGORITHM)),
     },
     pointCount: normalizePointCountForScatterAlgorithm(Number(data.get("pointCount") || DEFAULT_POINT_COUNT), scatterAlgorithm, MIN_POINT_COUNT, MAX_POINT_COUNT),
@@ -132,6 +136,7 @@ export function readFormState(form) {
     waterPressureRangeRatio: normalizeDecimal(Number(data.get("waterPressureRangeRatio") || DEFAULT_WATER_PRESSURE_RANGE_RATIO), 0.1, 1),
     waterCenterBiasRadiusRatio: normalizeDecimal(Number(data.get("waterCenterBiasRadiusRatio") || DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO), 0, 1),
     relaxPaddingRatio: normalizeDecimal(Number(data.get("relaxPaddingRatio") || DEFAULT_RELAX_PADDING_RATIO), 0, 0.15),
+    collapseShortEdgeLength: normalizeDecimal(Number(data.get("collapseShortEdgeLength") || DEFAULT_COLLAPSE_SHORT_EDGE_LENGTH), 0, 100),
     primaryRiverTurnAngleDegrees: normalizeDecimal(Number(data.get("primaryRiverTurnAngleDegrees") || DEFAULT_PRIMARY_RIVER_TURN_ANGLE_DEGREES), 30, 180),
     tributaryRiverTurnAngleDegrees: normalizeDecimal(Number(data.get("tributaryRiverTurnAngleDegrees") || DEFAULT_TRIBUTARY_RIVER_TURN_ANGLE_DEGREES), 30, 180),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
@@ -161,6 +166,13 @@ function normalizeParishClusteringAlgorithm(value) {
     return value;
   }
   return DEFAULT_PARISH_CLUSTERING_ALGORITHM;
+}
+
+function normalizeRoadNetworkAlgorithm(value) {
+  if (value === "parish_center_spine") {
+    return value;
+  }
+  return DEFAULT_ROAD_NETWORK_ALGORITHM;
 }
 
 function getSelectedScatterAlgorithm(form) {

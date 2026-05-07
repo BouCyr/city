@@ -5,7 +5,7 @@
  * WHY: Roads should be the selected parish spine; all other land travel remains alley-scale.
  */
 
-import { clonePoint, pointDistance } from "../map-model.js";
+import { clonePoint, midpointBetween, pointDistance } from "../map-model.js";
 import {
   addLotCenterAlleyRoutesToRouteGraph,
   buildRouteGraph,
@@ -19,11 +19,15 @@ const STREET_ROUTE_TYPE = "street";
 const ALLEY_ROUTE_TYPE = "alley";
 const WILD_ROUTE_TYPE = "wild";
 const CENTER_CONNECTOR_ROUTE_TYPE = "center_connector";
+const BOUNDARY_CONNECTOR_ROUTE_TYPE = "boundary_connector";
 const STREET_ROUTE_WEIGHT_FACTOR = 1;
 const ROAD_ROUTE_WEIGHT_FACTOR = 3;
 const ALLEY_ROUTE_WEIGHT_FACTOR = 6;
+const PARISH_BOUNDARY_ROUTE_WEIGHT_FACTOR = 2;
 const BRIDGE_PENALTY_MULTIPLIER = 1.5;
 const TEMP_CENTER_ALLEY_FEATURE = "roadNetworkCenterAlley";
+const TEMP_BOUNDARY_ALLEY_FEATURE = "roadNetworkBoundaryAlley";
+const DEFAULT_ROAD_NETWORK_ALGORITHM = "boundary_connectors";
 
 export function runBuildRoadNetworkStep(map) {
   if (!Array.isArray(map.parishCenters) || map.parishCenters.length <= 1) {
@@ -49,6 +53,8 @@ export function runBuildRoadNetworkStep(map) {
 }
 
 export function buildRoadNetwork(map) {
+  const algorithm = normalizeRoadNetworkAlgorithm(map.init?.params?.stepAlgorithms?.roadNetwork);
+  const useBoundaryConnectors = algorithm === "boundary_connectors";
   const baseGraph = stripLotCenterAlleyRoutesFromRouteGraph(map.routeGraph || buildRouteGraph(map));
   const centerLots = resolveParishCenterLots(map);
   const graphWithEligibleCenterLinks = addLotCenterAlleyRoutesToRouteGraph(
@@ -56,7 +62,11 @@ export function buildRoadNetwork(map) {
     centerLots,
     { [TEMP_CENTER_ALLEY_FEATURE]: true, routeType: CENTER_CONNECTOR_ROUTE_TYPE },
   );
-  const graphWithCenters = demotePhysicalRoadsToAlleys(graphWithEligibleCenterLinks);
+  const demotedGraph = demotePhysicalRoadsToAlleys(graphWithEligibleCenterLinks);
+  const parishBoundaryRouteIds = useBoundaryConnectors ? findParishBoundaryRouteIds(demotedGraph, map.lots || []) : new Set();
+  const graphWithCenters = useBoundaryConnectors
+    ? addBoundaryLotVirtualAlleys(demotedGraph, map.lots || [], parishBoundaryRouteIds)
+    : demotedGraph;
   graphWithCenters.parishCenters = map.parishCenters || [];
   const centerParish = findMiddleParishCenter(map.parishCenters || [], map.meta?.size || 1000);
   const centerNodeByParishId = new Map((graphWithCenters.nodes || [])
@@ -70,6 +80,7 @@ export function buildRoadNetwork(map) {
   const centerNodeId = centerNodeByParishId.get(centerParish?.parishId);
   const roadRouteIds = new Set();
   const streetRouteIds = new Set();
+  const virtualRoadRouteIds = new Set();
   const bridgeNodeIds = new Set();
   const linkedParishIds = new Set(centerParish ? [centerParish.parishId] : []);
   const iterations = [];
@@ -84,6 +95,7 @@ export function buildRoadNetwork(map) {
       roadRouteIds,
       bridgeNodeIds,
       crossingPenalty,
+      parishBoundaryRouteIds,
     );
     if (!path) {
       break;
@@ -105,6 +117,19 @@ export function buildRoadNetwork(map) {
           lotCenterAlley: false,
           [TEMP_CENTER_ALLEY_FEATURE]: false,
           routeType: STREET_ROUTE_TYPE,
+        };
+        return;
+      }
+      if (route?.features?.[TEMP_BOUNDARY_ALLEY_FEATURE]) {
+        virtualRoadRouteIds.add(routeId);
+        route.type = ROAD_ROUTE_TYPE;
+        route.features = {
+          ...(route.features || {}),
+          road: true,
+          street: false,
+          alley: false,
+          [TEMP_BOUNDARY_ALLEY_FEATURE]: false,
+          routeType: ROAD_ROUTE_TYPE,
         };
         return;
       }
@@ -143,7 +168,7 @@ export function buildRoadNetwork(map) {
       crossingPenalty,
       routeIds: path.routeIds.filter((routeId) => {
         const route = graphWithCenters.routes.find((candidate) => candidate.id === routeId);
-        return route && (isPhysicalLandRoute(route) || streetRouteIds.has(routeId));
+        return route && (isPhysicalLandRoute(route) || streetRouteIds.has(routeId) || virtualRoadRouteIds.has(routeId));
       }),
       nodeIds: path.nodeIds,
       bridgeNodeIds: newBridgeNodeIds,
@@ -154,11 +179,16 @@ export function buildRoadNetwork(map) {
     }
   }
 
-  const finalRouteGraph = stripTemporaryRoadNetworkCenterAlleys(graphWithCenters, streetRouteIds);
+  const finalRouteGraph = stripTemporaryRoadNetworkTemporaryAlleys(graphWithCenters, streetRouteIds, virtualRoadRouteIds);
   finalRouteGraph.routes.forEach((route) => {
     if (streetRouteIds.has(route.sourceRoadNetworkRouteId ?? route.id) || route.type === STREET_ROUTE_TYPE) {
       route.type = STREET_ROUTE_TYPE;
       route.features = { ...(route.features || {}), street: true, road: false, alley: false, routeType: STREET_ROUTE_TYPE };
+      return;
+    }
+    if (virtualRoadRouteIds.has(route.sourceRoadNetworkRouteId ?? route.id)) {
+      route.type = ROAD_ROUTE_TYPE;
+      route.features = { ...(route.features || {}), road: true, street: false, alley: false, [TEMP_BOUNDARY_ALLEY_FEATURE]: false, routeType: ROAD_ROUTE_TYPE };
       return;
     }
     if (!isPhysicalLandRoute(route)) {
@@ -184,6 +214,9 @@ export function buildRoadNetwork(map) {
   const streetRoutes = sanitizedRoadNetwork.routeGraph.routes
     .filter((route) => route.type === STREET_ROUTE_TYPE)
     .map((route) => serializeStreetRoute(route, sanitizedRoadNetwork.routeGraph.nodes));
+  const virtualRoadRoutes = sanitizedRoadNetwork.routeGraph.routes
+    .filter((route) => route.type === ROAD_ROUTE_TYPE && route.features?.roadNetworkVirtualRoad)
+    .map((route) => serializeStoredRoute(route, sanitizedRoadNetwork.routeGraph.nodes, ROAD_ROUTE_TYPE));
 
   return {
     finalRouteGraph: sanitizedRoadNetwork.routeGraph,
@@ -191,10 +224,13 @@ export function buildRoadNetwork(map) {
       centerParishId: centerParish?.parishId ?? null,
       centerParishLetter: centerParish?.letter ?? null,
       centerParishName: centerParish?.name ?? null,
+      algorithm,
       linkedParishIds: Array.from(linkedParishIds),
       roadRouteIds: Array.from(roadRouteIds),
       streetRouteIds: streetRoutes.map((route) => route.id),
       streetRoutes,
+      virtualRoadRouteIds: virtualRoadRoutes.map((route) => route.id),
+      virtualRoadRoutes,
       bridgeNodeIds: finalBridgeNodeIds,
       blockedCrossingRouteIds: sanitizedRoadNetwork.blockedRouteIds,
       blockedCrossingSourceSegmentIds: sanitizedRoadNetwork.blockedSourceSegmentIds,
@@ -204,6 +240,10 @@ export function buildRoadNetwork(map) {
     },
     traceGraph: graphWithCenters,
   };
+}
+
+function normalizeRoadNetworkAlgorithm(value) {
+  return value === "parish_center_spine" ? value : DEFAULT_ROAD_NETWORK_ALGORITHM;
 }
 
 function demotePhysicalRoadsToAlleys(routeGraph) {
@@ -235,6 +275,198 @@ function resolveParishCenterLots(map) {
     .filter(Boolean);
 }
 
+function findParishBoundaryRouteIds(routeGraph, lots) {
+  const lotById = new Map((lots || []).map((lot) => [lot.id, lot]));
+  return new Set((routeGraph.routes || [])
+    .filter((route) => routeIsBetweenDifferentLandParishes(route, lotById))
+    .map((route) => route.id));
+}
+
+function addBoundaryLotVirtualAlleys(routeGraph, lots, parishBoundaryRouteIds) {
+  if (!parishBoundaryRouteIds.size) {
+    return routeGraph;
+  }
+
+  const lotById = new Map((lots || []).map((lot) => [lot.id, lot]));
+  const nodes = (routeGraph.nodes || []).map((node) => ({
+    ...node,
+    routeIds: [...(node.routeIds || [])],
+    sourceVertexIds: [...(node.sourceVertexIds || [])],
+    features: { ...(node.features || {}) },
+  }));
+  const routes = (routeGraph.routes || []).map((route) => cloneRoute(route));
+  const nodeByKey = new Map(nodes.map((node) => [pointKey(node), node.id]));
+  const boundaryNodeIdsByLotId = new Map();
+  const landNodeIdsByLotId = new Map();
+
+  routes.forEach((route) => {
+    const lotIds = getLandRouteLotIds(route, lotById);
+    if (!lotIds.length) {
+      return;
+    }
+    const endpointIds = [route.fromNodeId, route.toNodeId].filter((nodeId) => nodes[nodeId]);
+    if (!endpointIds.length) {
+      return;
+    }
+    if (parishBoundaryRouteIds.has(route.id)) {
+      lotIds.forEach((lotId) => addSetValues(boundaryNodeIdsByLotId, lotId, endpointIds));
+      return;
+    }
+    if (route.type === COAST_ROUTE_TYPE || route.type === RIVER_ROUTE_TYPE || route.type === SEA_ROUTE_TYPE || route.type === WILD_ROUTE_TYPE) {
+      return;
+    }
+    if (route.type === ROAD_ROUTE_TYPE || route.type === ALLEY_ROUTE_TYPE || route.type === STREET_ROUTE_TYPE) {
+      lotIds.forEach((lotId) => addSetValues(landNodeIdsByLotId, lotId, endpointIds));
+    }
+  });
+
+  const virtualRouteKeySet = new Set();
+  Array.from(boundaryNodeIdsByLotId.keys())
+    .sort((first, second) => first - second)
+    .forEach((lotId) => {
+      const lot = lotById.get(lotId);
+      if (!lot?.features?.land || lot.features?.sea || !lot.centroid) {
+        return;
+      }
+      const boundaryNodeIds = Array.from(boundaryNodeIdsByLotId.get(lotId) || []).sort((first, second) => first - second);
+      const boundaryNodeIdSet = new Set(boundaryNodeIds);
+      const internalNodeIds = Array.from(landNodeIdsByLotId.get(lotId) || [])
+        .filter((nodeId) => !boundaryNodeIdSet.has(nodeId))
+        .sort((first, second) => first - second);
+      if (!boundaryNodeIds.length || !internalNodeIds.length) {
+        return;
+      }
+
+      const centerNodeId = getOrCreateBoundaryLotCenterNode(nodes, nodeByKey, lot);
+
+      boundaryNodeIds.forEach((boundaryNodeId) => {
+        appendBoundaryLotVirtualRoute(routes, nodes, virtualRouteKeySet, lotId, boundaryNodeId, centerNodeId);
+      });
+      internalNodeIds.forEach((internalNodeId) => {
+        appendBoundaryLotVirtualRoute(routes, nodes, virtualRouteKeySet, lotId, centerNodeId, internalNodeId);
+      });
+    });
+
+  return { nodes, routes };
+}
+
+function getOrCreateBoundaryLotCenterNode(nodes, nodeByKey, lot) {
+  const key = pointKey(lot.centroid);
+  const existingId = nodeByKey.get(key);
+  if (existingId !== undefined) {
+    nodes[existingId].type = "lot_center";
+    nodes[existingId].lotId = lot.id;
+    nodes[existingId].features = {
+      ...(nodes[existingId].features || {}),
+      lotCenter: true,
+      roadNetworkBoundaryCenter: true,
+    };
+    return existingId;
+  }
+
+  const id = nodes.length;
+  nodes.push({
+    id,
+    x: lot.centroid.x,
+    y: lot.centroid.y,
+    routeIds: [],
+    type: "lot_center",
+    lotId: lot.id,
+    parishId: lot.parishId ?? null,
+    sourceVertexIds: [],
+    features: {
+      lotCenter: true,
+      roadNetworkBoundaryCenter: true,
+    },
+  });
+  nodeByKey.set(key, id);
+  return id;
+}
+
+function appendBoundaryLotVirtualRoute(routes, nodes, virtualRouteKeySet, lotId, fromNodeId, toNodeId) {
+  if (fromNodeId === toNodeId) {
+    return;
+  }
+  const pairKey = routePairKey(fromNodeId, toNodeId);
+  if (virtualRouteKeySet.has(pairKey)) {
+    return;
+  }
+  virtualRouteKeySet.add(pairKey);
+  const from = nodes[fromNodeId];
+  const to = nodes[toNodeId];
+  const route = {
+    id: `route:${routes.length}`,
+    fromNodeId,
+    toNodeId,
+    type: ALLEY_ROUTE_TYPE,
+    length: pointDistance(from, to),
+    midpoint: midpointBetween(from, to),
+    sourceSegmentId: null,
+    leftLotId: lotId,
+    rightLotId: null,
+    leftSublotId: null,
+    rightSublotId: null,
+    features: {
+      alley: true,
+      roadNetworkVirtualRoad: true,
+      [TEMP_BOUNDARY_ALLEY_FEATURE]: true,
+      routeType: BOUNDARY_CONNECTOR_ROUTE_TYPE,
+    },
+  };
+  routes.push(route);
+  nodes[fromNodeId].routeIds.push(route.id);
+  nodes[toNodeId].routeIds.push(route.id);
+}
+
+const COAST_ROUTE_TYPE = "coast";
+const RIVER_ROUTE_TYPE = "river";
+const SEA_ROUTE_TYPE = "sea";
+
+function routeIsBetweenDifferentLandParishes(route, lotById) {
+  if (!isPhysicalLandRoute(route)) {
+    return false;
+  }
+  const leftLot = route.leftLotId === null || route.leftLotId === undefined ? null : lotById.get(route.leftLotId);
+  const rightLot = route.rightLotId === null || route.rightLotId === undefined ? null : lotById.get(route.rightLotId);
+  const leftParishId = leftLot?.parishId;
+  const rightParishId = rightLot?.parishId;
+  return Boolean(
+    leftLot?.features?.land
+    && rightLot?.features?.land
+    && !leftLot.features?.sea
+    && !rightLot.features?.sea
+    && leftParishId !== null
+    && leftParishId !== undefined
+    && rightParishId !== null
+    && rightParishId !== undefined
+    && leftParishId !== rightParishId
+  );
+}
+
+function getLandRouteLotIds(route, lotById) {
+  return [route.leftLotId, route.rightLotId]
+    .filter((lotId) => lotId !== null && lotId !== undefined)
+    .filter((lotId, index, lotIds) => lotIds.indexOf(lotId) === index)
+    .filter((lotId) => {
+      const lot = lotById.get(lotId);
+      return lot?.features?.land && !lot.features?.sea;
+    });
+}
+
+function addSetValues(map, key, values) {
+  const set = map.get(key) || new Set();
+  values.forEach((value) => set.add(value));
+  map.set(key, set);
+}
+
+function routePairKey(firstNodeId, secondNodeId) {
+  return firstNodeId < secondNodeId ? `${firstNodeId}:${secondNodeId}` : `${secondNodeId}:${firstNodeId}`;
+}
+
+function pointKey(point) {
+  return `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
+}
+
 function findMiddleParishCenter(parishCenters, mapSize) {
   const middle = { x: mapSize / 2, y: mapSize / 2 };
   return parishCenters
@@ -249,7 +481,7 @@ function findParishIdByLotId(parishCenters, lotId) {
   return parishCenters.find((center) => center.lotId === lotId)?.parishId ?? null;
 }
 
-function findNearestUnlinkedParishPath(graph, centerNodeId, centerNodeByParishId, linkedParishIds, roadRouteIds, bridgeNodeIds, crossingPenalty) {
+function findNearestUnlinkedParishPath(graph, centerNodeId, centerNodeByParishId, linkedParishIds, roadRouteIds, bridgeNodeIds, crossingPenalty, parishBoundaryRouteIds = new Set()) {
   const parishByNodeId = new Map();
   centerNodeByParishId.forEach((nodeId, parishId) => {
     if (!linkedParishIds.has(parishId)) {
@@ -260,7 +492,7 @@ function findNearestUnlinkedParishPath(graph, centerNodeId, centerNodeByParishId
     return null;
   }
 
-  const result = findShortestPathToAnyTarget(graph, centerNodeId, parishByNodeId, roadRouteIds, bridgeNodeIds, crossingPenalty);
+  const result = findShortestPathToAnyTarget(graph, centerNodeId, parishByNodeId, roadRouteIds, bridgeNodeIds, crossingPenalty, parishBoundaryRouteIds);
   if (!result) {
     return null;
   }
@@ -272,8 +504,8 @@ function findNearestUnlinkedParishPath(graph, centerNodeId, centerNodeByParishId
   };
 }
 
-function findShortestPathToAnyTarget(graph, startNodeId, parishByNodeId, roadRouteIds, bridgeNodeIds, crossingPenalty) {
-  const adjacency = buildRoadNetworkAdjacency(graph, roadRouteIds);
+function findShortestPathToAnyTarget(graph, startNodeId, parishByNodeId, roadRouteIds, bridgeNodeIds, crossingPenalty, parishBoundaryRouteIds = new Set()) {
+  const adjacency = buildRoadNetworkAdjacency(graph, roadRouteIds, parishBoundaryRouteIds);
   const distances = new Map([[startNodeId, 0]]);
   const previous = new Map();
   const queue = new MinPriorityQueue();
@@ -335,27 +567,30 @@ function findShortestPathToAnyTarget(graph, startNodeId, parishByNodeId, roadRou
   };
 }
 
-function buildRoadNetworkAdjacency(graph, roadRouteIds) {
+function buildRoadNetworkAdjacency(graph, roadRouteIds, parishBoundaryRouteIds = new Set()) {
   const adjacency = new Map();
   (graph.routes || []).forEach((route) => {
     if (route.type !== ROAD_ROUTE_TYPE && route.type !== STREET_ROUTE_TYPE && route.type !== ALLEY_ROUTE_TYPE) {
       return;
     }
-    const weight = getRoadNetworkRouteWeight(route, roadRouteIds);
+    const weight = getRoadNetworkRouteWeight(route, roadRouteIds, parishBoundaryRouteIds);
     appendAdjacency(adjacency, route.fromNodeId, { toNodeId: route.toNodeId, routeId: route.id, weight });
     appendAdjacency(adjacency, route.toNodeId, { toNodeId: route.fromNodeId, routeId: route.id, weight });
   });
   return adjacency;
 }
 
-function getRoadNetworkRouteWeight(route, roadRouteIds) {
+function getRoadNetworkRouteWeight(route, roadRouteIds, parishBoundaryRouteIds = new Set()) {
+  const boundaryMultiplier = parishBoundaryRouteIds.has(route.id) || parishBoundaryRouteIds.has(route.sourceRoadNetworkRouteId)
+    ? PARISH_BOUNDARY_ROUTE_WEIGHT_FACTOR
+    : 1;
   if (route.type === STREET_ROUTE_TYPE || route.features?.[TEMP_CENTER_ALLEY_FEATURE]) {
     return (route.length || 0) * STREET_ROUTE_WEIGHT_FACTOR;
   }
   if (route.type === ROAD_ROUTE_TYPE || roadRouteIds.has(route.id)) {
-    return (route.length || 0) * ROAD_ROUTE_WEIGHT_FACTOR;
+    return (route.length || 0) * ROAD_ROUTE_WEIGHT_FACTOR * boundaryMultiplier;
   }
-  return (route.length || 0) * ALLEY_ROUTE_WEIGHT_FACTOR;
+  return (route.length || 0) * ALLEY_ROUTE_WEIGHT_FACTOR * boundaryMultiplier;
 }
 
 function appendAdjacency(adjacency, nodeId, edge) {
@@ -372,8 +607,16 @@ function isRiverCrossingNode(node) {
   return node?.type === "river_crossing";
 }
 
-function stripTemporaryRoadNetworkCenterAlleys(routeGraph, streetRouteIds) {
-  const keptRoutes = (routeGraph.routes || []).filter((route) => !route.features?.[TEMP_CENTER_ALLEY_FEATURE] || streetRouteIds.has(route.id));
+function stripTemporaryRoadNetworkTemporaryAlleys(routeGraph, streetRouteIds, virtualRoadRouteIds) {
+  const keptRoutes = (routeGraph.routes || []).filter((route) => {
+    if (route.features?.[TEMP_CENTER_ALLEY_FEATURE] && !streetRouteIds.has(route.id)) {
+      return false;
+    }
+    if (route.features?.[TEMP_BOUNDARY_ALLEY_FEATURE] && !virtualRoadRouteIds.has(route.id)) {
+      return false;
+    }
+    return true;
+  });
   const usedNodeIds = new Set();
   keptRoutes.forEach((route) => {
     usedNodeIds.add(route.fromNodeId);
@@ -518,6 +761,10 @@ function applyRoadNetworkSegmentFeatures(segments, routes, blockedSourceSegmentI
 }
 
 function serializeStreetRoute(route, nodes) {
+  return serializeStoredRoute(route, nodes, STREET_ROUTE_TYPE);
+}
+
+function serializeStoredRoute(route, nodes, routeType) {
   const from = nodes.find((node) => node.id === route.fromNodeId);
   const to = nodes.find((node) => node.id === route.toNodeId);
   return {
@@ -528,17 +775,19 @@ function serializeStreetRoute(route, nodes) {
     midpoint: route.midpoint ? clonePoint(route.midpoint) : null,
     leftLotId: route.leftLotId ?? null,
     rightLotId: route.rightLotId ?? null,
-    fromNode: serializeStreetNode(from),
-    toNode: serializeStreetNode(to),
+    fromNode: serializeStoredNode(from),
+    toNode: serializeStoredNode(to),
     features: {
       ...(route.features || {}),
-      street: true,
-      routeType: STREET_ROUTE_TYPE,
+      road: routeType === ROAD_ROUTE_TYPE,
+      street: routeType === STREET_ROUTE_TYPE,
+      alley: false,
+      routeType,
     },
   };
 }
 
-function serializeStreetNode(node) {
+function serializeStoredNode(node) {
   if (!node) {
     return null;
   }

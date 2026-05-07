@@ -1,10 +1,10 @@
 /*
  * WHAT: Build tutorial frames for the parish-border smoothing pass.
- * HOW: Reuse the production parish-border trace and the merged 2.3 land-edge rebuild on a fixed generated map.
+ * HOW: Reuse the production parish-border trace and step 2.4 parish-border rebuild on a fixed generated map.
  * WHY: The tutorial should explain the real geometry and topology changes applied before field dispatch.
  */
 
-import { convertLotGeometryToLandEdgeGeometry } from "./map-model.js";
+import { convertLotGeometryToParishBorderGeometry } from "./map-model.js";
 import { buildParishBorderTrace } from "./parish-border-model.js";
 
 const TUTORIAL_SEGMENT_LENGTH = 40;
@@ -19,7 +19,7 @@ export function buildParishSmoothingTutorialTrace(dataset) {
   }
 
   const trace = buildParishBorderTrace(inputMap, { segmentLength: TUTORIAL_SEGMENT_LENGTH });
-  const finalMap = convertLotGeometryToLandEdgeGeometry(inputMap, TUTORIAL_SEGMENT_LENGTH);
+  const finalMap = convertLotGeometryToParishBorderGeometry(inputMap, TUTORIAL_SEGMENT_LENGTH);
   const chainSegments = trace.chains.flatMap((chain, chainIndex) =>
     chain.segmentIds.map((segmentId) => ({ segmentId, chainIndex, smoothed: chain.smoothed }))
   );
@@ -64,7 +64,7 @@ export function buildParishSmoothingTutorialTrace(dataset) {
           .filter(Boolean)
           .map((point) => ({ point, className: "parish-pinned-point" })),
       }),
-      frame("Build Bezier border paths", "The smoothing curves are computed on the unsegmented border graph first. Only after these paths exist does step 2.3 sample them into canonical segments.", {
+      frame("Build Bezier border paths", "The smoothing curves are computed on the unsegmented border graph first. Step 2.4 then rebuilds parish-border geometry from those paths.", {
         lots: inputMap.lots,
         segments: inputMap.segments?.map((segment) => ({
           ...segment,
@@ -84,7 +84,7 @@ export function buildParishSmoothingTutorialTrace(dataset) {
             { point: curve.end, label: "M", className: "parish-midpoint" },
           ]))),
       }),
-      frame("Rebuilt land edges + route graph", "This is the real merged 2.3 output: non-border edges were straight-resampled, parish borders were sampled along their Bezier paths, and the rebuilt route graph keeps the border flags for later steps.", {
+      frame("Rebuilt parish borders", "This is the step 2.4 output: parish borders were sampled along their Bezier paths and non-border land edges stay unsegmented until step 2.5.", {
         lots: finalMap.lots,
         segments: finalMap.segments?.map((segment) => ({
           ...segment,

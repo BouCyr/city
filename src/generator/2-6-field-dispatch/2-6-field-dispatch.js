@@ -10,12 +10,12 @@ import {
   pointDistance,
 } from "../map-model.js";
 import { addAlleyRoutesToRouteGraph } from "../route-graph.js";
-import { buildCurvedBisectionSplitPath } from "./2-5-curved-bisection.js";
-import { buildStraightBisectionSplitPath } from "./2-5-straight-bisection.js";
+import { buildCurvedBisectionSplitPath } from "./2-6-curved-bisection.js";
+import { buildStraightBisectionSplitPath } from "./2-6-straight-bisection.js";
 
 export function runFieldDispatchStep(map, { onProgress = null }) {
   if (!Array.isArray(map.lots) || !map.lots.length) {
-        const label = "Step 2.5 / Field dispatch";
+        const label = "Step 2.6 / Field dispatch";
         return {
           map,
           frameEntries: [
@@ -44,7 +44,7 @@ export function runFieldDispatchStep(map, { onProgress = null }) {
       sublots: progress.sublots.map((sublot) => cloneSublot(sublot)),
     };
     onProgress({
-      label: `Step 2.5 / Field dispatch (${progress.completed}/${progress.total})`,
+      label: `Step 2.6 / Field dispatch (${progress.completed}/${progress.total})`,
       map: buildTessellatedMap(map, progressTessellation),
       progress: {
         completed: progress.completed,
@@ -58,7 +58,7 @@ export function runFieldDispatchStep(map, { onProgress = null }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 2.5 / Field dispatch",
+        label: "Step 2.6 / Field dispatch",
         map: nextMap,
       },
     ],
