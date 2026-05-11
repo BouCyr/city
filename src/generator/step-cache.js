@@ -41,7 +41,8 @@ export function buildGenerationStepSignature(stepIndex, options) {
     case 5:
       return stableSignature({
         noiseMinimumEdgeLength: 100,
-        noiseDisplacementRatioRange: [0.1, 0.2],
+        noiseMinDisplacementRatio: options.noiseMinDisplacementRatio ?? 0.1,
+        noiseMaxDisplacementRatio: options.noiseMaxDisplacementRatio ?? 0.2,
       });
     case 6:
       return stableSignature({

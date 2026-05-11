@@ -36,6 +36,8 @@ export function createInitialMap(options) {
         waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
         relaxPaddingRatio: options.relaxPaddingRatio,
         collapseShortEdgeLength: options.collapseShortEdgeLength,
+        noiseMinDisplacementRatio: options.noiseMinDisplacementRatio,
+        noiseMaxDisplacementRatio: options.noiseMaxDisplacementRatio,
         primaryRiverWidth: options.primaryRiverWidth,
         primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
         tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,

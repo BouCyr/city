@@ -139,6 +139,18 @@
                   </li>
                   <li data-step-index="5">
                     <button class="step-select" type="button">1.6 Noise</button>
+                    <div class="step-controls">
+                      <label>
+                        <span class="field-title">Noise Min Amplitude <button class="control-help-trigger" type="button" data-help-key="noiseMinDisplacementRatio" aria-label="Noise Min Amplitude help">?</button></span>
+                        <input id="noiseMinDisplacementRatio" name="noiseMinDisplacementRatio" type="range" min="0" max="0.5" step="0.01" value="0.1">
+                        <output for="noiseMinDisplacementRatio" id="noiseMinDisplacementRatioValue">0.1</output>
+                      </label>
+                      <label>
+                        <span class="field-title">Noise Max Amplitude <button class="control-help-trigger" type="button" data-help-key="noiseMaxDisplacementRatio" aria-label="Noise Max Amplitude help">?</button></span>
+                        <input id="noiseMaxDisplacementRatio" name="noiseMaxDisplacementRatio" type="range" min="0" max="0.5" step="0.01" value="0.2">
+                        <output for="noiseMaxDisplacementRatio" id="noiseMaxDisplacementRatioValue">0.2</output>
+                      </label>
+                    </div>
                   </li>
                   <li data-step-index="6">
                     <button class="step-select" type="button">1.7 Primary river</button>

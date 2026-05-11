@@ -13,12 +13,12 @@ import {
 } from "../cell-topology.js";
 
 const MIN_NOISE_EDGE_LENGTH = 100;
-const MIN_DISPLACEMENT_RATIO = 0.1;
-const MAX_DISPLACEMENT_RATIO = 0.2;
+const DEFAULT_MIN_DISPLACEMENT_RATIO = 0.1;
+const DEFAULT_MAX_DISPLACEMENT_RATIO = 0.2;
 const EPSILON = 0.0001;
 
 export function runNoiseStep(map, { rng }) {
-  const result = applyCellEdgeNoise(map, rng);
+  const result = applyCellEdgeNoise(map, rng, getNoiseOptions(map));
   const nextMap = result.map;
 
   return {
@@ -32,7 +32,20 @@ export function runNoiseStep(map, { rng }) {
   };
 }
 
-function applyCellEdgeNoise(map, rng) {
+function getNoiseOptions(map) {
+  const minRatio = normalizeDisplacementRatio(map.init?.params?.noiseMinDisplacementRatio, DEFAULT_MIN_DISPLACEMENT_RATIO);
+  const maxRatio = normalizeDisplacementRatio(map.init?.params?.noiseMaxDisplacementRatio, DEFAULT_MAX_DISPLACEMENT_RATIO);
+  return {
+    minDisplacementRatio: Math.min(minRatio, maxRatio),
+    maxDisplacementRatio: Math.max(minRatio, maxRatio),
+  };
+}
+
+function normalizeDisplacementRatio(value, fallback) {
+  return Number.isFinite(value) ? Math.max(0, Math.min(0.5, value)) : fallback;
+}
+
+function applyCellEdgeNoise(map, rng, options) {
   if (!Array.isArray(map.vertices) || !Array.isArray(map.cells) || !Array.isArray(map.edges) || !map.cells.length) {
     return {
       map,
@@ -73,7 +86,7 @@ function applyCellEdgeNoise(map, rng) {
 
     const midpoint = midpointBetween(candidate.from, candidate.to);
     const targetCell = chooseTargetCell(leftCell, rightCell, areaDeltaByCellId, areaByCellId, rng);
-    const displacedPoint = displaceToward(midpoint, targetCell.centroid, candidate.length, rng);
+    const displacedPoint = displaceToward(midpoint, targetCell.centroid, candidate.length, rng, options);
     const newVertexId = nextVertexId;
     vertexPoints.set(newVertexId, displacedPoint);
 
@@ -112,7 +125,7 @@ function applyCellEdgeNoise(map, rng) {
       noise: {
         splitCount,
         minimumEdgeLength: MIN_NOISE_EDGE_LENGTH,
-        displacementRatioRange: [MIN_DISPLACEMENT_RATIO, MAX_DISPLACEMENT_RATIO],
+        displacementRatioRange: [options.minDisplacementRatio, options.maxDisplacementRatio],
         areaDeltaByCellId: Object.fromEntries(
           Array.from(areaDeltaByCellId.entries())
             .filter(([, delta]) => Math.abs(delta) > EPSILON)
@@ -183,7 +196,7 @@ function chooseTargetCell(leftCell, rightCell, areaDeltaByCellId, areaByCellId, 
   return rng.next() < 0.5 ? leftCell : rightCell;
 }
 
-function displaceToward(midpoint, target, edgeLength, rng) {
+function displaceToward(midpoint, target, edgeLength, rng, options) {
   const dx = target.x - midpoint.x;
   const dy = target.y - midpoint.y;
   const distance = Math.hypot(dx, dy);
@@ -191,7 +204,7 @@ function displaceToward(midpoint, target, edgeLength, rng) {
     return clonePoint(midpoint);
   }
 
-  const ratio = MIN_DISPLACEMENT_RATIO + rng.next() * (MAX_DISPLACEMENT_RATIO - MIN_DISPLACEMENT_RATIO);
+  const ratio = options.minDisplacementRatio + rng.next() * (options.maxDisplacementRatio - options.minDisplacementRatio);
   const displacement = edgeLength * ratio;
   return {
     x: midpoint.x + (dx / distance) * displacement,

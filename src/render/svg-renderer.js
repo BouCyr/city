@@ -36,7 +36,6 @@ const COLORS = {
   seaFill: "#7ebbd4",
   seaEdge: "#1f4e72",
   riverHit: "rgba(0, 0, 0, 0)",
-  tessellation: "rgba(119, 119, 119, 0.62)",
   routeNode: "#18232b",
   routeNodeHit: "rgba(0, 0, 0, 0)",
   routeNodeSea: "#2f7fa1",
@@ -134,7 +133,6 @@ function createMapLayer(map) {
   const layer = createElement("g");
   layer.append(
     createLotsGroup(lots, map),
-    createTessellationGroup(map.tessellation, map),
     createSegmentsGroup(segments, map),
     createRouteGraphAlleyGroup(map),
     useRiverStrokeDebug
@@ -587,99 +585,6 @@ function createRouteGraphAlleyGroup(map) {
     });
 
   return group;
-}
-
-function createTessellationGroup(tessellation, map) {
-  const group = createElement("g");
-
-  if (!tessellation?.vertices?.length || !tessellation?.sublots?.length) {
-    return group;
-  }
-
-  const vertices = new Map(tessellation.vertices.map((vertex) => [vertex.id, vertex]));
-  const edges = new Map();
-  const hitGroup = createElement("g", {
-    fill: "rgba(0, 0, 0, 0)",
-    stroke: "none",
-    "pointer-events": "all",
-  });
-  const lineGroup = createElement("g", {
-    fill: "none",
-    stroke: COLORS.tessellation,
-    "stroke-width": 0.45,
-    "pointer-events": "none",
-  });
-
-  tessellation.sublots.forEach((sublot) => {
-    const points = sublot.vertexIds.map((vertexId) => vertices.get(vertexId)).filter(Boolean);
-    if (points.length >= 3) {
-      hitGroup.append(
-        createElement("polygon", {
-          points: toSvgPoints(points),
-          "data-sublot-id": sublot.id,
-          "data-lot-id": sublot.lotId,
-        }),
-      );
-    }
-
-    const sourceKey = `${sublot.lotId}:${sublot.siteIndex ?? sublot.id}`;
-    for (let index = 0; index < points.length; index += 1) {
-      const from = points[index];
-      const to = points[(index + 1) % points.length];
-      const key = tessellationEdgeKey(from, to);
-      const edge = edges.get(key) || {
-        from,
-        to,
-        sourceKeys: new Set(),
-        occurrences: 0,
-      };
-      edge.sourceKeys.add(sourceKey);
-      edge.occurrences += 1;
-      edges.set(key, edge);
-    }
-  });
-
-  edges.forEach((edge) => {
-    if (edge.occurrences > 1 && edge.sourceKeys.size === 1) {
-      return;
-    }
-    lineGroup.append(
-      createElement("line", {
-        x1: edge.from.x,
-        y1: edge.from.y,
-        x2: edge.to.x,
-        y2: edge.to.y,
-      }),
-    );
-  });
-  group.append(hitGroup, lineGroup, createTessellationVerticesGroup(tessellation.vertices));
-
-  return group;
-}
-
-function createTessellationVerticesGroup(vertices) {
-  const group = createElement("g", {
-    "pointer-events": "none",
-  });
-
-  vertices.forEach((vertex) => {
-    group.append(
-      createElement("circle", {
-        cx: vertex.x,
-        cy: vertex.y,
-        r: 2.25,
-        fill: COLORS.tessellation,
-      }),
-    );
-  });
-
-  return group;
-}
-
-function tessellationEdgeKey(first, second) {
-  const firstKey = `${first.x.toFixed(4)},${first.y.toFixed(4)}`;
-  const secondKey = `${second.x.toFixed(4)},${second.y.toFixed(4)}`;
-  return firstKey < secondKey ? `${firstKey}|${secondKey}` : `${secondKey}|${firstKey}`;
 }
 
 function createPointsGroup(points) {

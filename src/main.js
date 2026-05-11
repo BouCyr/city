@@ -107,6 +107,8 @@ const CONTROL_HELP_TEXT = {
   waterCenterBiasRadiusRatio: "Bias against flooding the map center. Higher values keep center landier for longer.",
   relaxPaddingRatio: "Padding ratio applied during Lloyd relaxation to keep adjusted points away from map edges.",
   collapseShortEdgeLength: "Minimum edge length kept after Lloyd relaxation. Step 1.4 collapses shorter Voronoi edges before water and lot geometry are built.",
+  noiseMinDisplacementRatio: "Smallest midpoint displacement used by step 1.6. The value is multiplied by each eligible edge length.",
+  noiseMaxDisplacementRatio: "Largest midpoint displacement used by step 1.6. The value is multiplied by each eligible edge length.",
   primaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the primary river route. Lower values allow sharper bends, higher values keep the river straighter.",
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",

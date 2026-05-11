@@ -17,6 +17,8 @@ const RANGE_FIELDS = [
   "waterCenterBiasRadiusRatio",
   "relaxPaddingRatio",
   "collapseShortEdgeLength",
+  "noiseMinDisplacementRatio",
+  "noiseMaxDisplacementRatio",
   "primaryRiverTurnAngleDegrees",
   "tributaryRiverTurnAngleDegrees",
   "parishCount",
@@ -42,6 +44,8 @@ const DEFAULT_WATER_PRESSURE_RANGE_RATIO = 0.42;
 const DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO = 0.68;
 const DEFAULT_RELAX_PADDING_RATIO = 0.04;
 const DEFAULT_COLLAPSE_SHORT_EDGE_LENGTH = 35;
+const DEFAULT_NOISE_MIN_DISPLACEMENT_RATIO = 0.1;
+const DEFAULT_NOISE_MAX_DISPLACEMENT_RATIO = 0.2;
 const DEFAULT_PRIMARY_RIVER_TURN_ANGLE_DEGREES = 60;
 const DEFAULT_TRIBUTARY_RIVER_TURN_ANGLE_DEGREES = 60;
 const DEFAULT_PRIMARY_RIVER_WIDTH = 18;
@@ -137,6 +141,8 @@ export function readFormState(form) {
     waterCenterBiasRadiusRatio: normalizeDecimal(Number(data.get("waterCenterBiasRadiusRatio") || DEFAULT_WATER_CENTER_BIAS_RADIUS_RATIO), 0, 1),
     relaxPaddingRatio: normalizeDecimal(Number(data.get("relaxPaddingRatio") || DEFAULT_RELAX_PADDING_RATIO), 0, 0.15),
     collapseShortEdgeLength: normalizeDecimal(Number(data.get("collapseShortEdgeLength") || DEFAULT_COLLAPSE_SHORT_EDGE_LENGTH), 0, 100),
+    noiseMinDisplacementRatio: normalizeDecimal(Number(data.get("noiseMinDisplacementRatio") || DEFAULT_NOISE_MIN_DISPLACEMENT_RATIO), 0, 0.5),
+    noiseMaxDisplacementRatio: normalizeDecimal(Number(data.get("noiseMaxDisplacementRatio") || DEFAULT_NOISE_MAX_DISPLACEMENT_RATIO), 0, 0.5),
     primaryRiverTurnAngleDegrees: normalizeDecimal(Number(data.get("primaryRiverTurnAngleDegrees") || DEFAULT_PRIMARY_RIVER_TURN_ANGLE_DEGREES), 30, 180),
     tributaryRiverTurnAngleDegrees: normalizeDecimal(Number(data.get("tributaryRiverTurnAngleDegrees") || DEFAULT_TRIBUTARY_RIVER_TURN_ANGLE_DEGREES), 30, 180),
     tributaryWidthRatio: normalizeDecimal(Number(data.get("tributaryWidthRatio") || DEFAULT_TRIBUTARY_WIDTH_RATIO), 0.3, 1),
