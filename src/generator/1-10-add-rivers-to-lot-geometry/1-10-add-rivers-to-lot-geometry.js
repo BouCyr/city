@@ -14,6 +14,7 @@ import {
   normalizePolyline,
   polylineLength,
   pointDistance,
+  enforceCoastContinuity,
 } from "../map-model.js";
 import { smoothPinnedPolyline } from "../polyline-smoothing.js";
 
@@ -660,6 +661,7 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
   });
 
   appendUnrepresentedRiverSegments(segments, riverGraph.segments, normalizedLots, lotById);
+  enforceCoastContinuity(segments);
 
   segments.forEach((segment) => {
     if (segment.leftLotId !== null) {

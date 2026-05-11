@@ -283,7 +283,6 @@ function runSingleGeneration(options) {
 
     if (message.type === "generation-step-start") {
       stepTracker.startStep(message.index, message.status);
-      logStepParameters(message);
       setBackgroundTaskStatus(`Generating ${message.index + 1}/${TOTAL_GENERATION_STEPS}`);
       return;
     }
@@ -413,14 +412,6 @@ function createGenerationWorker(requestId, onMessage) {
     });
   });
   return worker;
-}
-
-function logStepParameters(message) {
-  if (!message || !message.params) {
-    return;
-  }
-
-  console.log(`[generation] ${message.label}`, message.params);
 }
 
 function teardownWorkerTask() {

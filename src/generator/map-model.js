@@ -12,6 +12,8 @@ export const BLANK_STEP_INDEX = -1;
 export const DEFAULT_SEGMENT_LENGTH = 20;
 
 const SNAPSHOT_FALLBACK = (value) => JSON.parse(JSON.stringify(value));
+const COAST_CONNECTOR_MAX_SEGMENTS = 12;
+const COAST_CONNECTOR_MAX_LENGTH = DEFAULT_SEGMENT_LENGTH * 20;
 
 export function createInitialMap(options) {
   return {
@@ -286,6 +288,7 @@ function convertLotGeometryWithParishBorders(map, segmentLength = DEFAULT_SEGMEN
 
   rebuildLotPolygonsFromSegmentPaths(lots, map.segments || [], segmentPathById);
   rebuildLotRelationships(lots, lotById, segments);
+  enforceCoastContinuity(segments);
   lots.forEach((lot) => {
     lot.vertexIds = lot.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point));
   });
@@ -399,6 +402,7 @@ function convertCellGeometryToLotGeometryWithEdgeSampler(map, sampleEdgePath) {
     lot.vertexIds = lot.polygon.map((point) => getOrCreateLotVertex(vertices, vertexByKey, point));
   });
   rebuildLotRelationships(lots, lotById, segments);
+  enforceCoastContinuity(segments);
   applyVertexFeaturesFromSegments(vertices, segments);
   return {
     ...stripCellGeometry(map),
@@ -452,6 +456,139 @@ function orientPathForEndpoints(path, from, to) {
   const reverseDistance = pointDistance(last, from) + pointDistance(first, to);
   const oriented = forwardDistance <= reverseDistance ? path : [...path].reverse();
   return oriented.map((point) => clonePoint(point));
+}
+
+export function enforceCoastContinuity(segments) {
+  const incidentByVertexKey = buildIncidentSegmentsByVertexKey(segments);
+  const pointByVertexKey = buildPointByVertexKey(segments);
+  const candidateIdsByVertexKey = new Map();
+  const candidateById = new Map();
+
+  segments.forEach((segment) => {
+    if (!isCoastConnectorCandidate(segment)) {
+      return;
+    }
+
+    candidateById.set(segment.id, segment);
+    for (const key of [pointKey(segment.from), pointKey(segment.to)]) {
+      const segmentIds = candidateIdsByVertexKey.get(key) || [];
+      segmentIds.push(segment.id);
+      candidateIdsByVertexKey.set(key, segmentIds);
+    }
+  });
+
+  const coastJunctionKeys = new Set(
+    Array.from(incidentByVertexKey.entries())
+      .filter(([, incident]) => incident.some((segment) => segment.features?.coast))
+      .map(([key]) => key),
+  );
+  const terminalKeys = new Set(coastJunctionKeys);
+  const boundaryLimit = Math.max(0, ...Array.from(pointByVertexKey.values()).flatMap((point) => [point.x, point.y]));
+  pointByVertexKey.forEach((point, key) => {
+    if (isMapBoundaryPoint(point, boundaryLimit)) {
+      terminalKeys.add(key);
+    }
+  });
+  const promotedSegmentIds = new Set();
+
+  coastJunctionKeys.forEach((startKey) => {
+    for (const segmentId of candidateIdsByVertexKey.get(startKey) || []) {
+      if (promotedSegmentIds.has(segmentId)) {
+        continue;
+      }
+
+      const path = traceCoastConnectorPath(startKey, segmentId, candidateById, candidateIdsByVertexKey, terminalKeys);
+      if (!path || path.segmentIds.length > COAST_CONNECTOR_MAX_SEGMENTS || path.length > COAST_CONNECTOR_MAX_LENGTH) {
+        continue;
+      }
+
+      path.segmentIds.forEach((id) => promotedSegmentIds.add(id));
+    }
+  });
+
+  promotedSegmentIds.forEach((id) => {
+    const segment = candidateById.get(id);
+    segment.features = {
+      ...(segment.features || {}),
+      coast: true,
+      land: false,
+      sea: false,
+    };
+  });
+}
+
+function buildIncidentSegmentsByVertexKey(segments) {
+  const incidentByVertexKey = new Map();
+  segments.forEach((segment) => {
+    for (const point of [segment.from, segment.to]) {
+      const key = pointKey(point);
+      const incident = incidentByVertexKey.get(key) || [];
+      incident.push(segment);
+      incidentByVertexKey.set(key, incident);
+    }
+  });
+  return incidentByVertexKey;
+}
+
+function buildPointByVertexKey(segments) {
+  const pointByVertexKey = new Map();
+  segments.forEach((segment) => {
+    pointByVertexKey.set(pointKey(segment.from), segment.from);
+    pointByVertexKey.set(pointKey(segment.to), segment.to);
+  });
+  return pointByVertexKey;
+}
+
+function isCoastConnectorCandidate(segment) {
+  return Boolean(
+    (segment?.features?.land || segment.leftLotId === null || segment.rightLotId === null)
+    && !segment.features.coast
+    && !segment.features.sea
+    && !segment.features.river
+    && !segment.features.road
+    && !segment.features.street
+  );
+}
+
+function isMapBoundaryPoint(point, boundaryLimit) {
+  return point.x <= 0 || point.y <= 0 || point.x >= boundaryLimit || point.y >= boundaryLimit;
+}
+
+function traceCoastConnectorPath(startKey, firstSegmentId, candidateById, candidateIdsByVertexKey, terminalKeys) {
+  const segmentIds = [];
+  let currentKey = startKey;
+  let currentSegmentId = firstSegmentId;
+  let totalLength = 0;
+
+  while (currentSegmentId !== undefined) {
+    const segment = candidateById.get(currentSegmentId);
+    if (!segment || segmentIds.includes(currentSegmentId)) {
+      return null;
+    }
+
+    segmentIds.push(currentSegmentId);
+    totalLength += segment.length || pointDistance(segment.from, segment.to);
+    const fromKey = pointKey(segment.from);
+    const toKey = pointKey(segment.to);
+    const nextKey = currentKey === fromKey ? toKey : fromKey;
+    if (nextKey !== startKey && terminalKeys.has(nextKey)) {
+      return {
+        segmentIds,
+        length: totalLength,
+      };
+    }
+
+    const nextCandidateIds = (candidateIdsByVertexKey.get(nextKey) || [])
+      .filter((id) => id !== currentSegmentId);
+    if (nextCandidateIds.length !== 1 || terminalKeys.has(nextKey)) {
+      return null;
+    }
+
+    currentKey = nextKey;
+    currentSegmentId = nextCandidateIds[0];
+  }
+
+  return null;
 }
 
 function replacePathEndpoints(path, from, to) {

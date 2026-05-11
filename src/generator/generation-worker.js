@@ -5,7 +5,6 @@
  */
 
 import { generateCity, generateCityThroughStep } from "./city-generator.js";
-import { DEFAULT_SEGMENT_LENGTH } from "./map-model.js";
 
 const RIVER_EVALUATION_STEP_INDEX = 7;
 
@@ -34,7 +33,7 @@ self.addEventListener("message", async (event) => {
 });
 
 async function handleGenerateRequest({ requestId, options }) {
-  const map = await generateCity(options, createGenerationStepTracker(requestId, options));
+  const map = await generateCity(options, createGenerationStepTracker(requestId));
 
   postMessage({
     type: "generation-complete",
@@ -65,7 +64,7 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
       ...options,
       seed,
     };
-    const previewMap = await generateCityThroughStep(previewOptions, RIVER_EVALUATION_STEP_INDEX, createGenerationStepTracker(requestId, previewOptions));
+    const previewMap = await generateCityThroughStep(previewOptions, RIVER_EVALUATION_STEP_INDEX, createGenerationStepTracker(requestId));
     const tributaryLength = previewMap.rivers?.[1]?.length || 0;
 
     if (!bestCandidate || tributaryLength > bestCandidate.tributaryLength) {
@@ -73,7 +72,7 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
         ...options,
         seed,
       };
-      const map = await generateCity(candidateOptions, createGenerationStepTracker(requestId, candidateOptions));
+      const map = await generateCity(candidateOptions, createGenerationStepTracker(requestId));
       bestCandidate = {
         seed,
         tributaryLength,
@@ -110,100 +109,7 @@ async function handleBestOfRequest({ requestId, options, sampleCount, baseline }
   });
 }
 
-function getStepParametersForStep(stepIndex, options) {
-  switch (stepIndex) {
-    case 0:
-      return {
-        scatterAlgorithm: options.stepAlgorithms?.scatterPoints || "random_scattering",
-        pointCount: options.pointCount,
-        scatterPaddingRatio: options.scatterPaddingRatio,
-        poissonSpacingRatio: options.poissonSpacingRatio,
-        poissonMaxAttempts: options.poissonMaxAttempts,
-        poissonPaddingRatio: options.poissonPaddingRatio,
-      };
-    case 1:
-      return {
-        pointCount: options.pointCount,
-        mapSize: options.mapSize,
-      };
-    case 2:
-      return {
-        relaxPaddingRatio: options.relaxPaddingRatio,
-      };
-    case 3:
-      return {
-        collapseShortEdgeLength: options.collapseShortEdgeLength ?? 35,
-      };
-    case 4:
-      return {
-        waterSides: options.waterSides.filter((side) => side.enabled).map((side) => side.name),
-        waterReachRatio: options.waterReachRatio,
-        waterExpansionBase: options.waterExpansionBase,
-        waterExpansionEdgeWeight: options.waterExpansionEdgeWeight,
-        waterPressureRangeRatio: options.waterPressureRangeRatio,
-        waterCenterBiasRadiusRatio: options.waterCenterBiasRadiusRatio,
-      };
-    case 5:
-      return {
-        noiseMinimumEdgeLength: 100,
-        noiseDisplacementRatioRange: [0.1, 0.2],
-      };
-    case 6:
-      return {
-        primaryRiverTurnAngleDegrees: options.primaryRiverTurnAngleDegrees,
-      };
-    case 7:
-      return {
-        tributaryRiverTurnAngleDegrees: options.tributaryRiverTurnAngleDegrees,
-      };
-    case 8:
-      return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
-      };
-    case 9:
-      return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH,
-      };
-    case 10:
-      return {
-        routeGraph: "segments",
-      };
-    case 11:
-      return {
-        parishAlgorithm: options.stepAlgorithms?.parishClustering || "graph_kmeans",
-        parishCount: options.parishCount,
-        routeCrossingCost: options.routeCrossingCost,
-        routeDistanceModel: "center-node-road-x3-alley-x6-plus-crossing-cost",
-      };
-    case 12:
-      return {
-        roadNetworkAlgorithm: options.stepAlgorithms?.roadNetwork || "boundary_connectors",
-        routeGraph: "parish-center-road-network",
-        bridgePenaltyMultiplier: 1.5,
-      };
-    case 13:
-      return {
-        parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
-      };
-    case 14:
-      return {
-        segmentLength: DEFAULT_SEGMENT_LENGTH * 2,
-        routeGraph: "rebuilt-after-land-edge-segmentation",
-      };
-    case 15:
-      return {
-        tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
-        minimumSplitChildAreaRatio: 0.4,
-        curvedSplitCurve: "circular arc tangent to boundary-vertex bisectors",
-        poissonVoronoiTargetSource: "estimated straight-bisection sublot count",
-        splitSegmentLength: DEFAULT_SEGMENT_LENGTH * 0.5,
-      };
-    default:
-      return null;
-  }
-}
-
-function createGenerationStepTracker(requestId, options) {
+function createGenerationStepTracker(requestId) {
   return {
     reset() {
       postMessage({
@@ -212,15 +118,10 @@ function createGenerationStepTracker(requestId, options) {
       });
     },
     onStepStart(payload) {
-      const params = {
-        seed: options.seed,
-        ...getStepParametersForStep(payload.index, options),
-      };
       postMessage({
         type: "generation-step-start",
         requestId,
         ...payload,
-        params,
       });
     },
     onStepComplete(payload) {

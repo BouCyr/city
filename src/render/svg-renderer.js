@@ -18,6 +18,7 @@ const RIVER_OUTER_WIDTH_OFFSET = -2;
 const RIVER_INNER_WIDTH_REDUCTION = 4;
 const PRIMARY_RIVER_STEP_INDEX = 6;
 const RIVER_BRANCH_STEP_INDEX = 7;
+const COASTLINE_MESH_STEP_INDEX = 8;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 10;
 const ROUTE_GRAPH_STEP_INDEX = 10;
 const PARISH_CLUSTERING_STEP_INDEX = 11;
@@ -26,7 +27,7 @@ const LAND_EDGE_SEGMENTATION_STEP_INDEX = 14;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
-  landFill: "#c8ae89",
+  landFill: "#e3caa0",
   seaDistanceNear: "#ead3ab",
   seaDistanceFar: "#6d4529",
   centerFill: "#efc8c3",
@@ -318,7 +319,8 @@ function routeNodeFill(node) {
 
 function createLotsGroup(lots, map) {
   const group = createElement("g");
-  const seaDistances = isRiverDistanceDebugStep(map) && (Array.isArray(map.cells) || Array.isArray(lots))
+  const useSeaDistanceFill = (map.meta?.stepIndex ?? -1) < COASTLINE_MESH_STEP_INDEX && isRiverDistanceDebugStep(map);
+  const seaDistances = useSeaDistanceFill && (Array.isArray(map.cells) || Array.isArray(lots))
     ? computeSeaDistances(Array.isArray(map.cells) && map.cells.length > 0 ? map.cells : lots)
     : null;
   const baseItems = Array.isArray(map.cells) && map.cells.length > 0 ? map.cells : lots;
@@ -410,6 +412,9 @@ function fillForLot(lot, seaDistances, maxLandSeaDistance, map) {
   if (lot.features.sea) {
     return COLORS.seaFill;
   }
+  if ((map.meta?.stepIndex ?? -1) >= COASTLINE_MESH_STEP_INDEX && lot.features.land) {
+    return COLORS.landFill;
+  }
   if (seaDistances && lot.features.land && Number.isFinite(seaDistances[lot.id])) {
     return seaDistanceFill(seaDistances[lot.id], maxLandSeaDistance);
   }
@@ -446,11 +451,19 @@ function createSegmentsGroup(segments, map) {
   const riverDotGroup = createElement("g");
 
   segments.forEach((segment) => {
+    if (!shouldDrawSegment(segment, stepIndex)) {
+      return;
+    }
+
     const leftId = segment.leftLotId ?? segment.leftCellId ?? "";
     const rightId = segment.rightLotId ?? segment.rightCellId ?? "";
     const isRiver = Boolean(segment.features.river);
     const stroke = segment.features.wild || segment.features.routeType === "wild"
         ? COLORS.wild
+        : segment.features.road || segment.features.street || segment.features.routeType === "road" || segment.features.routeType === "street"
+        ? COLORS.road
+        : segment.features.coast
+        ? COLORS.seaEdge
         : segment.features.sea
         ? COLORS.seaEdge
         : COLORS.edge;
@@ -479,6 +492,21 @@ function createSegmentsGroup(segments, map) {
   });
   group.append(lineGroup, dotGroup, riverLineGroup, riverDotGroup);
   return group;
+}
+
+function shouldDrawSegment(segment, stepIndex) {
+  if (stepIndex < ROAD_NETWORK_STEP_INDEX) {
+    return true;
+  }
+
+  return Boolean(
+    segment.features?.river
+    || segment.features?.coast
+    || segment.features?.road
+    || segment.features?.street
+    || segment.features?.routeType === "road"
+    || segment.features?.routeType === "street",
+  );
 }
 
 function createSegmentLine(segment, stroke, strokeWidth, leftId, rightId) {
@@ -530,7 +558,7 @@ function createRouteGraphAlleyGroup(map) {
         return route.type === "alley" && route.features?.lotCenterAlley;
       }
       if (stepIndex >= ROAD_NETWORK_STEP_INDEX) {
-        return (route.type === "alley" || route.type === "road" || route.type === "street" || route.type === "wild") && !route.features?.lotCenterAlley;
+        return (route.type === "alley" || route.type === "road" || route.type === "street" || route.type === "river" || route.type === "coast") && !route.features?.lotCenterAlley;
       }
       return false;
     })
@@ -546,13 +574,13 @@ function createRouteGraphAlleyGroup(map) {
           y1: from.y,
           x2: to.x,
           y2: to.y,
-          stroke: route.type === "wild"
-            ? COLORS.wild
-            : route.type === "road" || route.type === "street"
-              ? COLORS.road
-              : COLORS.alley,
+          stroke: route.type === "road" || route.type === "street"
+            ? COLORS.road
+            : route.type === "alley"
+              ? COLORS.alley
+              : COLORS.seaEdge,
           "stroke-width": route.type === "road" || route.type === "street" ? EDGE_STROKE_WIDTH * 2.6 : EDGE_STROKE_WIDTH * 1.25,
-          opacity: route.type === "road" || route.type === "street" ? 0.92 : route.type === "wild" ? 0.72 : 0.56,
+          opacity: route.type === "road" || route.type === "street" ? 0.92 : route.type === "alley" ? 0.56 : 0.72,
           "data-route-id": route.id,
         }),
       );
@@ -933,7 +961,6 @@ function buildParishPathData(segments) {
 
   while (true) {
     let startVKey = null;
-    // Prefer endpoints (degree 1 or odd) for starting a path
     for (const [vKey, connected] of vToEdges.entries()) {
       const unused = connected.filter(e => !e.used);
       if (unused.length > 0 && unused.length % 2 !== 0) {
@@ -941,7 +968,6 @@ function buildParishPathData(segments) {
         break;
       }
     }
-    // If no endpoints, pick any vertex with unused edges
     if (startVKey === null) {
       for (const [vKey, connected] of vToEdges.entries()) {
         if (connected.some(e => !e.used)) {
@@ -970,7 +996,7 @@ function buildParishPathData(segments) {
       pts.push(nextPt);
       currentVKey = nextVKey;
       
-      if (currentVKey === startVKey) break; // Loop closed
+      if (currentVKey === startVKey) break;
     }
 
     if (pts.length > 1) {
@@ -978,7 +1004,6 @@ function buildParishPathData(segments) {
       for (let i = 1; i < pts.length; i++) {
         d += `L ${pts[i].x} ${pts[i].y} `;
       }
-      // "Close it if last vertex=first vertex"
       if (getVKey(pts[pts.length - 1]) === getVKey(pts[0]) && pts.length > 2) {
         d += "Z ";
       }

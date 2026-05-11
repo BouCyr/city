@@ -199,15 +199,15 @@ export function buildRoadNetwork(map) {
       route.features = { ...(route.features || {}), road: true, alley: false, routeType: ROAD_ROUTE_TYPE };
       return;
     }
-    route.type = ALLEY_ROUTE_TYPE;
-    route.features = { ...(route.features || {}), road: false, alley: true, routeType: ALLEY_ROUTE_TYPE };
+    route.type = WILD_ROUTE_TYPE;
+    route.features = { ...(route.features || {}), road: false, street: false, alley: false, wild: true, routeType: WILD_ROUTE_TYPE };
   });
   finalRouteGraph.nodes.forEach((node) => {
     if (bridgeNodeIds.has(node.sourceRoadNetworkNodeId ?? node.id)) {
       node.features = { ...(node.features || {}), bridge: true };
     }
   });
-  const sanitizedRoadNetwork = removeNonBridgeCrossings(finalRouteGraph);
+  const sanitizedRoadNetwork = convertRemainingAlleysToWild(removeNonBridgeCrossings(finalRouteGraph));
   const finalBridgeNodeIds = finalRouteGraph.nodes
     .filter((node) => node.features?.bridge)
     .map((node) => node.id);
@@ -711,6 +711,35 @@ function removeNonBridgeCrossings(routeGraph) {
   };
 }
 
+function convertRemainingAlleysToWild(roadNetwork) {
+  const routes = (roadNetwork.routeGraph.routes || []).map((route) => {
+    if (route.type !== ALLEY_ROUTE_TYPE) {
+      return route;
+    }
+
+    return {
+      ...route,
+      type: WILD_ROUTE_TYPE,
+      features: {
+        ...(route.features || {}),
+        road: false,
+        street: false,
+        alley: false,
+        wild: true,
+        routeType: WILD_ROUTE_TYPE,
+      },
+    };
+  });
+
+  return {
+    ...roadNetwork,
+    routeGraph: {
+      ...roadNetwork.routeGraph,
+      routes,
+    },
+  };
+}
+
 function applyRoadNetworkSegmentFeatures(segments, routes, blockedSourceSegmentIds = []) {
   const routeBySegmentId = new Map();
   const bridgeSegmentIds = new Set();
@@ -741,7 +770,7 @@ function applyRoadNetworkSegmentFeatures(segments, routes, blockedSourceSegmentI
         },
       };
     }
-    if (!route || (route.type !== ROAD_ROUTE_TYPE && route.type !== STREET_ROUTE_TYPE && route.type !== ALLEY_ROUTE_TYPE)) {
+    if (!route || (route.type !== ROAD_ROUTE_TYPE && route.type !== STREET_ROUTE_TYPE && route.type !== ALLEY_ROUTE_TYPE && route.type !== WILD_ROUTE_TYPE)) {
       return bridge
         ? { ...segment, features: { ...(segment.features || {}), bridge: true } }
         : segment;
@@ -753,6 +782,7 @@ function applyRoadNetworkSegmentFeatures(segments, routes, blockedSourceSegmentI
         road: route.type === ROAD_ROUTE_TYPE,
         street: route.type === STREET_ROUTE_TYPE,
         alley: route.type === ALLEY_ROUTE_TYPE,
+        wild: route.type === WILD_ROUTE_TYPE,
         routeType: route.type,
         bridge: bridge || Boolean(segment.features?.bridge),
       },

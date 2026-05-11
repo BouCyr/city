@@ -64,7 +64,8 @@ export function addAlleyRoutesToRouteGraph(map, tessellation) {
     routeIds: [],
     sourceVertexIds: [...(node.sourceVertexIds || [])],
   }));
-  const routes = graph.routes.map((route) => cloneRoute(route));
+  const tessellatedLotIds = new Set((tessellation?.sublots || []).map((sublot) => sublot.lotId));
+  const routes = graph.routes.map((route) => reopenWildRouteOnTessellatedLotBoundary(cloneRoute(route), tessellatedLotIds));
   const nodeByKey = new Map(nodes.map((node) => [pointKey(node), node.id]));
   const vertices = new Map((tessellation?.vertices || []).map((vertex) => [vertex.id, vertex]));
   const edgeOwners = new Map();
@@ -128,6 +129,26 @@ export function addAlleyRoutesToRouteGraph(map, tessellation) {
       type: classifyNodeType(node, routes),
     })),
     routes,
+  };
+}
+
+function reopenWildRouteOnTessellatedLotBoundary(route, tessellatedLotIds) {
+  if (
+    route.type !== "wild"
+    || (!tessellatedLotIds.has(route.leftLotId) && !tessellatedLotIds.has(route.rightLotId))
+  ) {
+    return route;
+  }
+
+  return {
+    ...route,
+    type: "alley",
+    features: {
+      ...(route.features || {}),
+      alley: true,
+      wild: false,
+      routeType: "alley",
+    },
   };
 }
 
