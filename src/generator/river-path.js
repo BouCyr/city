@@ -21,7 +21,7 @@ const CENTRAL_BOUNDARY_MIN_RATIO = 0.25;
 const CENTRAL_BOUNDARY_MAX_RATIO = 0.75;
 const MAX_RIVER_EXPANDED_STATES = 5000;
 const MAX_RIVER_COMPLETED_PATHS = 500;
-export const DEFAULT_RIVER_TURN_ANGLE_DEGREES = 30;
+export const DEFAULT_RIVER_TURN_ANGLE_DEGREES = 60;
 
 export function computeSeaDistances(cells) {
   if (!cells || cells.length === 0) {

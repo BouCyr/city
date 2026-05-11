@@ -322,7 +322,7 @@ Function input:
 {
   cells: [{ id: 0, centroid: { ... }, neighborCellIds: [...], features: { land: true, sea: false } }, ...],
   edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
-  primaryRiverTurnAngleDegrees: 30,
+  primaryRiverTurnAngleDegrees: 60,
   river: { primary: null, secondary: null },
   rivers: []
 }
@@ -379,7 +379,7 @@ Function input:
 {
   cells: [{ id: 0, features: { land: true, river: false, sea: false }, ... }, ...],
   edges: [{ id: "...", midpoint: { ... }, leftCellId: 0, rightCellId: 1 }, ...],
-  tributaryRiverTurnAngleDegrees: 30,
+  tributaryRiverTurnAngleDegrees: 60,
   river: { primary: { id: 0, cellIds: [12, 18, 27, ...], ... }, secondary: null },
   rivers: [{ id: 0, ... }]
 }
