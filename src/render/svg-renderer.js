@@ -355,7 +355,7 @@ function createLotsGroup(lots, map) {
     );
   });
 
-  // 2. Identify complete outline segments per parish
+  // 2. Identify inter-parish boundary segments
   const parishBoundarySegments = new Map(); // parishId -> Array of segments
   segments.forEach(s => {
     const lId = s.leftLotId ?? s.leftCellId;
@@ -363,11 +363,9 @@ function createLotsGroup(lots, map) {
     const lParish = lId !== null ? lotParishMap.get(lId) : null;
     const rParish = rId !== null ? lotParishMap.get(rId) : null;
 
-    if (lParish !== null && lParish !== undefined && lParish !== rParish) {
+    if (lParish !== null && lParish !== undefined && rParish !== null && rParish !== undefined && lParish !== rParish) {
       if (!parishBoundarySegments.has(lParish)) parishBoundarySegments.set(lParish, []);
       parishBoundarySegments.get(lParish).push(s);
-    }
-    if (rParish !== null && rParish !== undefined && rParish !== lParish) {
       if (!parishBoundarySegments.has(rParish)) parishBoundarySegments.set(rParish, []);
       parishBoundarySegments.get(rParish).push(s);
     }

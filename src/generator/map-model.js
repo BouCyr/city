@@ -543,7 +543,7 @@ function buildPointByVertexKey(segments) {
 
 function isCoastConnectorCandidate(segment) {
   return Boolean(
-    (segment?.features?.land || segment.leftLotId === null || segment.rightLotId === null)
+    (segment.leftLotId === null || segment.rightLotId === null)
     && !segment.features.coast
     && !segment.features.sea
     && !segment.features.river
