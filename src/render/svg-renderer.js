@@ -25,6 +25,14 @@ const PARISH_CLUSTERING_STEP_INDEX = 11;
 const NEAR_EXCLAVE_STEP_INDEX = 12;
 const NEAR_EXCLAVE_CORRECTIONS_STEP_INDEX = 13;
 const FIELD_DISPATCH_STEP_INDEX = 14;
+const PARISH_TINT_OPACITY = 0.12;
+const PARISH_LABEL_MARGIN = 150;
+const PARISH_LABEL_MAX_FONT_SIZE = 84;
+const PARISH_LABEL_MIN_FONT_SIZE = 14;
+const PARISH_LABEL_TEXT_WIDTH_RATIO = 0.68;
+const PARISH_LABEL_ANGLES = [-45, -30, -15, 0, 15, 30, 45];
+const PARISH_LABEL_SCAN_STEP = 45;
+const PARISH_LABEL_RECTANGLE_STROKE = "#8b2cff";
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -158,39 +166,6 @@ function createParishCentersGroup(map) {
   const group = createElement("g", {
     "pointer-events": "none",
   });
-  if ((map.meta?.stepIndex ?? -1) < PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.parishCenters)) {
-    return group;
-  }
-
-  map.parishCenters.forEach((center) => {
-    group.append(
-      createElement("circle", {
-        cx: center.x,
-        cy: center.y,
-        r: 30,
-        fill: center.color || "#18232b",
-        stroke: "none",
-        "stroke-width": 7,
-        opacity: 0.92,
-        "data-parish-id": center.parishId,
-        "data-center-lot-id": center.lotId,
-        "data-center-node-id": center.nodeId ?? "",
-      }),
-      createElement("text", {
-        x: center.x,
-        y: center.y + 10,
-        fill: "#f7f3e8",
-        stroke: "#18232b",
-        "stroke-width": 4,
-        "paint-order": "stroke",
-        "font-size": 32,
-        "font-weight": 800,
-        "text-anchor": "middle",
-        "pointer-events": "none",
-      }, center.letter || String(center.parishId)),
-    );
-  });
-
   return group;
 }
 
@@ -354,6 +329,10 @@ function createLotsGroup(lots, map) {
     );
   });
 
+  if ((map.meta?.stepIndex ?? -1) >= PARISH_CLUSTERING_STEP_INDEX) {
+    appendParishTintGroup(group, parishLotsMap, map.parishColors || []);
+  }
+
   // 2. Identify boundary segments between a parish lot and anything outside the same parish (including coast/water).
   const parishBoundarySegments = new Map(); // parishId -> Array of segments
   segments.forEach(s => {
@@ -415,7 +394,410 @@ function createLotsGroup(lots, map) {
     }
   });
 
+  if ((map.meta?.stepIndex ?? -1) >= PARISH_CLUSTERING_STEP_INDEX) {
+    group.append(createParishLabelRectangleGroup(parishLotsMap));
+    group.append(createParishNameLabelGroup(parishLotsMap, map.parishColors || []));
+  }
+
   return group;
+}
+
+function appendParishTintGroup(group, parishLotsMap, parishColors) {
+  const tintGroup = createElement("g", {
+    "pointer-events": "none",
+  });
+  parishLotsMap.forEach((parishLots, parishId) => {
+    const color = parishColors[parishId]?.border || parishColors[parishId]?.fill;
+    if (!color) {
+      return;
+    }
+    parishLots.forEach((lot) => {
+      if (!Array.isArray(lot.polygon) || lot.polygon.length < 3) {
+        return;
+      }
+      tintGroup.append(createElement("polygon", {
+        points: toSvgPoints(lot.polygon),
+        fill: color,
+        opacity: PARISH_TINT_OPACITY,
+      }));
+    });
+  });
+  group.append(tintGroup);
+}
+
+function createParishNameLabelGroup(parishLotsMap, parishColors) {
+  const group = createElement("g", {
+    "pointer-events": "none",
+  });
+
+  parishLotsMap.forEach((parishLots, parishId) => {
+    const color = parishColors[parishId]?.border || parishColors[parishId]?.fill || COLORS.edge;
+    const name = parishLots.find((lot) => lot.parishName || lot.parish)?.parishName
+      || parishLots.find((lot) => lot.parishName || lot.parish)?.parish
+      || "";
+    if (!name) {
+      return;
+    }
+
+    const labelLine = findParishLabelLine(parishLots);
+    if (!labelLine) {
+      return;
+    }
+
+    const availableTextLength = labelLine.length - (PARISH_LABEL_MARGIN * 2);
+    if (availableTextLength <= 0) {
+      return;
+    }
+
+    const fittedFontSize = availableTextLength / Math.max(1, name.length * PARISH_LABEL_TEXT_WIDTH_RATIO);
+    if (fittedFontSize < PARISH_LABEL_MIN_FONT_SIZE) {
+      return;
+    }
+    const fontSize = Math.min(PARISH_LABEL_MAX_FONT_SIZE, fittedFontSize);
+
+    group.append(createElement("text", {
+      x: labelLine.center.x,
+      y: labelLine.center.y,
+      fill: "#000000",
+      "fill-opacity": 0.33,
+      stroke: color,
+      "stroke-width": Math.max(4, Math.min(12, fontSize * 0.16)),
+      "paint-order": "stroke",
+      "font-size": fontSize,
+      "font-weight": 800,
+      "font-family": "Georgia, Garamond, Times New Roman, serif",
+      "text-anchor": "middle",
+      "dominant-baseline": "middle",
+      transform: `rotate(${labelLine.angle} ${labelLine.center.x} ${labelLine.center.y})`,
+      "data-parish-id": parishId,
+    }, name));
+  });
+
+  return group;
+}
+
+function createParishLabelRectangleGroup(parishLotsMap) {
+  const group = createElement("g", {
+    fill: "none",
+    stroke: PARISH_LABEL_RECTANGLE_STROKE,
+    "stroke-width": 4,
+    "pointer-events": "none",
+  });
+
+  parishLotsMap.forEach((parishLots, parishId) => {
+    const rectangle = findParishLabelRectangle(parishLots);
+    if (!rectangle) {
+      return;
+    }
+    group.append(createElement("polygon", {
+      points: toSvgPoints(rectangle.points),
+      opacity: 0.74,
+      "data-parish-id": parishId,
+    }));
+    group.append(createElement("circle", {
+      cx: rectangle.innerUpperLeft.x,
+      cy: rectangle.innerUpperLeft.y,
+      r: 9,
+      fill: PARISH_LABEL_RECTANGLE_STROKE,
+      stroke: "none",
+      opacity: 0.9,
+      "data-parish-id": parishId,
+    }));
+    group.append(createElement("circle", {
+      cx: rectangle.geometricCenter.x,
+      cy: rectangle.geometricCenter.y,
+      r: 9,
+      fill: "none",
+      stroke: PARISH_LABEL_RECTANGLE_STROKE,
+      "stroke-width": 4,
+      opacity: 0.9,
+      "data-parish-id": parishId,
+    }));
+  });
+
+  return group;
+}
+
+function findParishLabelRectangle(parishLots) {
+  const polygons = parishLots
+    .map((lot) => lot.polygon || [])
+    .filter((polygon) => polygon.length >= 3);
+  if (!polygons.length) {
+    return null;
+  }
+
+  const geometricCenter = computeParishGeometricCenter(polygons);
+  let bestRectangle = null;
+  PARISH_LABEL_ANGLES.forEach((angle) => {
+    const rotatedPolygons = polygons.map((polygon) => polygon.map((point) => rotatePoint(point, -angle)));
+    const candidate = findAxisAlignedLabelRectangle(rotatedPolygons);
+    if (!candidate || (bestRectangle && candidate.area <= bestRectangle.area)) {
+      return;
+    }
+    bestRectangle = {
+      ...candidate,
+      angle,
+      points: [
+        { x: candidate.minX, y: candidate.minY },
+        { x: candidate.maxX, y: candidate.minY },
+        { x: candidate.maxX, y: candidate.maxY },
+        { x: candidate.minX, y: candidate.maxY },
+      ].map((point) => rotatePoint(point, angle)),
+      innerUpperLeft: rotatePoint({
+        x: candidate.minX + Math.min(24, candidate.width * 0.12),
+        y: candidate.minY + Math.min(24, candidate.height * 0.12),
+      }, angle),
+      geometricCenter,
+    };
+  });
+
+  return bestRectangle;
+}
+
+function findAxisAlignedLabelRectangle(polygons) {
+  const bounds = computePointBounds(polygons.flat());
+  const scanYs = buildParishLabelScanYs(polygons, bounds);
+  const intervalsByY = scanYs.map((y) => mergeIntervals(polygons.flatMap((polygon) => polygonHorizontalIntervals(polygon, y))));
+  let bestRectangle = null;
+
+  for (let topIndex = 0; topIndex < scanYs.length; topIndex += 1) {
+    let activeIntervals = intervalsByY[topIndex].map((interval) => ({ ...interval }));
+    for (let bottomIndex = topIndex + 1; bottomIndex < scanYs.length; bottomIndex += 1) {
+      activeIntervals = intersectIntervalSets(activeIntervals, intervalsByY[bottomIndex]);
+      if (!activeIntervals.length) {
+        break;
+      }
+
+      const minY = scanYs[topIndex];
+      const maxY = scanYs[bottomIndex];
+      const height = maxY - minY;
+      activeIntervals.forEach((interval) => {
+        const width = interval.max - interval.min;
+        const area = width * height;
+        if (width <= height || (bestRectangle && area <= bestRectangle.area)) {
+          return;
+        }
+        bestRectangle = {
+          minX: interval.min,
+          maxX: interval.max,
+          minY,
+          maxY,
+          width,
+          height,
+          area,
+        };
+      });
+    }
+  }
+
+  return bestRectangle;
+}
+
+function intersectIntervalSets(firstIntervals, secondIntervals) {
+  const intersections = [];
+  firstIntervals.forEach((first) => {
+    secondIntervals.forEach((second) => {
+      const min = Math.max(first.min, second.min);
+      const max = Math.min(first.max, second.max);
+      if (max > min) {
+        intersections.push({ min, max });
+      }
+    });
+  });
+  return mergeIntervals(intersections);
+}
+
+function findParishLabelLine(parishLots) {
+  const polygons = parishLots
+    .map((lot) => lot.polygon || [])
+    .filter((polygon) => polygon.length >= 3);
+  if (!polygons.length) {
+    return null;
+  }
+
+  let bestLine = null;
+  PARISH_LABEL_ANGLES.forEach((angle) => {
+    const rotatedPolygons = polygons.map((polygon) => polygon.map((point) => rotatePoint(point, -angle)));
+    const bounds = computePointBounds(rotatedPolygons.flat());
+    const scanYs = buildParishLabelScanYs(rotatedPolygons, bounds);
+    scanYs.forEach((y) => {
+      const intervals = mergeIntervals(rotatedPolygons.flatMap((polygon) => polygonHorizontalIntervals(polygon, y)));
+      intervals.forEach((interval) => {
+        const length = interval.max - interval.min;
+        if (length <= 0 || (bestLine && length <= bestLine.length)) {
+          return;
+        }
+        const from = rotatePoint({ x: interval.min, y }, angle);
+        const to = rotatePoint({ x: interval.max, y }, angle);
+        const center = rotatePoint({ x: (interval.min + interval.max) / 2, y }, angle);
+        bestLine = {
+          angle,
+          from,
+          to,
+          center,
+          length,
+        };
+      });
+    });
+  });
+
+  return bestLine;
+}
+
+function buildParishLabelScanYs(polygons, bounds, requiredY = null) {
+  const ys = new Set();
+  for (let y = bounds.minY; y <= bounds.maxY; y += PARISH_LABEL_SCAN_STEP) {
+    ys.add(roundScanValue(y));
+  }
+  if (Number.isFinite(requiredY)) {
+    ys.add(roundScanValue(requiredY));
+  }
+  polygons.forEach((polygon) => {
+    polygon.forEach((point) => {
+      ys.add(roundScanValue(point.y));
+      ys.add(roundScanValue(point.y - 1));
+      ys.add(roundScanValue(point.y + 1));
+    });
+  });
+  return Array.from(ys)
+    .filter((y) => y >= bounds.minY && y <= bounds.maxY)
+    .sort((first, second) => first - second);
+}
+
+function polygonHorizontalIntervals(polygon, y) {
+  const xs = [];
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    if (Math.abs(current.y - next.y) <= 0.0001) {
+      continue;
+    }
+    const minY = Math.min(current.y, next.y);
+    const maxY = Math.max(current.y, next.y);
+    if (y < minY || y >= maxY) {
+      continue;
+    }
+    const ratio = (y - current.y) / (next.y - current.y);
+    xs.push(current.x + ((next.x - current.x) * ratio));
+  }
+
+  xs.sort((first, second) => first - second);
+  const intervals = [];
+  for (let index = 0; index + 1 < xs.length; index += 2) {
+    if (xs[index + 1] > xs[index]) {
+      intervals.push({ min: xs[index], max: xs[index + 1] });
+    }
+  }
+  return intervals;
+}
+
+function computeParishGeometricCenter(polygons) {
+  let weightedX = 0;
+  let weightedY = 0;
+  let totalArea = 0;
+  polygons.forEach((polygon) => {
+    const area = Math.abs(computePolygonSignedArea(polygon));
+    if (area <= 0.0001) {
+      return;
+    }
+    const centroid = computePolygonCentroidForRender(polygon);
+    weightedX += centroid.x * area;
+    weightedY += centroid.y * area;
+    totalArea += area;
+  });
+  if (totalArea <= 0.0001) {
+    const bounds = computePointBounds(polygons.flat());
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+  }
+  return {
+    x: weightedX / totalArea,
+    y: weightedY / totalArea,
+  };
+}
+
+function computePolygonCentroidForRender(polygon) {
+  let areaTwice = 0;
+  let centroidX = 0;
+  let centroidY = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    const factor = current.x * next.y - next.x * current.y;
+    areaTwice += factor;
+    centroidX += (current.x + next.x) * factor;
+    centroidY += (current.y + next.y) * factor;
+  }
+  if (Math.abs(areaTwice) <= 0.0001) {
+    return {
+      x: polygon.reduce((sum, point) => sum + point.x, 0) / polygon.length,
+      y: polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length,
+    };
+  }
+  return {
+    x: centroidX / (3 * areaTwice),
+    y: centroidY / (3 * areaTwice),
+  };
+}
+
+function computePolygonSignedArea(polygon) {
+  let area = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+  return area / 2;
+}
+
+function rotatePoint(point, angleDegrees) {
+  const radians = angleDegrees * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: (point.x * cos) - (point.y * sin),
+    y: (point.x * sin) + (point.y * cos),
+  };
+}
+
+function mergeIntervals(intervals) {
+  if (!intervals.length) {
+    return [];
+  }
+  const sorted = intervals
+    .slice()
+    .sort((first, second) => first.min - second.min || first.max - second.max);
+  const merged = [sorted[0]];
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = merged[merged.length - 1];
+    const current = sorted[index];
+    if (current.min <= previous.max + 0.001) {
+      previous.max = Math.max(previous.max, current.max);
+      continue;
+    }
+    merged.push({ ...current });
+  }
+  return merged;
+}
+
+function computePointBounds(points) {
+  return points.reduce((bounds, point) => ({
+    minX: Math.min(bounds.minX, point.x),
+    minY: Math.min(bounds.minY, point.y),
+    maxX: Math.max(bounds.maxX, point.x),
+    maxY: Math.max(bounds.maxY, point.y),
+  }), {
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity,
+  });
+}
+
+function roundScanValue(value) {
+  return Math.round(value * 1000) / 1000;
 }
 
 function fillForLot(lot, seaDistances, maxLandSeaDistance, map) {
@@ -508,7 +890,15 @@ function createSegmentsGroup(segments, map) {
   return group;
 }
 
-function shouldDrawSegment(segment) {
+function shouldDrawSegment(segment, stepIndex) {
+  if (stepIndex >= NEAR_EXCLAVE_STEP_INDEX) {
+    return Boolean(
+      segment.features?.river
+      || segment.features?.coast
+      || segment.features?.sea,
+    );
+  }
+
   return Boolean(
     segment.features?.river
     || segment.features?.coast
@@ -562,7 +952,7 @@ function createRouteGraphAlleyGroup(map) {
     "pointer-events": "none",
   });
   const stepIndex = map.meta?.stepIndex ?? -1;
-  if (stepIndex < PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.routeGraph?.routes)) {
+  if (stepIndex !== PARISH_CLUSTERING_STEP_INDEX || !Array.isArray(map.routeGraph?.routes)) {
     return group;
   }
 
@@ -571,9 +961,6 @@ function createRouteGraphAlleyGroup(map) {
     .filter((route) => {
       if (stepIndex === PARISH_CLUSTERING_STEP_INDEX) {
         return route.type === "alley" && route.features?.lotCenterAlley;
-      }
-      if (stepIndex >= PARISH_CLUSTERING_STEP_INDEX) {
-        return (route.type === "alley" || route.type === "road" || route.type === "street" || route.type === "river" || route.type === "coast") && !route.features?.lotCenterAlley;
       }
       return false;
     })
