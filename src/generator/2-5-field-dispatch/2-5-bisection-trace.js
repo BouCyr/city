@@ -5,8 +5,8 @@
  */
 
 import { DEFAULT_SEGMENT_LENGTH, clonePoint, pointDistance } from "../map-model.js";
-import { inspectCurvedBisection } from "./2-6-curved-bisection.js";
-import { splitLotPolygonRecursively } from "./2-6-field-dispatch.js";
+import { inspectCurvedBisection } from "./2-5-curved-bisection.js";
+import { splitLotPolygonRecursively } from "./2-5-field-dispatch.js";
 
 const EPSILON = 0.0001;
 export const TUTORIAL_LOTS = {
@@ -89,7 +89,7 @@ export function buildBisectionTutorialTrace({
       polygons: [{ points: originalPolygon, className: "tutorial-active-area" }],
       points: labelVertices(originalPolygon),
     }),
-    frame("Working boundary vertices", `Step 2.5 already provides the canonical lot boundary used by field dispatch. This lot enters the bisection step with ${polygon.length} boundary vertices.`, {
+    frame("Working boundary vertices", `Step 2.2 already provides the lot geometry used by field dispatch (now Step 2.5). This lot enters the bisection step with ${polygon.length} boundary vertices.`, {
       basePolygon: originalPolygon,
       polygons: [{ points: polygon, className: "tutorial-active-area segmented-lot" }],
       points: labelVertices(polygon),

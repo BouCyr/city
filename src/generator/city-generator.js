@@ -15,10 +15,9 @@ import { runBuildCoastlineGeometryStep } from "./1-9-build-coastline-geometry/1-
 import { runAddRiversToLotGeometryStep } from "./1-10-add-rivers-to-lot-geometry/1-10-add-rivers-to-lot-geometry.js";
 import { runBuildRouteGraphStep } from "./2-1-build-route-graph/2-1-build-route-graph.js";
 import { runGroupLotsStep } from "./2-2-group-lots/2-2-group-lots.js";
-import { runBuildRoadNetworkStep } from "./2-3-build-road-network/2-3-build-road-network.js";
-import { runBuildParishBordersStep } from "./2-4-build-parish-borders/2-4-build-parish-borders.js";
-import { runBuildLandEdgeGeometryStep } from "./2-5-build-land-edge-geometry/2-5-build-land-edge-geometry.js";
-import { runFieldDispatchStep } from "./2-6-field-dispatch/2-6-field-dispatch.js";
+import { runNearExclaveLotsStep } from "./2-3-near-exclave/2-3-near-exclave.js";
+import { runNearExclaveCorrectionsStep } from "./2-4-near-exclave-corrections/2-4-near-exclave-corrections.js";
+import { runFieldDispatchStep } from "./2-5-field-dispatch/2-5-field-dispatch.js";
 import { runRelaxPointsStep } from "./1-3-relax-points/1-3-relax-points.js";
 import { runScatterPointsStep } from "./1-1-scatter-points/1-1-scatter-points.js";
 import { runCollapseShortEdgesStep } from "./1-4-collapse-short-edges/1-4-collapse-short-edges.js";
@@ -37,9 +36,8 @@ const GENERATION_PIPELINE = [
   { status: "River Lots", run: runAddRiversToLotGeometryStep },
   { status: "Route graph", run: runBuildRouteGraphStep },
   { status: "Parishes", run: runGroupLotsStep },
-  { status: "Road network", run: runBuildRoadNetworkStep },
-  { status: "Parish borders", run: runBuildParishBordersStep },
-  { status: "Land edges", run: runBuildLandEdgeGeometryStep },
+  { status: "Near-exclave lots", run: runNearExclaveLotsStep },
+  { status: "Near-exclave corrections", run: runNearExclaveCorrectionsStep },
   { status: "Field dispatch", run: runFieldDispatchStep },
 ];
 

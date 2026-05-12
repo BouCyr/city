@@ -22,8 +22,9 @@ const COASTLINE_MESH_STEP_INDEX = 8;
 const RIVER_LOT_GEOMETRY_STEP_INDEX = 10;
 const ROUTE_GRAPH_STEP_INDEX = 10;
 const PARISH_CLUSTERING_STEP_INDEX = 11;
-const ROAD_NETWORK_STEP_INDEX = 12;
-const LAND_EDGE_SEGMENTATION_STEP_INDEX = 14;
+const NEAR_EXCLAVE_STEP_INDEX = 12;
+const NEAR_EXCLAVE_CORRECTIONS_STEP_INDEX = 13;
+const FIELD_DISPATCH_STEP_INDEX = 14;
 const COLORS = {
   background: "#f5f2ea",
   grid: "rgba(24, 33, 38, 0.06)",
@@ -46,6 +47,7 @@ const COLORS = {
   wild: "#8a5a2b",
   road: "#2a2219",
   bridge: "#f08a24",
+  nearExclave: "#ce3d3d",
 };
 
 /**
@@ -195,7 +197,7 @@ function createParishCentersGroup(map) {
 function createRouteGraphNodesGroup(map) {
   const group = createElement("g");
   const stepIndex = map.meta?.stepIndex ?? -1;
-  if ((stepIndex !== ROUTE_GRAPH_STEP_INDEX && stepIndex !== PARISH_CLUSTERING_STEP_INDEX && stepIndex !== ROAD_NETWORK_STEP_INDEX) || !Array.isArray(map.routeGraph?.nodes)) {
+  if ((stepIndex !== ROUTE_GRAPH_STEP_INDEX && stepIndex !== PARISH_CLUSTERING_STEP_INDEX) || !Array.isArray(map.routeGraph?.nodes)) {
     return group;
   }
 
@@ -287,9 +289,6 @@ function isInteractiveRouteNode(node, stepIndex) {
   if (stepIndex === PARISH_CLUSTERING_STEP_INDEX) {
     return node.type === "lot_center";
   }
-  if (stepIndex === ROAD_NETWORK_STEP_INDEX) {
-    return node.type !== "sea" && node.type !== "coast" && node.type !== "river_mouth" && node.type !== "river";
-  }
   return node.type === "river_crossing" || node.type === "river_mouth" || (node.routeIds || []).length > 2;
 }
 
@@ -355,17 +354,32 @@ function createLotsGroup(lots, map) {
     );
   });
 
-  // 2. Identify inter-parish boundary segments
+  // 2. Identify boundary segments between a parish lot and anything outside the same parish (including coast/water).
   const parishBoundarySegments = new Map(); // parishId -> Array of segments
   segments.forEach(s => {
     const lId = s.leftLotId ?? s.leftCellId;
     const rId = s.rightLotId ?? s.rightCellId;
     const lParish = lId !== null ? lotParishMap.get(lId) : null;
     const rParish = rId !== null ? lotParishMap.get(rId) : null;
+    const hasLParish = lParish !== null && lParish !== undefined;
+    const hasRParish = rParish !== null && rParish !== undefined;
+    const isInterParish = hasLParish && hasRParish && lParish !== rParish;
 
-    if (lParish !== null && lParish !== undefined && rParish !== null && rParish !== undefined && lParish !== rParish) {
+    if (!hasLParish && !hasRParish) {
+      return;
+    }
+    if (hasLParish && hasRParish && !isInterParish) {
+      return;
+    }
+    if (s.features?.river && !isInterParish) {
+      return;
+    }
+
+    if (hasLParish) {
       if (!parishBoundarySegments.has(lParish)) parishBoundarySegments.set(lParish, []);
       parishBoundarySegments.get(lParish).push(s);
+    }
+    if (hasRParish && lParish !== rParish) {
       if (!parishBoundarySegments.has(rParish)) parishBoundarySegments.set(rParish, []);
       parishBoundarySegments.get(rParish).push(s);
     }
@@ -408,6 +422,10 @@ function fillForLot(lot, seaDistances, maxLandSeaDistance, map) {
   if (lot.features.sea) {
     return COLORS.seaFill;
   }
+  const stepIndex = map.meta?.stepIndex ?? -1;
+  if ((stepIndex === NEAR_EXCLAVE_STEP_INDEX || stepIndex === NEAR_EXCLAVE_CORRECTIONS_STEP_INDEX) && lot.nearExclave) {
+    return mixHex(COLORS.landFill, COLORS.nearExclave, 0.55);
+  }
   if ((map.meta?.stepIndex ?? -1) >= COASTLINE_MESH_STEP_INDEX && lot.features.land) {
     return COLORS.landFill;
   }
@@ -429,7 +447,7 @@ function seaDistanceFill(seaDistance, maxLandSeaDistance) {
 
 function createSegmentsGroup(segments, map) {
   const stepIndex = map.meta?.stepIndex ?? -1;
-  const hideDots = stepIndex > LAND_EDGE_SEGMENTATION_STEP_INDEX;
+  const hideDots = stepIndex > FIELD_DISPATCH_STEP_INDEX;
   const strokeWidth = stepIndex >= PARISH_CLUSTERING_STEP_INDEX ? EDGE_STROKE_WIDTH * 1.55 : EDGE_STROKE_WIDTH;
   const group = createElement("g", {
     "pointer-events": "none",
@@ -490,18 +508,19 @@ function createSegmentsGroup(segments, map) {
   return group;
 }
 
-function shouldDrawSegment(segment, stepIndex) {
-  if (stepIndex < ROAD_NETWORK_STEP_INDEX) {
-    return true;
-  }
-
+function shouldDrawSegment(segment) {
   return Boolean(
     segment.features?.river
     || segment.features?.coast
+    || segment.features?.sea
     || segment.features?.road
     || segment.features?.street
+    || segment.features?.alley
     || segment.features?.routeType === "road"
-    || segment.features?.routeType === "street",
+    || segment.features?.routeType === "street"
+    || segment.features?.routeType === "alley"
+    || segment.features?.wild
+    || segment.features?.routeType === "wild",
   );
 }
 
@@ -553,7 +572,7 @@ function createRouteGraphAlleyGroup(map) {
       if (stepIndex === PARISH_CLUSTERING_STEP_INDEX) {
         return route.type === "alley" && route.features?.lotCenterAlley;
       }
-      if (stepIndex >= ROAD_NETWORK_STEP_INDEX) {
+      if (stepIndex >= PARISH_CLUSTERING_STEP_INDEX) {
         return (route.type === "alley" || route.type === "road" || route.type === "street" || route.type === "river" || route.type === "coast") && !route.features?.lotCenterAlley;
       }
       return false;

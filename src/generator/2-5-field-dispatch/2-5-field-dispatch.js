@@ -10,12 +10,12 @@ import {
   pointDistance,
 } from "../map-model.js";
 import { addAlleyRoutesToRouteGraph } from "../route-graph.js";
-import { buildCurvedBisectionSplitPath } from "./2-6-curved-bisection.js";
-import { buildStraightBisectionSplitPath } from "./2-6-straight-bisection.js";
+import { buildCurvedBisectionSplitPath } from "./2-5-curved-bisection.js";
+import { buildStraightBisectionSplitPath } from "./2-5-straight-bisection.js";
 
 export function runFieldDispatchStep(map, { onProgress = null }) {
   if (!Array.isArray(map.lots) || !map.lots.length) {
-        const label = "Step 2.6 / Field dispatch";
+        const label = "Step 2.5 / Field dispatch";
         return {
           map,
           frameEntries: [
@@ -38,13 +38,13 @@ export function runFieldDispatchStep(map, { onProgress = null }) {
     if (progress.completed < progress.total && now - lastProgressAt < PROGRESS_UPDATE_INTERVAL_MS) {
       return;
     }
-    lastProgressAt = now;
+      lastProgressAt = now;
     const progressTessellation = {
       vertices: progress.vertices.map((vertex) => ({ ...vertex })),
       sublots: progress.sublots.map((sublot) => cloneSublot(sublot)),
     };
-    onProgress({
-      label: `Step 2.6 / Field dispatch (${progress.completed}/${progress.total})`,
+      onProgress({
+      label: `Step 2.5 / Field dispatch (${progress.completed}/${progress.total})`,
       map: buildTessellatedMap(map, progressTessellation),
       progress: {
         completed: progress.completed,
@@ -58,7 +58,7 @@ export function runFieldDispatchStep(map, { onProgress = null }) {
     map: nextMap,
     frameEntries: [
       {
-        label: "Step 2.6 / Field dispatch",
+        label: "Step 2.5 / Field dispatch",
         map: nextMap,
       },
     ],
@@ -67,6 +67,7 @@ export function runFieldDispatchStep(map, { onProgress = null }) {
 
 const EPSILON = 0.0001;
 const POINT_KEY_DIGITS = 4;
+const MAX_TESSELLATED_LOTS = 1;
 const MIN_SUBLOT_AREA = 0.01;
 const MIN_SPLIT_CHILD_AREA_RATIO = 0.4;
 const MIN_RECURSIVE_SPLIT_AREA_RATIO = 3;
@@ -91,7 +92,7 @@ function buildLotTessellation(map, segmentLength, algorithm, curveAmplitude, onL
     })
     .filter((item) => item.polygon.length >= 3 && item.area > EPSILON && isLandLot(item.lot) && !item.lot.features?.boundary)
     .sort((a, b) => b.area - a.area)
-    .slice(0, 15)
+    .slice(0, MAX_TESSELLATED_LOTS)
     .map((item) => item.lot)
   let completedLots = 0;
 

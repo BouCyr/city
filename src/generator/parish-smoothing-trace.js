@@ -1,6 +1,6 @@
 /*
  * WHAT: Build tutorial frames for the parish-border smoothing pass.
- * HOW: Reuse the production parish-border trace and step 2.4 parish-border rebuild on a fixed generated map.
+ * HOW: Reuse the production parish-border trace and step 2.5 parish-border rebuild on a fixed generated map.
  * WHY: The tutorial should explain the real geometry and topology changes applied before field dispatch.
  */
 
@@ -64,7 +64,7 @@ export function buildParishSmoothingTutorialTrace(dataset) {
           .filter(Boolean)
           .map((point) => ({ point, className: "parish-pinned-point" })),
       }),
-      frame("Build Bezier border paths", "The smoothing curves are computed on the unsegmented border graph first. Step 2.4 then rebuilds parish-border geometry from those paths.", {
+      frame("Build Bezier border paths", "The smoothing curves are computed on the unsegmented border graph first, then parish-border geometry is rebuilt from those paths.", {
         lots: inputMap.lots,
         segments: inputMap.segments?.map((segment) => ({
           ...segment,
@@ -84,7 +84,7 @@ export function buildParishSmoothingTutorialTrace(dataset) {
             { point: curve.end, label: "M", className: "parish-midpoint" },
           ]))),
       }),
-      frame("Rebuilt parish borders", "This is the step 2.4 output: parish borders were sampled along their Bezier paths and non-border land edges stay unsegmented until step 2.5.", {
+      frame("Rebuilt parish borders", "Parish borders are sampled along their Bezier paths and non-border land edges remain unchanged in this tutorial model.", {
         lots: finalMap.lots,
         segments: finalMap.segments?.map((segment) => ({
           ...segment,

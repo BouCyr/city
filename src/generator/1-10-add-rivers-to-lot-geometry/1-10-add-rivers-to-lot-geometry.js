@@ -614,7 +614,7 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
       const isRiver = spanIsRiver(from, to, riverEdgeKeys, riverSpatialIndex);
       const existing = rawSegmentMap.get(key);
       if (!existing) {
-        const side = pointSide(canonical.from, canonical.to, lot.centroid);
+        const side = lotSideForCanonicalEdge(from, to, canonical);
         rawSegmentMap.set(key, {
           id: null,
           from: canonical.from,
@@ -637,7 +637,7 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
 
       existing.features.river = existing.features.river || isRiver;
       existing.features.riverside = existing.features.riverside || isRiver;
-      const side = pointSide(existing.from, existing.to, lot.centroid);
+      const side = lotSideForCanonicalEdge(from, to, existing);
       if (side >= 0) {
         existing.leftLotId = lot.id;
       } else {
@@ -697,6 +697,10 @@ function rebuildSegmentsFromLots(lots, riverGraph) {
     lots: normalizedLots,
     segments,
   };
+}
+
+function lotSideForCanonicalEdge(from, to, canonical) {
+  return pointsMatch(from, canonical.from) && pointsMatch(to, canonical.to) ? 1 : -1;
 }
 
 function appendUnrepresentedRiverSegments(segments, riverSegments, lots, lotById) {

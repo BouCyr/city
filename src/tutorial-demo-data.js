@@ -27,8 +27,7 @@ const DEFAULTS = {
   routeCrossingCost: 1500,
   stepAlgorithms: {
     scatterPoints: "random_scattering",
-    parishClustering: "graph_kmeans",
-    roadNetwork: "boundary_connectors",
+    parishClustering: "route_growth",
     tessellateLots: "curved_bisection",
   },
 };
@@ -75,26 +74,10 @@ export async function getParishSmoothingDemoDataset() {
     pointCount: 15,
     mapSize: 720,
     waterSides: waterSides({}),
-  }, 12);
+  }, 11);
   return {
     id: "generatedParishes",
     name: "Generated parishes",
-    size: map.meta?.size || 720,
-    map,
-  };
-}
-
-export async function getRoadNetworkDemoDataset() {
-  const map = await getCachedMap("road-network-demo", {
-    ...DEFAULTS,
-    seed: "road-network-demo",
-    pointCount: 15,
-    mapSize: 720,
-    waterSides: waterSides({}),
-  }, 11);
-  return {
-    id: "generatedRoadNetwork",
-    name: "Generated road network",
     size: map.meta?.size || 720,
     map,
   };
@@ -107,7 +90,7 @@ export async function getBisectionDemoDataset() {
     pointCount: 90,
     mapSize: 900,
     waterSides: waterSides({ north: true }),
-  }, 13);
+  }, 14);
   const lots = (map.lots || [])
     .filter((lot) => lot.features?.land && !lot.features?.sea && !lot.features?.boundary && Array.isArray(lot.polygon) && lot.polygon.length >= 4)
     .map((lot) => ({

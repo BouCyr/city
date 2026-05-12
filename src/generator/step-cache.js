@@ -70,28 +70,18 @@ export function buildGenerationStepSignature(stepIndex, options) {
       });
     case 11:
       return stableSignature({
-        parishAlgorithm: options.stepAlgorithms?.parishClustering || "graph_kmeans",
+        parishAlgorithm: options.stepAlgorithms?.parishClustering || "route_growth",
         parishCount: options.parishCount,
         routeCrossingCost: options.routeCrossingCost,
         routeDistanceModel: "center-node-road-x3-alley-x6-plus-crossing-cost",
       });
     case 12:
       return stableSignature({
-        roadNetworkAlgorithm: options.stepAlgorithms?.roadNetwork || "boundary_connectors",
-        routeGraph: "parish-center-road-network",
-        routeCrossingCost: options.routeCrossingCost,
-        bridgePenaltyMultiplier: 1.5,
       });
     case 13:
       return stableSignature({
-        parishBorderSmoothing: "quadratic-pinned-same-pair-chains",
       });
     case 14:
-      return stableSignature({
-        segmentLength: "default",
-        routeGraph: "rebuilt-after-land-edge-segmentation",
-      });
-    case 15:
       return stableSignature({
         tessellateAlgorithm: options.stepAlgorithms?.tessellateLots || "curved_bisection",
         splitSegmentLength: "default",

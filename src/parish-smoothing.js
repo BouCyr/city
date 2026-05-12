@@ -1,7 +1,7 @@
 /*
  * WHAT: Drive the standalone parish-border smoothing tutorial page.
  * HOW: Load one deterministic generated map and render the production parish-smoothing trace frames.
- * WHY: The step 2.4 smoothing pass should be inspectable without the full main-map UI.
+ * WHY: The step 2.5 smoothing pass should be inspectable without the full main-map UI.
  */
 
 import { buildParishSmoothingTutorialTrace } from "./generator/parish-smoothing-trace.js";

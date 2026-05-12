@@ -48,7 +48,6 @@ const ROUTE_START_STROKE = "#fff7e1";
 const RIVER_PREVIEW_STEP_INDEX = 4;
 const ROUTE_GRAPH_STEP_INDEX = 10;
 const PARISH_CLUSTERING_STEP_INDEX = 11;
-const ROAD_NETWORK_STEP_INDEX = 12;
 const DEFAULT_ROUTE_CROSSING_PENALTY = getDefaultRouteCrossingPenalty();
 const TOTAL_GENERATION_STEPS = GENERATION_STEPS.length;
 const form = document.querySelector("#generatorForm");
@@ -112,10 +111,9 @@ const CONTROL_HELP_TEXT = {
   primaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the primary river route. Lower values allow sharper bends, higher values keep the river straighter.",
   tributaryRiverTurnAngleDegrees: "Smallest allowed turn angle for the tributary route. Lower values allow sharper bends, higher values keep the tributary straighter.",
   parishCount: "The target number of parishes to create. Each parish is tinted with a distinct color.",
-  parishClusteringAlgorithm: "Choose how step 2.2 clusters parishes. Each option measures shortest weighted paths from lot center nodes over roads and center-to-corner alleys.",
-  roadNetworkAlgorithm: "Choose how step 2.3 links parish centers. Boundary connectors add temporary roads through parish-border lots and make boundary-following routes costlier.",
+  parishClusteringAlgorithm: "Step 2.2 clusters parishes with route growth, measuring weighted paths from lot center nodes over roads and center-to-corner alleys.",
   routeCrossingCost: "Extra weighted path cost added when a route path passes through an intermediate river crossing node. Road lengths count triple and step 2.2 center alleys count sixfold.",
-  tessellateAlgorithm: "Choose how step 2.6 dispatches fields. Straight bisection uses straight split chords, and Curved bisection follows a circular arc constrained by the endpoint normals.",
+  tessellateAlgorithm: "Choose how step 2.5 dispatches fields. Straight bisection uses straight split chords, and Curved bisection follows a circular arc constrained by the endpoint normals.",
 };
 
 bindFormInteractions(form);
@@ -1363,7 +1361,7 @@ function shouldShowRiverPreview() {
 
 function isRouteGraphInteractionFrame(frame = currentFrame) {
   return Boolean(frame && frame.type === "map"
-    && (frame.stepIndex === ROUTE_GRAPH_STEP_INDEX || frame.stepIndex === PARISH_CLUSTERING_STEP_INDEX || frame.stepIndex === ROAD_NETWORK_STEP_INDEX)
+    && (frame.stepIndex === ROUTE_GRAPH_STEP_INDEX || frame.stepIndex === PARISH_CLUSTERING_STEP_INDEX)
     && frame.map?.routeGraph);
 }
 
@@ -1372,43 +1370,21 @@ function isParishRouteInteractionFrame(frame = currentFrame) {
 }
 
 function isValidRouteInteractionNode(routeGraph, node) {
-  if (isRoadNetworkRouteInteractionFrame()) {
-    return isRoadNetworkLandRouteNode(routeGraph, node);
-  }
   return isParishRouteInteractionFrame()
     ? isLotCenterRouteNode(routeGraph, node)
     : isRouteGraphJunctionNode(node);
 }
 
 function isValidRouteStartNode(routeGraph, node) {
-  if (isRoadNetworkRouteInteractionFrame()) {
-    return isRoadNetworkLandRouteNode(routeGraph, node);
-  }
   return isParishRouteInteractionFrame()
     ? isLotCenterRouteNode(routeGraph, node)
     : isLandRouteNode(routeGraph, node);
 }
 
 function getRoutePathOptions() {
-  if (isRoadNetworkRouteInteractionFrame()) {
-    return {
-      crossingPenalty: getRouteCrossingPenalty(),
-      routeTypes: ["road", "street", "alley"],
-      startNodeValidator: isRoadNetworkLandRouteNode,
-      targetNodeValidator: isRoadNetworkLandRouteNode,
-    };
-  }
   return isParishRouteInteractionFrame()
     ? { crossingPenalty: getRouteCrossingPenalty(), routeTypes: ["road", "street", "alley"], nodeValidator: isLotCenterRouteNode }
     : { crossingPenalty: getRouteCrossingPenalty() };
-}
-
-function isRoadNetworkRouteInteractionFrame(frame = currentFrame) {
-  return Boolean(frame && frame.type === "map" && frame.stepIndex === ROAD_NETWORK_STEP_INDEX && frame.map?.routeGraph);
-}
-
-function isRoadNetworkLandRouteNode(routeGraph, node) {
-  return isLandRouteNode(routeGraph, node) || isLotCenterRouteNode(routeGraph, node);
 }
 
 function getRouteCrossingPenalty() {

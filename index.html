@@ -198,9 +198,7 @@
                     <div class="step-controls">
                       <fieldset class="algorithm-choice">
                         <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="parishClusteringAlgorithm" aria-label="Parish clustering algorithm help">?</button></legend>
-                        <label><input type="radio" name="parishClusteringAlgorithm" value="graph_kmeans" checked>Graph k-means</label>
-                        <label><input type="radio" name="parishClusteringAlgorithm" value="route_growth">Route growth</label>
-                        <label><input type="radio" name="parishClusteringAlgorithm" value="graph_kmedoids">Graph k-medoids</label>
+                        <label><input type="radio" name="parishClusteringAlgorithm" value="route_growth" checked>Route growth</label>
                       </fieldset>
                       <label>
                         <span class="field-title">Parish Count <button class="control-help-trigger" type="button" data-help-key="parishCount" aria-label="Parish Count help">?</button></span>
@@ -210,23 +208,13 @@
                     </div>
                   </li>
                   <li data-step-index="12">
-                    <button class="step-select" type="button">2.3 Road network</button>
-                    <div class="step-controls">
-                      <fieldset class="algorithm-choice">
-                        <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="roadNetworkAlgorithm" aria-label="Road network algorithm help">?</button></legend>
-                        <label><input type="radio" name="roadNetworkAlgorithm" value="boundary_connectors" checked>Boundary connectors</label>
-                        <label><input type="radio" name="roadNetworkAlgorithm" value="parish_center_spine">Parish center spine</label>
-                      </fieldset>
-                    </div>
+                    <button class="step-select" type="button">2.3 Near-exclave lots</button>
                   </li>
                   <li data-step-index="13">
-                    <button class="step-select" type="button">2.4 Parish borders</button>
+                    <button type="button" class="step-select">2.4 Near-exclave corrections</button>
                   </li>
                   <li data-step-index="14">
-                    <button class="step-select" type="button">2.5 Land edges segmentation</button>
-                  </li>
-                  <li data-step-index="15">
-                    <button class="step-select" type="button">2.6 Field dispatch</button>
+                    <button class="step-select" type="button">2.5 Field dispatch</button>
                     <div class="step-controls">
                       <fieldset class="algorithm-choice">
                         <legend>Algorithm <button class="control-help-trigger" type="button" data-help-key="tessellateAlgorithm" aria-label="Tessellation algorithm help">?</button></legend>

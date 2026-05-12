@@ -20,10 +20,9 @@ Each step is a simple function. Its input is exactly the previous step output, e
 2. Human occupation
 2.1 Route graph
 2.2 Parish clustering
-2.3 Road network
-2.4 Parish borders
-2.5 Land edges segmentation
-2.6 Field dispatch
+2.3 Near-exclave lots
+2.4 Near-exclave corrections
+2.5 Field dispatch
 
 ## Geometry Rules
 
@@ -508,7 +507,7 @@ Function output:
 Rules:
 - Segment endpoints are deduplicated into graph nodes.
 - Existing canonical segments are preserved and each valid segment becomes one route.
-- Route types are `road`, `coast`, `river`, `sea`, and later `alley`.
+- Route types are `road`, `coast`, `river`, `sea`, and later `alley`, `street`, and `wild`.
 - `road` routes are land-to-land non-river segments.
 - `coast` routes are land/sea boundaries.
 - `river` routes are river segments between land geometry.
@@ -528,7 +527,7 @@ Function input:
 {
   lots: [{ id: 0, centroid: { x: 100, y: 100 }, features: { land: true, sea: false }, ... }, ...],
   routeGraph: { nodes: [{ id: 0, type: "road", ... }], routes: [{ id: "route:0", type: "road", ... }, ...] },
-  init: { params: { parishCount: 15, routeCrossingCost: 1500, stepAlgorithms: { parishClustering: "graph_kmeans" } } }
+  init: { params: { parishCount: 15, routeCrossingCost: 1500, stepAlgorithms: { parishClustering: "route_growth" } } }
 }
 ```
 
@@ -549,63 +548,90 @@ Rules:
 - Coast, river, sea, and river-crossing nodes are not connected by center alleys.
 - Parish distance is computed between lot center nodes over the route graph.
 - Road route length is weighted by 3, center-junction alley route length is weighted by 6, and river crossing nodes add `routeCrossingCost` only when reached by road routes.
-- `graph_kmeans` assigns lots to nearest parish center node by weighted graph distance, recomputes each center from the average lot centroid, then snaps that point to the nearest land lot center node.
 - `route_growth` picks graph-spread center-node seeds and grows parishes by weighted route distance.
-- `graph_kmedoids` assigns lots by weighted graph distance and chooses each parish center as the assigned lot center minimizing in-cluster graph distance.
-- Parish centers identify the selected center lot and center node for display.
+- Parish center labels are placed after assignment by selecting a representative parish lot: prefer lots with the greatest neighbor-hop depth from a foreign-parish boundary, then choose the one closest to the average centroid of all lots in that parish.
 - Parishes are lettered `A` through `Z` and named from a static list of 50 `Santo ...` / `Santa ...` names; each assigned lot stores `parishId`, `parishLetter`, `parishName`, and `parish`.
 - Parishes are colored greedily to avoid adjacent parishes sharing the same color index from the generated HSL palette.
 - Step 2.2 only accepts lot center nodes as route START points.
 - From step 2.2 onward, route endpoint dots are hidden, route lines are wider, alley routes are medium gray, and parish centers remain visible.
 
-## 2.3 Road Network
+## 2.3 Near-Exclave Lots
 
-Source: `src/generator/2-3-build-road-network/2-3-build-road-network.js`
+Source: `src/generator/2-3-near-exclave/2-3-near-exclave.js`
 
-Rules:
-- Existing physical land `road` routes are demoted to `alley`; river, sea, and coast routes keep their route types.
-- The selectable algorithms are `boundary_connectors` and `parish_center_spine`; `boundary_connectors` is the default.
-- Temporary parish-center alleys are added only for the selected parish-center lots, using the same eligible junction rule as step 2.2.
-- In `boundary_connectors`, routes that follow a parish boundary have doubled pathfinding cost.
-- In `boundary_connectors`, parish-boundary lots receive a temporary centroid node with virtual alleys from each boundary route node to the centroid and from the centroid to same-lot route nodes that are not on the parish boundary.
-- The parish center closest to the map midpoint becomes the center parish.
-- Each iteration finds the cheapest weighted path from the center parish to any unlinked parish center over roads and alleys.
-- The nearest unlinked parish path is promoted to road, and subsequent iterations include those cheaper road weights.
-- River crossing nodes on promoted paths become bridges and add no further crossing penalty.
-- Each newly added bridge multiplies the future river crossing penalty by 1.5.
-- Temporary parish-center alleys used by a selected path become persistent `street` routes and are treated like roads.
-- Temporary boundary-lot virtual alleys used by a selected path become persistent `road` routes.
-- Unused temporary parish-center alleys are removed from the final route graph.
-- Unused temporary boundary-lot virtual alleys are removed from the final route graph.
-- Final physical routes keep either `road` or `alley` type/features for later geometry rebuilds.
+Function input:
 
-## 2.4 Build Parish Borders
+```js
+{
+  lots: [{ id: 0, parishId: 2, polygon: [{ x: 10, y: 20 }, ...], ... }, ...],
+  segments: [{ id: "segment:0", leftLotId: 0, rightLotId: 1, features: { river: false }, ... }, ...]
+}
+```
 
-Source: `src/generator/2-4-build-parish-borders/2-4-build-parish-borders.js`
+Function output:
 
-Rules:
-- Coastline and sea segments are preserved.
-- Segments between two different parishes are marked with `features.parishBoundary`.
-- Displayed parish outlines include inter-parish borders plus coast, sea, and map-boundary edges adjacent to the parish.
-- Only same-parish-pair border chains are smoothed, using the same midpoint-control quadratic sampling strategy used for rivers and coasts.
-- Nodes touching coast, river, sea, or map-boundary segments stay fixed.
-- Protected parish-border vertices break smoothing chains; single-segment borders stay straight.
-- Smoothed parish-border spans are marked with `features.parishBoundarySmoothed`.
-- Lot polygons, vertex ids, segment ids, adjacency, and route graph are rebuilt from the parish-border-smoothed geometry.
-
-## 2.5 Build Land-Edge Segmentation
-
-Source: `src/generator/2-5-build-land-edge-geometry/2-5-build-land-edge-geometry.js`
+```js
+{
+  lots: [{
+    id: 0,
+    parishId: 2,
+    borderLengthByAdjacentParish: {
+      "3": 48.2,
+      "7": 22.7,
+    },
+    nearExclave: true,
+    // ... other lot fields
+  }, ...],
+}
+```
 
 Rules:
-- Coastline, sea segments, and already-smoothed parish-border paths are preserved.
-- Remaining non-sea land and boundary edges are resampled as straight segments at double the coastline segment length.
-- Lot polygons, vertex ids, segment ids, and adjacency are rebuilt from the normalized geometry.
-- `routeGraph` is rebuilt from the updated canonical segments, preserving `parishBoundary` and `parishBoundarySmoothed` on routes for later steps.
+- Each canonical segment boundary between two lots in different parishes is counted as an external boundary.
+- River borders are excluded from this analysis.
+- For each lot, border length is summed by adjacent parish id into `borderLengthByAdjacentParish`.
+- `nearExclave` is `true` when a lot has more foreign-parish borders than same-parish borders.
 
-## 2.6 Field Dispatch
+## 2.4 Near-Exclave Corrections
 
-Source: `src/generator/2-6-field-dispatch/2-6-field-dispatch.js`
+Source: `src/generator/2-4-near-exclave-corrections/2-4-near-exclave-corrections.js`
+
+Function input:
+
+```js
+{
+  lots: [{ id: 0, parishId: 2, borderLengthByAdjacentParish: { "3": 48.2 }, ... }, ...],
+  segments: [{ id: "segment:0", leftLotId: 0, rightLotId: 1, features: { river: false }, ... }, ...]
+}
+```
+
+Function output:
+
+```js
+{
+  lots: [{
+    id: 0,
+    parishId: 4,
+    borderLengthByAdjacentParish: {
+      "3": 48.2,
+      "4": 10.7,
+    },
+    nearExclave: false,
+    // ... other lot fields
+  }, ...],
+}
+```
+
+Rules:
+- Candidates are near-exclaves detected from the current dispatch.
+- For each near-exclave lot, neighboring parishes are ordered by longest shared border length (river borders excluded from all measurements).
+- A lot is tested in descending `other-parish-border-length / same-parish-border-length` order and switched to candidate neighboring parishes from longest shared border to shortest.
+- A switch is kept only if the recomputed near-exclave count is strictly reduced.
+- Iteration is capped at twice the number of near-exclaves present at step start.
+- Rejected switches are rolled back and the next candidate is evaluated.
+
+## 2.5 Field Dispatch
+
+Source: `src/generator/2-5-field-dispatch/2-5-field-dispatch.js`
 
 Function input:
 
@@ -637,7 +663,7 @@ Function output:
 
 Rules:
 - The step output shape is identical regardless of the selected tessellation algorithm.
-- Only the 15 land lots with the highest area that are not touching the map boundaries are selected for tessellation.
+- Only the 1 land lot with the highest area that is not touching map boundaries is selected for tessellation.
 - `straight_bisection` starts recursive sublotting for each selected land lot when a valid split exists.
 - In `straight_bisection`, each branch tries the shortest valid straight bisection and the smaller child must keep at least 40% of the parent branch area.
 - In `curved_bisection`, the same recursive split selection is used, but the inserted split edge is a cubic Hermite curve instead of a straight chord.
